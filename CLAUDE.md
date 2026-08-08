@@ -45,8 +45,15 @@ python -m pytest                  # suíte completa
 python -m pytest tests/test_projections.py::test_planta_decai_ao_avancar_14_dias
 python -m pytest -k planta -x     # por nome, parando no primeiro erro
 python tools/check_svg.py         # validar SVGs -> build/svg_check/*.png
+python tools/simular_uso.py       # percorre a UI com mouse e teclado sintéticos
 pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 ```
+
+`tools/simular_uso.py` é o que cobre o QML — o pytest não cobre. Ele cria
+tarefa, roda sessão, conclui, arrasta, captura ideia e fecha o dia clicando de
+verdade; depois reabre o banco e confere o log evento por evento. Rode depois
+de mexer em qualquer `.qml`. Passe uma pasta como argumento para guardar as
+capturas de cada etapa.
 
 Linux (casa) é o mesmo com `source .venv/bin/activate`.
 
