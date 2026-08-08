@@ -115,6 +115,13 @@ def main(argv: list[str] | None = None) -> int:
     codigo = app.exec()
     atalho.remove()
     ambiente.stop()
+
+    # Derruba o QML antes do backend. Na ordem inversa, as janelas ainda
+    # existem enquanto a context property já virou nulo, e cada binding da
+    # tela reclama de ler propriedade de null no caminho da saída.
+    engine.deleteLater()
+    del engine
+
     store.close()
     return codigo
 
