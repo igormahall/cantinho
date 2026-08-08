@@ -37,15 +37,25 @@ Windows (PowerShell), venv em `.venv/`:
 
 ```powershell
 .venv\Scripts\Activate.ps1        # ou prefixar tudo com .venv\Scripts\python.exe
+pip install -r requirements-dev.txt   # runtime + pytest + pyinstaller
 
 python -m cantinho.main           # rodar o app
+python -m cantinho.main --db .\teste.db --log DEBUG   # banco descartável
 python -m pytest                  # suíte completa
-python -m pytest tests/test_projections.py::test_foco_14d   # um teste só
-python -m pytest -k foco -x       # por nome, parando no primeiro erro
+python -m pytest tests/test_projections.py::test_planta_decai_ao_avancar_14_dias
+python -m pytest -k planta -x     # por nome, parando no primeiro erro
 python tools/check_svg.py         # validar SVGs -> build/svg_check/*.png
+pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 ```
 
 Linux (casa) é o mesmo com `source .venv/bin/activate`.
+
+`--db` e `--device-id` existem para teste: sem eles o banco vai para a pasta de
+dados do sistema, e é fácil sujar o banco real ao experimentar.
+
+Para rodar a suíte sem abrir janela: `$env:QT_QPA_PLATFORM="offscreen"`. Cuidado
+que nesse modo o Qt fica **sem nenhuma família de fonte** — texto vira tofu em
+screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
 
 `tools/check_svg.py` varre `assets/**/*.svg`, rasteriza cada um e sai com código
 1 se algum falhar. Não basta olhar o exit code: **abra os PNGs em
@@ -205,28 +215,56 @@ cantinho/
 `core/clock.py` é injetável. Sem isso, nada que dependa da janela de 14 dias é
 testável.
 
-### Estado atual
+### Divergências em relação ao desenho original
 
-O código ainda não começou. Existem só os SVGs de `assets/`,
-`tools/check_svg.py` e os `__init__.py` vazios de `cantinho/`, `cantinho/core/`
-e `cantinho/services/`. `tests/` está vazio, `cantinho/ui/` não existe.
-`requirements.txt` tem apenas PySide6 — pytest ainda precisa entrar lá (e ser
-instalado) antes do primeiro teste.
+Todas deliberadas, todas com motivo:
 
-Ou seja: F0 é greenfield. O primeiro arquivo a existir deve ser `core/store.py`
-+ `core/events.py`, com teste, antes de qualquer coisa de Qt.
+- **`cantinho/backend.py`** não estava na estrutura. É a fronteira entre o log e
+  o QML, o único objeto exposto como context property. Não cabia em `core/`
+  (importa Qt) nem em `services/` (não é plataforma).
+- **`cantinho/services/scene.py`** monta a cena camada a camada e serve as
+  imagens ao QML. É o que permite planta e estante mudarem sem redesenhar o
+  resto — e é a razão de os ids serem idênticos nos dois SVGs.
+- **`QSystemTrayIcon` é QtWidgets**, e não existe equivalente em QtQuick. A
+  exceção está confinada em `services/tray.py`, nenhum widget é mostrado, e é
+  por causa dela que `main.py` usa `QApplication` e não `QGuiApplication`.
+- **O grão é ruído ladrilhado, não `ShaderEffect`.** Shader no Qt6 precisa ser
+  compilado para `.qsb` por ferramenta externa, o que seria uma etapa de build
+  nova. O resultado na tela é o mesmo.
+- **Kind novo `backlog.reordered {order: [id]}`.** A lista é arrastável e a
+  ordem é decisão do usuário, não estado derivado. Aditivo, como a regra pede.
+- **Tema `auto` decide pelo relógio local** (18h–6h é noite). O padrão vindo do
+  `device_id` não foi implementado: o `device_id` é um uuid opaco, não sabe
+  dizer se é trabalho ou casa. Como os dois ambientes são usados em horários
+  diferentes, a regra do relógio já entrega o efeito descrito.
+- **Sessão interrompida conta no `foco_14d`.** O tempo foi gasto, e zerá-lo
+  seria a penalidade explícita que o decaimento da janela dispensa.
+
+### Limites conhecidos do MVP
+
+- A estante comporta **12 objetos** (duas prateleiras, seis cada). A projeção
+  guarda todos para sempre; é o desenho que lota. Passar disso pede arte nova.
+- Sessão é atribuída inteira ao instante em que terminou, sem teto. Timer
+  esquecido a noite toda vira oito horas de foco.
+- `assets/scenes/*.svg` têm uma emenda visível em `x=560`, onde
+  `mesa_esquerda` termina e `mesa_direita` começa com gradientes que não se
+  encontram. É da arte, não da renderização — o composto por camada é
+  pixel-idêntico ao render do arquivo inteiro, e existe teste provando isso.
+- Sem áudio: `services/audio.py` funciona, mas o repositório não versiona som.
+  Ver o docstring do módulo para os nomes de arquivo que ele procura.
+- Atalho global só no Windows. No Linux `create_hotkey()` devolve um no-op.
 
 ## Fases
 
-| Fase | Entrega |
-|------|---------|
-| F0 | Event store + timer + janela sem estilo. **Atual.** |
-| F1 | Mini window, tray, always-on-top |
-| F2 | Backlog e "Hoje" (máx. 5) |
-| F3 | Cena, planta, estante |
-| F4 | Retrospectiva, humor, inbox de ideias |
-| F5 | Áudio local, ambiente, ciclo dia/noite |
-| F6 | PyInstaller portable |
+| Fase | Entrega | |
+|------|---------|---|
+| F0 | Event store + timer + janela | feito |
+| F1 | Mini window, tray, always-on-top | feito |
+| F2 | Backlog e "Hoje" (máx. 5) | feito |
+| F3 | Cena, planta, estante | feito |
+| F4 | Retrospectiva, humor, inbox de ideias | feito |
+| F5 | Áudio local, ambiente, ciclo dia/noite | ambiente e ciclo feitos; áudio sem arquivo |
+| F6 | PyInstaller portable | feito, 207 MB em `dist/Cantinho/` |
 
 Não pule fase. Não adiante arte. Se o modelo de eventos estiver errado,
 descobrir na F3 custa caro.
