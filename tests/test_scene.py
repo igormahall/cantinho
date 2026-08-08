@@ -192,6 +192,45 @@ def test_tipo_desconhecido_nao_derruba_a_estante(app) -> None:
     assert _tem_pixel_visivel(imagem)
 
 
+@pytest.mark.parametrize("tema", scene.THEMES)
+def test_a_mesa_nao_tem_emenda(app, tema: str) -> None:
+    """Regressão: as duas metades da mesa têm que virar uma superfície só.
+
+    Com `abajur` desenhado entre `mesa_esquerda` e `mesa_direita`, o brilho do
+    abajur caía sobre a mesa da esquerda e era apagado pela da direita, que é
+    opaca e vinha por cima. Sobrava um degrau duro de 24 níveis exatamente em
+    x=560, na emenda das duas.
+
+    A varredura fica abaixo dos objetos apoiados na mesa, senão a caneca e os
+    livros contam como salto — e eles são borda de verdade.
+    """
+    from PySide6.QtCore import QSize
+
+    imagem = scene.render_static(tema, QSize(scene.SCENE_WIDTH, scene.SCENE_HEIGHT))
+
+    pior, onde = 0, (0, 0)
+    for y in range(478, 489):
+        for x in range(270, 830):
+            atual = imagem.pixelColor(x, y)
+            proximo = imagem.pixelColor(x + 1, y)
+            salto = max(
+                abs(atual.red() - proximo.red()),
+                abs(atual.green() - proximo.green()),
+                abs(atual.blue() - proximo.blue()),
+            )
+            if salto > pior:
+                pior, onde = salto, (x, y)
+
+    assert pior <= 10, f"degrau de {pior} níveis em x={onde[0]} y={onde[1]}"
+
+
+def test_abajur_vem_depois_das_duas_mesas(app) -> None:
+    """A ordem é o que corrige a emenda; trocar de novo traria o degrau."""
+    ordem = list(scene.STATIC_LAYERS)
+    assert ordem.index("abajur") > ordem.index("mesa_esquerda")
+    assert ordem.index("abajur") > ordem.index("mesa_direita")
+
+
 def test_grao_e_reprodutivel_por_seed(app) -> None:
     a = scene.render_grain(3)
     b = scene.render_grain(3)

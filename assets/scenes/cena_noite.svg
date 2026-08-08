@@ -273,6 +273,19 @@
   <path d="M258 464 L560 464 L560 488 L258 488 C250 488 244 483 244 476 C244 469 250 464 258 464 Z" fill="url(#gDeskTop)"></path>
   <path d="M258 464 L560 464 L560 476 L244 476 C244 469 250 464 258 464 Z" fill="url(#gDeskEdge)"></path>
 </g>
+<g id="mesa_direita">
+  <path d="M818 492 C823 522 825 552 821 582" fill="none" stroke="#3E3129" stroke-width="14" stroke-linecap="round"></path>
+  <path d="M560 484 L838 484 C844 484 848 487 848 492 C848 497 844 500 838 500 L560 500 Z" fill="#3A2E26"></path>
+  <path d="M560 464 L842 464 C850 464 856 469 856 476 C856 483 850 488 842 488 L560 488 Z" fill="url(#gDeskTop)"></path>
+  <path d="M560 464 L842 464 C850 464 856 469 856 476 L560 476 Z" fill="url(#gDeskEdge)"></path>
+  <path d="M780 470 L810 470 L742 482 L706 482 Z" fill="url(#gLongSh)"></path>
+  <ellipse cx="796" cy="472" rx="24" ry="6" fill="url(#gCtc)"></ellipse>
+  <path d="M780 448 C780 444 783 442 787 442 L803 442 C807 442 810 444 810 448 L810 464 C810 469 806 472 800 472 L790 472 C784 472 780 469 780 464 Z" fill="url(#gMossA)"></path>
+  <path d="M812 450 C820 450 824 455 824 460 C824 465 820 470 812 470" fill="none" stroke="#7A8B6F" stroke-width="4" stroke-linecap="round"></path>
+  <path d="M818 458 L862 458 C866 458 869 461 869 465 C869 469 866 472 862 472 L818 472 C814 472 811 469 811 465 C811 461 814 458 818 458 Z" fill="url(#gShelfClay)"></path>
+  <path d="M822 448 L858 448 C862 448 865 451 865 455 C865 459 862 462 858 462 L822 462 C818 462 815 459 815 455 C815 451 818 448 822 448 Z" fill="url(#gLampBase)"></path>
+  <path d="M826 440 L854 440 C858 440 860 442 860 446 C860 450 858 452 854 452 L826 452 C822 452 820 450 820 446 C820 442 822 440 826 440 Z" fill="url(#gMossB)"></path>
+</g>
 <g id="abajur">
   <path d="M306 466 L360 466 L250 478 L206 478 Z" fill="url(#gLongSh)"></path>
   <ellipse cx="333" cy="466" rx="40" ry="10" fill="url(#gCtc)"></ellipse>
@@ -299,19 +312,6 @@
   <circle cx="430" cy="470" r="2.3" fill="url(#gDust)"></circle>
   <circle cx="356" cy="240" r="1.5" fill="url(#gDust)"></circle>
   <circle cx="146" cy="440" r="2" fill="url(#gDust)"></circle>
-</g>
-<g id="mesa_direita">
-  <path d="M818 492 C823 522 825 552 821 582" fill="none" stroke="#3E3129" stroke-width="14" stroke-linecap="round"></path>
-  <path d="M560 484 L838 484 C844 484 848 487 848 492 C848 497 844 500 838 500 L560 500 Z" fill="#3A2E26"></path>
-  <path d="M560 464 L842 464 C850 464 856 469 856 476 C856 483 850 488 842 488 L560 488 Z" fill="url(#gDeskTop)"></path>
-  <path d="M560 464 L842 464 C850 464 856 469 856 476 L560 476 Z" fill="url(#gDeskEdge)"></path>
-  <path d="M780 470 L810 470 L742 482 L706 482 Z" fill="url(#gLongSh)"></path>
-  <ellipse cx="796" cy="472" rx="24" ry="6" fill="url(#gCtc)"></ellipse>
-  <path d="M780 448 C780 444 783 442 787 442 L803 442 C807 442 810 444 810 448 L810 464 C810 469 806 472 800 472 L790 472 C784 472 780 469 780 464 Z" fill="url(#gMossA)"></path>
-  <path d="M812 450 C820 450 824 455 824 460 C824 465 820 470 812 470" fill="none" stroke="#7A8B6F" stroke-width="4" stroke-linecap="round"></path>
-  <path d="M818 458 L862 458 C866 458 869 461 869 465 C869 469 866 472 862 472 L818 472 C814 472 811 469 811 465 C811 461 814 458 818 458 Z" fill="url(#gShelfClay)"></path>
-  <path d="M822 448 L858 448 C862 448 865 451 865 455 C865 459 862 462 858 462 L822 462 C818 462 815 459 815 455 C815 451 818 448 822 448 Z" fill="url(#gLampBase)"></path>
-  <path d="M826 440 L854 440 C858 440 860 442 860 446 C860 450 858 452 854 452 L826 452 C822 452 820 450 820 446 C820 442 822 440 826 440 Z" fill="url(#gMossB)"></path>
 </g>
 <g id="vaso">
   <path d="M906 502 C906 496 910 492 916 492 L972 492 C978 492 983 496 983 502 C980 530 975 558 968 570 C963 578 955 581 944 581 C933 581 925 578 920 570 C913 558 908 530 906 502 Z" fill="url(#gClay)"></path>

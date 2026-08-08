@@ -34,8 +34,11 @@ STATIC_LAYERS: tuple[str, ...] = (
     "chao",
     "estante",
     "mesa_esquerda",
-    "abajur",
     "mesa_direita",
+    # Depois das duas mesas, não entre elas: o brilho do abajur cai sobre a
+    # mesa da esquerda e era apagado pela da direita, que é opaca e vinha por
+    # cima. Isso deixava uma borda dura exatamente em x=560.
+    "abajur",
     "vaso",
 )
 
