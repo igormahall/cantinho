@@ -73,6 +73,14 @@ def main(argv: list[str] | None = None) -> int:
     # Fechar a janela principal não encerra o app: ele continua na bandeja.
     app.setQuitOnLastWindowClosed(False)
 
+    # Janela, barra de tarefas e alt-tab. Fixo, ao contrário do da bandeja:
+    # o ícone que identifica o app não pode mudar sozinho.
+    icone = scene.assets_dir() / "icon" / "cantinho.ico"
+    if icone.is_file():
+        app.setWindowIcon(QIcon(str(icone)))
+    else:
+        logger.warning("ícone não encontrado em %s", icone)
+
     store = EventStore(args.db, device_id=args.device_id)
     logger.info("banco em %s", store.db_path)
 
@@ -102,7 +110,6 @@ def main(argv: list[str] | None = None) -> int:
         bandeja.miniToggleRequested.connect(backend.toggleMini)
         bandeja.quitRequested.connect(app.quit)
         backend.stateChanged.connect(lambda: bandeja.set_stage(backend.plantStage))
-        app.setWindowIcon(QIcon())
     else:
         # Sem bandeja não há como reabrir a janela: fechar precisa encerrar.
         logger.info("sem bandeja: fechar a janela encerra o app")

@@ -16,7 +16,7 @@ import math
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QImage, QPainter
+from PySide6.QtGui import QColor, QImage, QPainter, QPen
 from PySide6.QtQuick import QQuickImageProvider
 from PySide6.QtSvg import QSvgRenderer
 
@@ -231,6 +231,153 @@ def render_shelf(theme: str, object_types: list[str], size: QSize) -> QImage:
         )
     painter.end()
     return imagem
+
+
+# ------------------------------------------------------------------- ícone
+#
+# O ícone não é arte nova: é o mesmo vaso que fica no canto do quarto, sobre um
+# ladrilho quente com a luz do abajur atrás. O app inteiro é um cômodo, e o
+# ícone é esse cômodo reduzido ao que cabe em 16 pixels — uma luz acesa e uma
+# planta.
+#
+# Desenhar um relógio, um check ou uma lista seria a linguagem de produtividade
+# que o projeto recusa na tela; não faz sentido colocá-la na barra de tarefas.
+
+# Moldura fixa em coordenadas de planta_N.svg: o vaso (que não muda) unido à
+# folhagem do estágio 4 (a maior). Fixa de propósito — assim o vaso fica do
+# mesmo tamanho em todos os estágios e o que se vê crescendo é só a planta,
+# preenchendo um quadro que não se mexe.
+ICON_FRAME_X = 16.0
+ICON_FRAME_Y = 25.0
+ICON_FRAME_W = 160.0
+ICON_FRAME_H = 236.0
+
+# Tudo é composto neste tamanho e depois reduzido. Rasterizar SVG direto em
+# 16 px sai empastado; reduzir de 256 com filtro suave sai limpo.
+ICON_BASE = 256
+
+# Abaixo deste tamanho o ladrilho sai e a planta ocupa o quadro inteiro.
+#
+# Não é preguiça, é o motivo de um `.ico` ter várias resoluções: cada tamanho é
+# um desenho. Em 16 px o ladrilho come quase toda a área, sobra um vaso de
+# quatro pixels e o ícone vira um quadrado escuro indistinguível de qualquer
+# outro. Sem ladrilho, o mesmo vaso ocupa a largura toda e se enxerga tanto em
+# barra escura quanto clara.
+ICON_TILE_MIN = 32
+
+# Quanto da altura o vaso e a folhagem ocupam, com e sem ladrilho.
+_ICON_PLANT_HEIGHT = 0.84
+_ICON_PLANT_BOTTOM = 0.07
+_ICON_PLANT_HEIGHT_SOLTO = 0.96
+
+# Sem ladrilho, a moldura começa mais embaixo. A moldura cheia é retrato
+# (160x236), e encaixá-la pela altura deixa o vaso com sete pixels de largura
+# num ícone de dezesseis. Cortando as pontas mais esparsas da folhagem a
+# moldura fica quase quadrada e tudo cresce junto. Só o estágio 4 perde as
+# pontas, que em 16 px são sub-pixel de qualquer jeito.
+ICON_FRAME_Y_SOLTO = 55.0
+
+
+def _desenhar_planta(
+    painter: QPainter,
+    stage: int,
+    altura: float,
+    base_y: float,
+    topo: float = ICON_FRAME_Y,
+) -> None:
+    """Vaso e folhagem encaixados na moldura fixa.
+
+    Os dois vêm do mesmo arquivo e são desenhados sob a mesma transformação,
+    senão a folhagem descola do vaso.
+    """
+    renderer = _renderers.get(plant_path(stage))
+    if renderer is None:
+        return
+
+    moldura_h = ICON_FRAME_Y + ICON_FRAME_H - topo
+    escala = altura / moldura_h
+    largura = ICON_FRAME_W * escala
+    destino_x = (ICON_BASE - largura) / 2
+    destino_y = base_y - altura
+
+    painter.save()
+    painter.translate(destino_x - ICON_FRAME_X * escala, destino_y - topo * escala)
+    painter.scale(escala, escala)
+    for elemento in ("vaso", "planta"):
+        if renderer.elementExists(elemento):
+            renderer.render(painter, elemento, renderer.boundsOnElement(elemento))
+    painter.restore()
+
+
+def render_icon(stage: int, size: int = ICON_BASE) -> QImage:
+    """Ícone do app, com a planta no estágio pedido.
+
+    Sempre nas cores da noite, independente do tema em uso: o ícone é
+    identidade, não estado da tela. Um ícone que trocasse de cor ao entardecer
+    viraria outro ícone na barra de tarefas.
+    """
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QBrush, QLinearGradient, QPainterPath, QRadialGradient
+
+    base = _blank(QSize(ICON_BASE, ICON_BASE))
+    painter = QPainter(base)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+
+    if size < ICON_TILE_MIN:
+        _desenhar_planta(
+            painter,
+            stage,
+            ICON_BASE * _ICON_PLANT_HEIGHT_SOLTO,
+            ICON_BASE * (1.0 + _ICON_PLANT_HEIGHT_SOLTO) / 2,
+            topo=ICON_FRAME_Y_SOLTO,
+        )
+    else:
+        # Ladrilho: cantos arredondados e um gradiente vertical discreto, para
+        # não ficar um bloco chapado.
+        moldura = QPainterPath()
+        moldura.addRoundedRect(
+            0, 0, ICON_BASE, ICON_BASE, ICON_BASE * 0.22, ICON_BASE * 0.22
+        )
+        parede = QLinearGradient(0, 0, 0, ICON_BASE)
+        parede.setColorAt(0.0, QColor("#332B26"))
+        parede.setColorAt(1.0, QColor("#1A1614"))
+        painter.fillPath(moldura, QBrush(parede))
+
+        painter.save()
+        painter.setClipPath(moldura)
+        # Um pouco à esquerda e acima do centro, como na cena — mas perto o
+        # bastante da planta para funcionar como contraluz. É esse halo que
+        # separa a silhueta do fundo quando o ícone encolhe.
+        brilho = QRadialGradient(
+            QPointF(ICON_BASE * 0.42, ICON_BASE * 0.46), ICON_BASE * 0.58
+        )
+        brilho.setColorAt(0.0, QColor(224, 164, 88, 130))
+        brilho.setColorAt(0.45, QColor(224, 164, 88, 52))
+        brilho.setColorAt(1.0, QColor(224, 164, 88, 0))
+        painter.fillPath(moldura, QBrush(brilho))
+
+        _desenhar_planta(
+            painter,
+            stage,
+            ICON_BASE * _ICON_PLANT_HEIGHT,
+            ICON_BASE * (1.0 - _ICON_PLANT_BOTTOM),
+        )
+        painter.restore()
+
+        # Fio de luz na borda: separa o ladrilho de uma barra escura.
+        caneta = QPen(QColor(237, 224, 208, 38))
+        caneta.setWidthF(ICON_BASE * 0.012)
+        painter.setPen(caneta)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(moldura)
+
+    painter.end()
+
+    if size == ICON_BASE:
+        return base
+    # Compõe grande e reduz: rasterizar SVG direto em 16 px sai empastado.
+    return base.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
 
 GRAIN_TILE = 128

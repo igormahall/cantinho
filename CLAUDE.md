@@ -47,6 +47,7 @@ python -m pytest -k planta -x     # por nome, parando no primeiro erro
 python tools/check_svg.py         # validar SVGs -> build/svg_check/*.png
 python tools/simular_uso.py       # percorre a UI com mouse e teclado sintéticos
 python tools/gerar_audio.py       # regera assets/audio/*.wav
+python tools/gerar_icone.py       # regera assets/icon/cantinho.{ico,png}
 pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 ```
 
@@ -258,6 +259,32 @@ Todas deliberadas, todas com motivo:
 - O som é sintetizado, não gravado, e é curto: 24 s em loop. Não tem melodia,
   é textura. Trocar por faixa de verdade é só pôr outro arquivo com o mesmo
   nome em `assets/audio/`.
+
+### Ícone
+
+O ícone não é arte nova: é o mesmo vaso da cena, renderizado por
+`scene.render_icon()` a partir de `planta_N.svg`. Um relógio, um check ou uma
+lista seriam a linguagem de produtividade que o projeto recusa na tela — não
+faz sentido colocá-la na barra de tarefas.
+
+Três decisões que não são arbitrárias:
+
+- **O desenho muda com o tamanho.** De 32 px para cima é a planta sobre um
+  ladrilho quente com a luz do abajur atrás — o cômodo reduzido a um quadrado.
+  Abaixo disso o ladrilho sai e a planta ocupa o quadro: em 16 px o ladrilho
+  engolia tudo e sobrava um vaso de quatro pixels. É para isso que `.ico` tem
+  várias resoluções.
+- **A moldura da planta é fixa**, então o vaso fica do mesmo tamanho em todos
+  os estágios e só a folhagem cresce. Sem isso o ícone da bandeja pularia a
+  cada mudança de estágio. Nos tamanhos pequenos a moldura começa mais embaixo
+  (`ICON_FRAME_Y_SOLTO`), cortando as pontas esparsas para tudo crescer junto.
+- **Só o da bandeja é vivo.** Ele acompanha `plant_stage`. O do executável e o
+  da janela são fixos no estágio 2: identidade não pode mudar sozinha.
+
+`escrever_ico()` monta o contêiner na mão porque o Qt não tem gravador de ICO.
+São 16 bytes de diretório por quadro e um PNG por tamanho; há teste lendo o
+arquivo byte a byte, porque `.ico` malformado só aparece na barra de tarefas
+do usuário.
 
 ### Áudio
 

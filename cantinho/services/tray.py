@@ -23,24 +23,24 @@ logger = logging.getLogger(__name__)
 __all__ = ["Tray"]
 
 
+# Tamanhos que o Windows pede da bandeja conforme a escala da tela.
+_TAMANHOS_BANDEJA = (16, 20, 24, 32)
+
+
 def _plant_icon(stage: int) -> QIcon:
-    """Ícone tirado do próprio desenho da planta, no estágio atual.
+    """A planta do quarto, no estágio de agora.
 
-    Sem asset novo: a bandeja mostra o mesmo que o vaso do quarto.
+    A bandeja é o único lugar onde o ícone é vivo: ele acompanha o crescimento.
+    O ícone do executável é fixo, porque identidade não pode mudar sozinha.
+
+    Entrega vários tamanhos em vez de um só. Deixar o Windows reduzir um ícone
+    de 64 para 16 sozinho borra o desenho — e em 16 px o `render_icon` ainda
+    troca a composição, largando o ladrilho para a planta caber.
     """
-    from PySide6.QtCore import QRectF, Qt
-    from PySide6.QtGui import QImage, QPainter
-    from PySide6.QtSvg import QSvgRenderer
-
-    imagem = QImage(64, 64, QImage.Format_ARGB32_Premultiplied)
-    imagem.fill(Qt.transparent)
-    renderer = QSvgRenderer(str(scene.plant_path(stage)))
-    if renderer.isValid():
-        painter = QPainter(imagem)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        renderer.render(painter, QRectF(2, 2, 60, 60))
-        painter.end()
-    return QIcon(QPixmap.fromImage(imagem))
+    icone = QIcon()
+    for lado in _TAMANHOS_BANDEJA:
+        icone.addPixmap(QPixmap.fromImage(scene.render_icon(stage, lado)))
+    return icone
 
 
 class Tray(QObject):

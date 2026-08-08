@@ -79,10 +79,11 @@ admin. O build é por plataforma: o do Windows não serve no Linux e vice-versa.
 ```bash
 pip install -r requirements-dev.txt
 
-python -m pytest              # 189 testes, sem abrir janela
+python -m pytest              # 212 testes, sem abrir janela
 python tools/simular_uso.py   # percorre a interface clicando de verdade
 python tools/check_svg.py     # rasteriza os SVGs em build/svg_check/
 python tools/gerar_audio.py   # regera os loops de ambiente
+python tools/gerar_icone.py   # regera o ícone do app
 ```
 
 O `pytest` não cobre o QML. Quem faz isso é o `simular_uso.py`: ele abre as
@@ -107,6 +108,10 @@ cantinho/
   backend.py  a fronteira entre o log e a interface
   ui/         Main.qml Mini.qml theme/ room/ panels/
 ```
+
+O ícone é o próprio vaso do quarto: nos tamanhos grandes ele aparece sobre um
+ladrilho com a luz do abajur atrás, e nos pequenos o ladrilho sai para a planta
+caber. Na bandeja ele é vivo — acompanha o crescimento da planta.
 
 O som de ambiente é sintetizado, não gravado: `tools/gerar_audio.py` monta
 chuva, acorde e estalo de vinil com a biblioteca padrão do Python. Os SVGs do

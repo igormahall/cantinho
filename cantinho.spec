@@ -106,6 +106,8 @@ exe = EXE(
     upx=False,
     # Sem console: é um app de ambiente, não uma ferramenta de terminal.
     console=False,
+    # Sem isto o executável sai com o ícone padrão do PyInstaller.
+    icon="assets/icon/cantinho.ico",
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
