@@ -30,6 +30,10 @@ __all__ = ["Backend"]
 NIGHT_FROM_HOUR = 18
 NIGHT_UNTIL_HOUR = 6
 
+# Quantas linhas cabem no bilhete da parede. É a folha que limita, não a
+# projeção: uma lista que rola na parede deixaria de ser um bilhete.
+BOARD_LIMIT = 6
+
 
 def _format_elapsed(delta: timedelta) -> str:
     total = int(delta.total_seconds())
@@ -48,6 +52,11 @@ class Backend(QObject):
     captureRequested = Signal()
     miniVisibleChanged = Signal()
     mainVisibleChanged = Signal()
+    soundChanged = Signal()
+    # Reação curta de interface (passar o mouse, clicar, concluir). Quem toca é
+    # `services/audio.py`; o backend só avisa, para o QML não precisar conhecer
+    # o serviço de áudio.
+    sfxRequested = Signal(str)
 
     def __init__(
         self,
@@ -66,6 +75,9 @@ class Backend(QObject):
         self._theme_mode = "auto"
         self._mini_visible = False
         self._main_visible = True
+        # Só nesta sessão. Preferência de som não vai a disco: `events` é a
+        # única tabela persistida, e "liguei o som" não é fato do histórico.
+        self._sound_on = True
 
         # Reavalia o tema de tempos em tempos. Um minuto é folgado de sobra
         # para uma transição que leva três segundos.
@@ -253,6 +265,8 @@ class Backend(QObject):
                 "id": ideia.id,
                 "text": ideia.text,
                 "when": ideia.captured_at.astimezone().strftime("%d/%m %H:%M"),
+                "used": ideia.used,
+                "taskId": ideia.task_id or "",
             }
             for ideia in self._ideias
         ]
@@ -266,9 +280,33 @@ class Backend(QObject):
         self.ideaSaved.emit()
 
     @Slot(str)
-    def ideaToTask(self, text: str) -> None:
-        """Uma ideia vira tarefa quando o usuário decide, não na captura."""
-        self.addTask(text)
+    def ideaToTask(self, idea_id: str) -> None:
+        """Uma ideia vira tarefa quando o usuário decide, não na captura.
+
+        Dois eventos, nesta ordem: a tarefa nasce e a ideia é marcada como
+        aproveitada, apontando para ela. A ideia continua no mural, riscada —
+        o mural é o registro de onde as tarefas vieram.
+        """
+        ideia = next((item for item in self._ideias if item.id == idea_id), None)
+        if ideia is None or ideia.used:
+            return
+        tarefa = ev.task_created(self._clock, self.device_id, label=ideia.text)
+        self._registrar(tarefa)
+        self._registrar(
+            ev.idea_promoted(
+                self._clock,
+                self.device_id,
+                id=ideia.id,
+                task_id=tarefa.payload["id"],
+            )
+        )
+
+    @Slot(str)
+    def archiveIdea(self, idea_id: str) -> None:
+        """Tira a ideia do mural. Não apaga nada: é um evento novo."""
+        if not idea_id:
+            return
+        self._registrar(ev.idea_archived(self._clock, self.device_id, id=idea_id))
 
     # -------------------------------------------------------- retrospectiva
 
@@ -289,6 +327,28 @@ class Backend(QObject):
             }
             for sessao in do_dia
         ]
+
+    @Property("QVariantList", notify=stateChanged)
+    def todayBoard(self) -> list[dict]:
+        """As linhas do bilhete pregado na parede.
+
+        Primeiro o que ainda está aberto no "Hoje", depois o que foi concluído
+        hoje — que fica na folha, riscado, até o dia virar. Riscar é o que dá
+        peso ao que foi feito; some da lista amanhã, sozinho.
+        """
+        fuso = self._fuso()
+        hoje = self._hoje()
+        abertas = [
+            {"id": task.id, "label": task.label, "done": False}
+            for task in self._backlog[: proj.TODAY_LIMIT]
+        ]
+        feitas = [
+            {"id": task.id, "label": task.label, "done": True}
+            for task in reversed(self._concluidas)
+            if task.completed_at is not None
+            and task.completed_at.astimezone(fuso).date() == hoje
+        ]
+        return (abertas + feitas)[:BOARD_LIMIT]
 
     @Property("QVariantList", notify=stateChanged)
     def todayCompleted(self) -> list[str]:
@@ -379,6 +439,28 @@ class Backend(QObject):
         ordem = ("auto", "tarde", "noite")
         atual = ordem.index(self._theme_mode)
         self.setThemeMode(ordem[(atual + 1) % len(ordem)])
+
+    # ------------------------------------------------------------------ som
+
+    @Property(bool, notify=soundChanged)
+    def soundOn(self) -> bool:
+        return self._sound_on
+
+    @Slot(bool)
+    def setSoundOn(self, ligado: bool) -> None:
+        if bool(ligado) != self._sound_on:
+            self._sound_on = bool(ligado)
+            self.soundChanged.emit()
+
+    @Slot()
+    def toggleSound(self) -> None:
+        self.setSoundOn(not self._sound_on)
+
+    @Slot(str)
+    def sfx(self, nome: str) -> None:
+        """Pede uma reação curta. Silencioso quando o som está desligado."""
+        if self._sound_on and nome:
+            self.sfxRequested.emit(nome)
 
     # -------------------------------------------------------------- janelas
 

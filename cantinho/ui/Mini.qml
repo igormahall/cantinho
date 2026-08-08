@@ -25,6 +25,22 @@ Window {
         anchors.fill: parent
         anchors.margins: 6
 
+        // A mini fica por cima do trabalho de outra pessoa o dia inteiro. Opaca
+        // ela é um retângulo colado na tela; translúcida, o que está embaixo
+        // continua legível e ela vira um objeto apoiado ali.
+        //
+        // Firma quando o mouse chega, que é quando alguém vai de fato ler o
+        // relógio ou apertar um botão.
+        opacidadeFundo: sobre.hovered
+                        ? Theme.opacidadePainel : Theme.opacidadeMini
+
+        // Canto mais redondo que o dos painéis: numa janela sem moldura, o
+        // raio é a única coisa que separa "objeto apoiado na tela" de
+        // "retângulo colado nela".
+        radius: 16
+
+        HoverHandler { id: sobre }
+
         // Frameless exige drag manual.
         DragHandler {
             target: null
@@ -72,6 +88,13 @@ Window {
                 onClicked: backend.timerRunning
                            ? backend.endSession(false, "")
                            : backend.startSession("")
+            }
+
+            BotaoSuave {
+                text: backend.soundOn ? "som" : "mudo"
+                destacado: backend.soundOn
+                corAtiva: Theme.musgo
+                onClicked: backend.toggleSound()
             }
 
             BotaoSuave {

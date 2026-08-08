@@ -12,17 +12,46 @@ Item {
     property int plantStage: 0
     property var shelf: []
 
+    signal abrirHoje()
+
     // Coordenadas do viewBox dos SVGs. Serve para posicionar os efeitos por
     // cima do desenho quando a janela não está em 1:1.
+    //
+    // As camadas usam `PreserveAspectFit`, então o desenho é centralizado e
+    // sobra faixa vazia no eixo mais folgado. Sem somar essa folga, tudo que é
+    // posicionado por conta própria — chuva, poeira, luz do abajur, os objetos
+    // de parede — fica ancorado no canto do Item em vez do canto da cena. Em
+    // 1100x700 os dois coincidem e o erro não aparece; ao maximizar, a chuva
+    // sai da janela e a poeira sai do feixe.
+    //
+    // Daí a separação: `px` converte comprimento, `cx`/`cy` convertem posição.
     readonly property real escala: Math.min(width / 1100, height / 700)
+    readonly property real folgaX: (width - 1100 * escala) / 2
+    readonly property real folgaY: (height - 700 * escala) / 2
+
     function px(v) { return v * escala }
+    function cx(v) { return folgaX + v * escala }
+    function cy(v) { return folgaY + v * escala }
+
+    // Largura em que o provedor rasteriza as camadas, arredondada para cima em
+    // degraus.
+    //
+    // Ligar `sourceSize` direto na largura da janela manda rasterizar as cinco
+    // camadas de novo a cada pixel arrastado na borda — algumas centenas de
+    // desenhos de SVG para um arrasto de janela, cada um com sua entrada nova
+    // no cache de imagem do QML.
+    //
+    // Em degraus de 200 px são poucos tamanhos, todos reaproveitados quando a
+    // janela volta, e nenhum abaixo do tamanho de tela: rasterizar acima e
+    // reduzir não custa nitidez, o contrário custa.
+    readonly property int larguraFonte: Math.max(1100, Math.ceil(width / 200) * 200)
 
     // --------------------------------------------------------- cenário fixo
 
     Image {
         anchors.fill: parent
         source: "image://cena/estatico/tarde"
-        sourceSize.width: Math.round(quarto.width)
+        sourceSize.width: quarto.larguraFonte
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
@@ -31,7 +60,7 @@ Item {
     Image {
         anchors.fill: parent
         source: "image://cena/estatico/noite"
-        sourceSize.width: Math.round(quarto.width)
+        sourceSize.width: quarto.larguraFonte
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
@@ -44,7 +73,7 @@ Item {
     Image {
         anchors.fill: parent
         source: "image://cena/estante/tarde/" + quarto.shelf.join(",")
-        sourceSize.width: Math.round(quarto.width)
+        sourceSize.width: quarto.larguraFonte
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
@@ -54,7 +83,7 @@ Item {
     Image {
         anchors.fill: parent
         source: "image://cena/estante/noite/" + quarto.shelf.join(",")
-        sourceSize.width: Math.round(quarto.width)
+        sourceSize.width: quarto.larguraFonte
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
@@ -72,15 +101,15 @@ Item {
         id: planta
         anchors.fill: parent
         source: "image://cena/planta/" + quarto.plantStage
-        sourceSize.width: Math.round(quarto.width)
+        sourceSize.width: quarto.larguraFonte
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
 
         // Folhas balançando: ±1,5°, em torno do próprio vaso.
         transform: Rotation {
-            origin.x: quarto.px(944)
-            origin.y: quarto.px(560)
+            origin.x: quarto.cx(944)
+            origin.y: quarto.cy(560)
             angle: 0
             RotationAnimation on angle {
                 running: true
@@ -100,6 +129,37 @@ Item {
                 NumberAnimation { target: planta; property: "opacity"; to: 1; duration: 1400 }
             }
         }
+    }
+
+    // ------------------------------------------------- objetos de parede
+    //
+    // Antes da luz do abajur, e não depois: assim o halo do abajur cai sobre o
+    // calendário como cai sobre a mesa. Se entrassem por cima da luz, ficariam
+    // recortados do ambiente, com aquele aspecto de janelinha colada na tela.
+    //
+    // As três posições vêm das áreas de parede que a arte deixou livres: acima
+    // da estante à esquerda, e a coluna à direita entre o teto e a folhagem do
+    // vaso. Nenhuma delas cobre estante, vaso ou janela.
+
+    Calendario {
+        unidade: quarto.escala
+        x: quarto.cx(46)
+        y: quarto.cy(46)
+    }
+
+    RelogioParede {
+        unidade: quarto.escala
+        x: quarto.cx(842)
+        y: quarto.cy(40)
+    }
+
+    BilheteDoDia {
+        unidade: quarto.escala
+        x: quarto.cx(768)
+        y: quarto.cy(184)
+        linhas: backend.todayBoard
+        tarefaAtual: backend.currentTaskId
+        onAberto: quarto.abrirHoje()
     }
 
     // ------------------------------------------------------- luz do abajur
@@ -126,7 +186,7 @@ Item {
         ShapePath {
             strokeWidth: 0
             fillGradient: RadialGradient {
-                centerX: quarto.px(334); centerY: quarto.px(392)
+                centerX: quarto.cx(334); centerY: quarto.cy(392)
                 focalX: centerX; focalY: centerY
                 centerRadius: luz.raio
                 GradientStop { position: 0.0; color: Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b, 0.30) }
@@ -146,7 +206,10 @@ Item {
     // chuva dentro do quarto.
     Item {
         id: janela
-        x: quarto.px(424); y: quarto.px(94)
+        // Nomeado para `tools/simular_uso.py` conferir que o recorte continua
+        // caindo em cima do vidro depois de a janela mudar de tamanho.
+        objectName: "chuva"
+        x: quarto.cx(424); y: quarto.cy(94)
         width: quarto.px(252); height: quarto.px(212)
         clip: true
         opacity: Theme.noite ? 1 : 0
@@ -186,7 +249,8 @@ Item {
     // No feixe que entra pela janela, alargando conforme desce até o chão.
     Item {
         id: feixe
-        x: quarto.px(400); y: quarto.px(94)
+        objectName: "poeira"
+        x: quarto.cx(400); y: quarto.cy(94)
         width: quarto.px(330); height: quarto.px(400)
         clip: true
         opacity: Theme.noite ? 0 : 1

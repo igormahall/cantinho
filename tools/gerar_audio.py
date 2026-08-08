@@ -213,6 +213,87 @@ def _construir(tema: str) -> list[float]:
     return _normalizar(_emendar(misturado, total, fade), 0.42)
 
 
+# --------------------------------------------------------- reações de mouse
+#
+# Os três sons curtos de interface. A regra que os une: nada de ataque seco.
+# Todos entram com uma rampa de alguns milissegundos, porque começar em zero e
+# saltar para o pico é exatamente o que faz um som de UI soar como bipe de
+# eletrodoméstico. Ninguém repara no ataque; só repara em não incomodar.
+
+
+def _envelope(k: int, comprimento: int, ataque: int, decaimento: float) -> float:
+    subida = min(1.0, k / ataque) if ataque else 1.0
+    return subida * math.exp(-decaimento * k / comprimento)
+
+
+def _toque(rng: random.Random) -> list[float]:
+    """Mouse passando por cima: quase só ar, com um fundo grave curtíssimo."""
+    comprimento = int(0.055 * TAXA)
+    ataque = int(0.004 * TAXA)
+    filtro = PassaBaixa(1500)
+    saida = []
+    for k in range(comprimento):
+        t = k / TAXA
+        ar = filtro(rng.uniform(-1.0, 1.0)) * 0.9
+        corpo = math.sin(2 * math.pi * 320 * t) * 0.35
+        saida.append((ar + corpo) * _envelope(k, comprimento, ataque, 7.0))
+    return saida
+
+
+def _clique(rng: random.Random) -> list[float]:
+    """Clique: madeira batendo em madeira, não plástico.
+
+    Duas parciais em intervalo não harmônico e um sopro de ruído por cima. Uma
+    parcial sozinha sai afinada demais e vira nota musical no meio da tela.
+    """
+    comprimento = int(0.085 * TAXA)
+    ataque = int(0.002 * TAXA)
+    filtro = PassaBaixa(3200)
+    saida = []
+    for k in range(comprimento):
+        t = k / TAXA
+        corpo = (math.sin(2 * math.pi * 430 * t) * 0.55
+                 + math.sin(2 * math.pi * 651 * t) * 0.30)
+        batida = filtro(rng.uniform(-1.0, 1.0)) * math.exp(-90 * t) * 0.7
+        saida.append((corpo + batida) * _envelope(k, comprimento, ataque, 9.0))
+    return saida
+
+
+def _entrega() -> list[float]:
+    """Tarefa concluída: o único som que pode soar como recompensa.
+
+    Uma terça maior com a quinta em cima, decaindo devagar. O corte é longo o
+    bastante para respirar e curto o bastante para não virar jingle.
+    """
+    comprimento = int(0.9 * TAXA)
+    ataque = int(0.010 * TAXA)
+    parciais = ((523.25, 0.50, 3.2), (659.25, 0.34, 4.0), (783.99, 0.22, 5.2))
+    saida = []
+    for k in range(comprimento):
+        t = k / TAXA
+        valor = 0.0
+        for frequencia, peso, decaimento in parciais:
+            valor += peso * math.sin(2 * math.pi * frequencia * t) * math.exp(
+                -decaimento * t
+            )
+        saida.append(valor * _envelope(k, comprimento, ataque, 0.4))
+    return saida
+
+
+def _apagar_fim(amostras: list[float], quadros: int) -> list[float]:
+    """Zera os últimos quadros.
+
+    `QSoundEffect` toca o arquivo até o último quadro e corta. Se o sinal ainda
+    tiver amplitude ali, o corte é um estalo — o mesmo problema da emenda do
+    loop, na outra ponta.
+    """
+    saida = list(amostras)
+    for j in range(min(quadros, len(saida))):
+        indice = len(saida) - 1 - j
+        saida[indice] *= j / quadros
+    return saida
+
+
 def _conferir(nome: str, amostras: list[float]) -> None:
     quadros = len(amostras)
     rms = math.sqrt(sum(v * v for v in amostras) / quadros)
@@ -227,6 +308,24 @@ def _conferir(nome: str, amostras: list[float]) -> None:
         print(f"  AVISO: a volta do loop pode estalar em {nome}")
 
 
+def _construir_reacoes() -> dict[str, list[float]]:
+    """Os três sons de interação, com pico bem abaixo do ambiente.
+
+    Cada um tem semente própria e derivada da fixa: mexer num não pode mudar o
+    ruído dos outros.
+    """
+    corte = int(0.006 * TAXA)
+    return {
+        "toque": _apagar_fim(
+            _normalizar(_toque(random.Random(SEMENTE + 1)), 0.30), corte
+        ),
+        "clique": _apagar_fim(
+            _normalizar(_clique(random.Random(SEMENTE + 2)), 0.55), corte
+        ),
+        "entrega": _apagar_fim(_normalizar(_entrega(), 0.62), corte),
+    }
+
+
 def main() -> int:
     print(f"sintetizando {DURACAO:.0f}s a {TAXA} Hz, mono 16 bits")
     for tema in ("noite", "tarde"):
@@ -236,6 +335,14 @@ def main() -> int:
         _gravar(caminho, amostras)
         print(f"  -> {caminho.relative_to(RAIZ)} "
               f"({caminho.stat().st_size / 1024:.0f} KB)")
+
+    print("reações de interface")
+    for nome, amostras in _construir_reacoes().items():
+        caminho = DESTINO / f"ui_{nome}.wav"
+        _gravar(caminho, amostras)
+        print(f"  {nome:8} {len(amostras) / TAXA * 1000:.0f} ms"
+              f"  pico={max(abs(v) for v in amostras):.2f}"
+              f"  -> {caminho.relative_to(RAIZ)}")
     return 0
 
 

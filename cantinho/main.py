@@ -21,10 +21,11 @@ from PySide6.QtWidgets import QApplication
 
 from cantinho.backend import Backend
 from cantinho.core.clock import SystemClock
-from cantinho.core.store import EventStore
+from cantinho.core.store import DATABASE_FILENAME, EventStore, default_data_dir
 from cantinho.services import scene
-from cantinho.services.audio import Ambience
+from cantinho.services.audio import Ambience, Sfx
 from cantinho.services.hotkey import create_hotkey
+from cantinho.services.single_instance import SingleInstance
 from cantinho.services.tray import Tray
 
 logger = logging.getLogger(__name__)
@@ -39,11 +40,22 @@ def _ui_dir() -> Path:
     return UI_DIR
 
 
+def _caminho(bruto: str) -> Path:
+    """Caminho da linha de comando, com `~` resolvido aqui.
+
+    O PowerShell não expande `~` em argumento de executável nativo — ele chega
+    como um til literal, e `Path("~/x")` vira uma pasta chamada `~` dentro do
+    diretório atual. O sintoma é o pior possível: o app abre, funciona e grava
+    num banco vazio que não é o que se pediu.
+    """
+    return Path(bruto).expanduser()
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="cantinho", description="Cantinho")
     parser.add_argument(
         "--db",
-        type=Path,
+        type=_caminho,
         default=None,
         help="caminho do banco (padrão: pasta de dados do sistema)",
     )
@@ -81,7 +93,17 @@ def main(argv: list[str] | None = None) -> int:
     else:
         logger.warning("ícone não encontrado em %s", icone)
 
-    store = EventStore(args.db, device_id=args.device_id)
+    db_path = args.db if args.db is not None else default_data_dir() / DATABASE_FILENAME
+
+    # Antes de abrir o banco e antes de qualquer janela: se já existe uma cópia
+    # sobre este mesmo banco, o certo é trazer a dela para a frente e sair.
+    trava = SingleInstance(db_path)
+    if trava.already_running():
+        logger.info("já existe um cantinho aberto em %s", db_path)
+        return 0
+    trava.listen()
+
+    store = EventStore(db_path, device_id=args.device_id)
     logger.info("banco em %s", store.db_path)
 
     clock = SystemClock()
@@ -100,9 +122,26 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("as janelas não carregaram")
         return 1
 
+    # Uma cópia já aberta traz a janela para a frente quando alguém tenta abrir
+    # outra — inclusive pelo ícone da barra de tarefas.
+    trava.activated.connect(backend.showMain)
+
     ambiente = Ambience(app)
     ambiente.set_theme(backend.themeName)
     backend.themeChanged.connect(lambda: ambiente.set_theme(backend.themeName))
+
+    # Um interruptor só para o ambiente e para as reações de clique: dois
+    # controles de som numa tela que quer ser um quarto já seria um painel.
+    efeitos = Sfx(app)
+    backend.sfxRequested.connect(efeitos.play)
+
+    def _aplicar_som() -> None:
+        mudo = not backend.soundOn
+        ambiente.set_muted(mudo)
+        efeitos.set_muted(mudo)
+
+    backend.soundChanged.connect(_aplicar_som)
+    _aplicar_som()
 
     bandeja = Tray(app)
     if bandeja.install(backend.plantStage):
@@ -122,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     codigo = app.exec()
     atalho.remove()
     ambiente.stop()
+    trava.close()
 
     # Derruba o QML antes do backend. Na ordem inversa, as janelas ainda
     # existem enquanto a context property já virou nulo, e cada binding da

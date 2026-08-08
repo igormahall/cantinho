@@ -90,6 +90,8 @@ def _um_de_cada(clock: FakeClock) -> list[Event]:
         ev.session_started(clock, DEVICE, task_id="task-1"),
         ev.session_ended(clock, DEVICE, id="s-1", interrupted=True, note="telefone"),
         ev.idea_captured(clock, DEVICE, text="trocar a fonte"),
+        ev.idea_promoted(clock, DEVICE, id="idea-1", task_id="task-1"),
+        ev.idea_archived(clock, DEVICE, id="idea-1"),
         ev.day_checkin(clock, DEVICE, date="2026-03-02", intents=["ler", "escrever"]),
         ev.day_review(clock, DEVICE, date="2026-03-02", mood=4, energy=2, note="ok"),
         ev.backlog_reordered(clock, DEVICE, order=["task-2", "task-1"]),
@@ -100,7 +102,7 @@ def test_todos_os_kinds_tem_construtor(clock: FakeClock) -> None:
     assert {evento.kind for evento in _um_de_cada(clock)} == set(ev.KINDS)
 
 
-@pytest.mark.parametrize("indice", range(9))
+@pytest.mark.parametrize("indice", range(11))
 def test_round_trip_por_kind(clock: FakeClock, indice: int) -> None:
     original = _um_de_cada(clock)[indice]
     assert Event.from_row(original.to_row()) == original

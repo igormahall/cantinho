@@ -120,16 +120,41 @@ Item {
                     // Círculo de concluir. Clicar aqui é o que coloca um
                     // objeto na estante.
                     Item {
+                        id: marcador
                         width: 20
                         height: parent.height
 
+                        // Trava depois do primeiro clique: a conclusão é
+                        // adiada para o anel aparecer, e sem isto um clique
+                        // duplo gravaria dois `task.completed`.
+                        property bool concluindo: false
+
+                        // O anel precisa de um instante para se abrir, e a
+                        // linha some no momento em que a tarefa é concluída.
+                        // Duzentos milissegundos não se percebem como atraso e
+                        // são o bastante para o gesto ter uma resposta.
+                        Timer {
+                            id: adiar
+                            interval: 200
+                            onTriggered: raiz.concluir(model.taskId)
+                        }
+
                         Rectangle {
+                            id: circulo
                             anchors.centerIn: parent
                             width: 15; height: 15; radius: 8
                             color: "transparent"
                             border.width: 1.5
                             border.color: marcar.containsMouse ? Theme.musgo : Theme.textoSuave
+                            scale: marcar.containsMouse ? 1.15 : 1.0
                             Behavior on border.color { ColorAnimation { duration: 150 } }
+                            Behavior on scale {
+                                NumberAnimation {
+                                    duration: Theme.reacao
+                                    easing.type: Easing.OutBack
+                                    easing.overshoot: 2.2
+                                }
+                            }
 
                             Rectangle {
                                 anchors.centerIn: parent
@@ -138,6 +163,34 @@ Item {
                                 opacity: marcar.containsMouse ? 1 : 0
                                 Behavior on opacity { NumberAnimation { duration: 150 } }
                             }
+
+                            // O anel que se abre ao concluir. Dura menos de meio
+                            // segundo e some junto com a linha — é o adeus da
+                            // tarefa, não uma comemoração.
+                            Rectangle {
+                                id: onda
+                                anchors.centerIn: parent
+                                width: 15; height: 15; radius: width / 2
+                                color: "transparent"
+                                border.width: 1.5
+                                border.color: Theme.musgo
+                                opacity: 0
+                                scale: 1
+
+                                ParallelAnimation {
+                                    id: pulso
+                                    NumberAnimation {
+                                        target: onda; property: "scale"
+                                        from: 1; to: 2.6
+                                        duration: 460; easing.type: Easing.OutCubic
+                                    }
+                                    NumberAnimation {
+                                        target: onda; property: "opacity"
+                                        from: 0.7; to: 0
+                                        duration: 460; easing.type: Easing.OutCubic
+                                    }
+                                }
+                            }
                         }
 
                         MouseArea {
@@ -145,7 +198,14 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: raiz.concluir(model.taskId)
+                            enabled: !marcador.concluindo
+                            onEntered: backend.sfx("toque")
+                            onClicked: {
+                                marcador.concluindo = true
+                                backend.sfx("entrega")
+                                pulso.start()
+                                adiar.start()
+                            }
                         }
                     }
 

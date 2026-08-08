@@ -103,9 +103,23 @@ class Session:
 
 @dataclass(frozen=True)
 class Idea:
+    """Uma linha do mural.
+
+    Uma ideia aproveitada não sai do mural: ela continua lá, riscada. Some do
+    mural só o que foi descartado de propósito — e mesmo isso é um evento novo,
+    não um apagamento.
+    """
+
     id: str
     text: str
     captured_at: datetime
+    task_id: str | None = None
+    promoted_at: datetime | None = None
+    archived_at: datetime | None = None
+
+    @property
+    def used(self) -> bool:
+        return self.promoted_at is not None
 
 
 @dataclass(frozen=True)
@@ -322,17 +336,55 @@ def sessions_on(events: Iterable[Event], day: date, tz: tzinfo) -> list[Session]
 
 
 def ideas(events: Iterable[Event]) -> list[Idea]:
-    """Inbox, da mais recente para a mais antiga."""
-    capturadas = [
-        Idea(
-            id=event.payload["id"],
-            text=event.payload["text"],
-            captured_at=event.occurred_at,
-        )
-        for event in _ordered(events)
-        if event.kind == "idea.captured"
-    ]
-    return list(reversed(capturadas))
+    """Mural de ideias: as ainda soltas primeiro, as aproveitadas depois.
+
+    Dentro de cada grupo, da mais recente para a mais antiga. Descartadas não
+    aparecem.
+
+    Duas passadas pelo mesmo motivo de `_index_tasks`: capturar uma ideia e
+    promovê-la podem cair no mesmo microssegundo, e a promoção não pode depender
+    de sortear a ordem certa.
+    """
+    ordenados = _ordered(events)
+
+    capturadas: dict[str, Idea] = {}
+    for event in ordenados:
+        if event.kind == "idea.captured":
+            ideia_id = event.payload["id"]
+            if ideia_id not in capturadas:
+                capturadas[ideia_id] = Idea(
+                    id=ideia_id,
+                    text=event.payload["text"],
+                    captured_at=event.occurred_at,
+                )
+
+    for event in ordenados:
+        if event.kind not in ("idea.promoted", "idea.archived"):
+            continue
+        atual = capturadas.get(event.payload["id"])
+        if atual is None:
+            continue
+        if event.kind == "idea.promoted" and atual.promoted_at is None:
+            capturadas[atual.id] = replace(
+                atual,
+                promoted_at=event.occurred_at,
+                task_id=event.payload["task_id"],
+            )
+        elif event.kind == "idea.archived" and atual.archived_at is None:
+            capturadas[atual.id] = replace(atual, archived_at=event.occurred_at)
+
+    vivas = [ideia for ideia in capturadas.values() if ideia.archived_at is None]
+    soltas = sorted(
+        (ideia for ideia in vivas if not ideia.used),
+        key=lambda ideia: (ideia.captured_at, ideia.id),
+        reverse=True,
+    )
+    usadas = sorted(
+        (ideia for ideia in vivas if ideia.used),
+        key=lambda ideia: (ideia.promoted_at, ideia.id),  # type: ignore[arg-type]
+        reverse=True,
+    )
+    return soltas + usadas
 
 
 def day_reviews(events: Iterable[Event]) -> dict[str, DayReview]:

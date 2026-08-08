@@ -32,7 +32,22 @@ QtObject {
     readonly property int titulo: 18
 
     // Painel translúcido: o quarto continua aparecendo por trás.
+    //
+    // Três níveis, e a diferença entre eles é quanto texto cada superfície
+    // carrega. A gaveta tem listas para ler e precisa de fundo. A barra é uma
+    // fileira de botões: opaca, ela vira um rodapé de aplicativo e corta o
+    // chão do quarto em dois. A mini é um objeto na mesa de outra pessoa, e
+    // quanto menos ela parecer janela, melhor.
     readonly property real opacidadePainel: 0.93
+    readonly property real opacidadeBarra: 0.62
+    readonly property real opacidadeMini: 0.55
+
+    // Papel pregado na parede: calendário, relógio e bilhete. Bem baixa — é
+    // decoração do cômodo, não widget por cima dele.
+    readonly property real opacidadeParede: 0.16
+
+    // Reação ao mouse. Curta o bastante para parecer resposta e não animação.
+    readonly property int reacao: 140
 
     Behavior on fundo      { ColorAnimation { duration: tema.transicao; easing.type: Easing.InOutQuad } }
     Behavior on superficie { ColorAnimation { duration: tema.transicao; easing.type: Easing.InOutQuad } }

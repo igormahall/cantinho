@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, QSize, Qt
@@ -132,6 +133,22 @@ class _RendererCache:
 
 _renderers = _RendererCache()
 
+# Toda renderização passa por aqui, uma de cada vez.
+#
+# `QQuickImageProvider` do tipo Image é chamado numa thread de trabalho sempre
+# que o `Image` do QML é assíncrono — e as cinco camadas do quarto são. Um
+# `QSvgRenderer` não é reentrante, e as camadas compartilham o renderer do
+# arquivo de cena, que fica em cache.
+#
+# O sintoma é traiçoeiro: no tamanho inicial dá certo, porque as imagens já
+# estão em cache do QML e ninguém pede duas ao mesmo tempo. Ao redimensionar a
+# janela, as cinco pedem um tamanho novo no mesmo instante, as chamadas se
+# atropelam dentro do mesmo renderer e o quarto inteiro sai em branco — sem
+# erro, sem aviso, só a parede vazia.
+#
+# Serializar custa pouco: a cena inteira rasteriza em ~10 ms.
+_desenho = threading.Lock()
+
 
 def _blank(size: QSize) -> QImage:
     imagem = QImage(size, QImage.Format_ARGB32_Premultiplied)
@@ -163,14 +180,15 @@ def _painter_for(imagem: QImage) -> QPainter:
 def render_static(theme: str, size: QSize) -> QImage:
     """Todas as camadas que não dependem de evento, numa imagem só."""
     imagem = _blank(size)
-    renderer = _renderers.get(scene_path(theme))
-    if renderer is None:
-        return imagem
-    painter = _painter_for(imagem)
-    for layer in STATIC_LAYERS:
-        if renderer.elementExists(layer):
-            renderer.render(painter, layer, renderer.boundsOnElement(layer))
-    painter.end()
+    with _desenho:
+        renderer = _renderers.get(scene_path(theme))
+        if renderer is None:
+            return imagem
+        painter = _painter_for(imagem)
+        for layer in STATIC_LAYERS:
+            if renderer.elementExists(layer):
+                renderer.render(painter, layer, renderer.boundsOnElement(layer))
+        painter.end()
     return imagem
 
 
@@ -181,22 +199,23 @@ def render_plant(stage: int, size: QSize) -> QImage:
     da cena é o que combina com a mesa.
     """
     imagem = _blank(size)
-    renderer = _renderers.get(plant_path(stage))
-    if renderer is None or not renderer.elementExists("planta"):
-        return imagem
-    painter = _painter_for(imagem)
-    bounds = renderer.boundsOnElement("planta")
-    renderer.render(
-        painter,
-        "planta",
-        QRectF(
-            bounds.x() + PLANT_OFFSET_X,
-            bounds.y() + PLANT_OFFSET_Y,
-            bounds.width(),
-            bounds.height(),
-        ),
-    )
-    painter.end()
+    with _desenho:
+        renderer = _renderers.get(plant_path(stage))
+        if renderer is None or not renderer.elementExists("planta"):
+            return imagem
+        painter = _painter_for(imagem)
+        bounds = renderer.boundsOnElement("planta")
+        renderer.render(
+            painter,
+            "planta",
+            QRectF(
+                bounds.x() + PLANT_OFFSET_X,
+                bounds.y() + PLANT_OFFSET_Y,
+                bounds.width(),
+                bounds.height(),
+            ),
+        )
+        painter.end()
     return imagem
 
 
@@ -208,28 +227,28 @@ def render_shelf(theme: str, object_types: list[str], size: QSize) -> QImage:
     acomodar mais que isso sem que o tipo do objeto dependa do lugar.
     """
     imagem = _blank(size)
-    renderer = _renderers.get(scene_path(theme))
-    if renderer is None:
-        return imagem
-
     visiveis = object_types[:SHELF_CAPACITY]
     posicoes = shelf_slots(len(visiveis))
-    painter = _painter_for(imagem)
-    for object_type, (centro_x, base_y) in zip(visiveis, posicoes):
-        if not renderer.elementExists(object_type):
-            continue
-        natural = renderer.boundsOnElement(object_type)
-        renderer.render(
-            painter,
-            object_type,
-            QRectF(
-                centro_x - natural.width() / 2,
-                base_y - natural.height(),
-                natural.width(),
-                natural.height(),
-            ),
-        )
-    painter.end()
+    with _desenho:
+        renderer = _renderers.get(scene_path(theme))
+        if renderer is None:
+            return imagem
+        painter = _painter_for(imagem)
+        for object_type, (centro_x, base_y) in zip(visiveis, posicoes):
+            if not renderer.elementExists(object_type):
+                continue
+            natural = renderer.boundsOnElement(object_type)
+            renderer.render(
+                painter,
+                object_type,
+                QRectF(
+                    centro_x - natural.width() / 2,
+                    base_y - natural.height(),
+                    natural.width(),
+                    natural.height(),
+                ),
+            )
+        painter.end()
     return imagem
 
 
@@ -290,23 +309,26 @@ def _desenhar_planta(
     Os dois vêm do mesmo arquivo e são desenhados sob a mesma transformação,
     senão a folhagem descola do vaso.
     """
-    renderer = _renderers.get(plant_path(stage))
-    if renderer is None:
-        return
-
     moldura_h = ICON_FRAME_Y + ICON_FRAME_H - topo
     escala = altura / moldura_h
     largura = ICON_FRAME_W * escala
     destino_x = (ICON_BASE - largura) / 2
     destino_y = base_y - altura
 
-    painter.save()
-    painter.translate(destino_x - ICON_FRAME_X * escala, destino_y - topo * escala)
-    painter.scale(escala, escala)
-    for elemento in ("vaso", "planta"):
-        if renderer.elementExists(elemento):
-            renderer.render(painter, elemento, renderer.boundsOnElement(elemento))
-    painter.restore()
+    # A bandeja redesenha o ícone a cada evento, na thread da UI, enquanto o
+    # provedor pode estar rasterizando a cena numa worker — e os dois passam
+    # pelo mesmo cache de renderer.
+    with _desenho:
+        renderer = _renderers.get(plant_path(stage))
+        if renderer is None:
+            return
+        painter.save()
+        painter.translate(destino_x - ICON_FRAME_X * escala, destino_y - topo * escala)
+        painter.scale(escala, escala)
+        for elemento in ("vaso", "planta"):
+            if renderer.elementExists(elemento):
+                renderer.render(painter, elemento, renderer.boundsOnElement(elemento))
+        painter.restore()
 
 
 def render_icon(stage: int, size: int = ICON_BASE) -> QImage:

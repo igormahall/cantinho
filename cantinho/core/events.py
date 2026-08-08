@@ -34,6 +34,8 @@ __all__ = [
     "session_started",
     "session_ended",
     "idea_captured",
+    "idea_promoted",
+    "idea_archived",
     "day_checkin",
     "day_review",
     "backlog_reordered",
@@ -156,6 +158,16 @@ KINDS: Mapping[str, _Spec] = {
     "idea.captured": _Spec(
         required={"id": _non_empty_str, "text": _non_empty_str},
     ),
+    # Ciclo de vida da ideia. Aditivos, e por evento próprio em vez de campo
+    # novo em `idea.captured`: o evento de captura já está gravado no log e é
+    # imutável, então "essa ideia foi aproveitada" só pode ser um fato posterior.
+    #
+    # `task_id` guardado aqui é o que permite ligar a ideia à tarefa que ela
+    # virou sem precisar comparar texto — o rótulo da tarefa pode mudar depois.
+    "idea.promoted": _Spec(
+        required={"id": _non_empty_str, "task_id": _non_empty_str},
+    ),
+    "idea.archived": _Spec(required={"id": _non_empty_str}),
     "day.checkin": _Spec(
         required={"date": _iso_date, "intents": _list_of_str},
     ),
@@ -350,6 +362,16 @@ def idea_captured(
         "idea.captured",
         {"id": id or new_id(), "text": text},
     )
+
+
+def idea_promoted(clock: Clock, device_id: str, *, id: str, task_id: str) -> Event:
+    return make_event(
+        clock, device_id, "idea.promoted", {"id": id, "task_id": task_id}
+    )
+
+
+def idea_archived(clock: Clock, device_id: str, *, id: str) -> Event:
+    return make_event(clock, device_id, "idea.archived", {"id": id})
 
 
 def day_checkin(

@@ -33,6 +33,9 @@ Window {
         anchors.fill: parent
         plantStage: backend.plantStage
         shelf: backend.shelf
+
+        // O bilhete da parede é a única parte do cenário que responde a clique.
+        onAbrirHoje: janela.aba = "backlog"
     }
 
     // Clicar no vazio do quarto fecha o painel aberto.
@@ -49,6 +52,10 @@ Window {
     // para mostrar a lista de pendências inverteria a prioridade da tela.
     Painel {
         id: gaveta
+        // Nomeado para `tools/simular_uso.py` conseguir procurar só aqui
+        // dentro: o bilhete da parede repete os rótulos das tarefas, e uma
+        // busca pela tela inteira acha o papel antes da linha da lista.
+        objectName: "gaveta"
         width: 410
         x: 330
         anchors.top: parent.top
@@ -71,7 +78,7 @@ Window {
 
             Text {
                 text: janela.aba === "backlog" ? "hoje"
-                      : janela.aba === "ideias" ? "ideias"
+                      : janela.aba === "ideias" ? "mural de ideias"
                       : janela.aba === "dia" ? "fechar o dia" : ""
                 color: Theme.texto
                 font.pixelSize: Theme.titulo
@@ -124,12 +131,22 @@ Window {
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.WordWrap
                     visible: backend.ideas.length === 0
-                    text: "Nada capturado ainda.\nCtrl+Shift+C funciona de qualquer lugar."
+                    text: "O mural está vazio.\nCtrl+Shift+C funciona de qualquer lugar."
                     color: Theme.textoSuave
                     font.pixelSize: Theme.corpo
                     lineHeight: 1.4
                 }
 
+                // O mural.
+                //
+                // Uma ideia aproveitada não sai daqui: ela fica riscada, com a
+                // data em que virou tarefa. É o único lugar do app onde dá para
+                // ver de onde as coisas vieram — e uma ideia riscada é bem mais
+                // barata de manter do que uma lista que se esvazia e não conta
+                // mais nada.
+                //
+                // Some do mural só o que for descartado à mão, e mesmo isso é
+                // um evento novo no log, não um apagamento.
                 ListView {
                     anchors.fill: parent
                     anchors.bottomMargin: 48
@@ -138,37 +155,68 @@ Window {
                     model: backend.ideas
 
                     delegate: Item {
+                        id: cartaz
                         width: ListView.view.width
                         height: linha.height + 10
 
+                        readonly property bool usada: modelData.used
+
                         HoverHandler { id: sobre }
+
+                        // Pino: sobra da metáfora do mural, e serve para o olho
+                        // achar o começo de cada ideia.
+                        Rectangle {
+                            width: 5; height: 5; radius: 3
+                            y: 6
+                            color: cartaz.usada ? Theme.musgo : Theme.ambar
+                            opacity: cartaz.usada ? 0.45 : 0.8
+                        }
 
                         Column {
                             id: linha
-                            width: parent.width - 70
+                            x: 14
+                            width: parent.width - 84
                             spacing: 2
 
                             Text {
                                 width: parent.width
                                 text: modelData.text
                                 color: Theme.texto
+                                opacity: cartaz.usada ? 0.45 : 1.0
                                 font.pixelSize: Theme.corpo
+                                font.strikeout: cartaz.usada
                                 wrapMode: Text.WordWrap
+                                Behavior on opacity { NumberAnimation { duration: 300 } }
                             }
                             Text {
-                                text: modelData.when
+                                text: cartaz.usada
+                                      ? modelData.when + " · virou tarefa"
+                                      : modelData.when
                                 color: Theme.textoSuave
+                                opacity: cartaz.usada ? 0.6 : 1.0
                                 font.pixelSize: 11
                             }
                         }
 
-                        BotaoSuave {
+                        Row {
                             anchors.right: parent.right
                             anchors.top: parent.top
-                            text: "virar tarefa"
+                            spacing: 0
                             opacity: sobre.hovered ? 1 : 0
+                            visible: opacity > 0.01
                             Behavior on opacity { NumberAnimation { duration: 180 } }
-                            onClicked: backend.ideaToTask(modelData.text)
+
+                            BotaoSuave {
+                                text: "virar tarefa"
+                                visible: !cartaz.usada
+                                onClicked: backend.ideaToTask(modelData.id)
+                            }
+
+                            BotaoSuave {
+                                text: "×"
+                                corAtiva: Theme.terracota
+                                onClicked: backend.archiveIdea(modelData.id)
+                            }
                         }
                     }
                 }
@@ -211,6 +259,14 @@ Window {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 24
+
+        // Bem mais translúcida que a gaveta: a barra não tem texto para ler, só
+        // controles. Opaca, ela vira rodapé de aplicativo e corta o chão do
+        // quarto em dois. Fica um pouco mais firme com o mouse por perto.
+        opacidadeFundo: sobreBarra.hovered
+                        ? Theme.opacidadePainel : Theme.opacidadeBarra
+
+        HoverHandler { id: sobreBarra }
 
         Row {
             anchors.left: parent.left
@@ -304,6 +360,14 @@ Window {
                 text: backend.themeMode === "auto" ? "relógio"
                       : backend.themeMode === "noite" ? "noite" : "tarde"
                 onClicked: backend.cycleThemeMode()
+            }
+
+            BotaoSuave {
+                anchors.verticalCenter: parent.verticalCenter
+                text: backend.soundOn ? "som" : "mudo"
+                destacado: backend.soundOn
+                corAtiva: Theme.musgo
+                onClicked: backend.toggleSound()
             }
 
             BotaoSuave {

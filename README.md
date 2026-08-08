@@ -20,6 +20,18 @@ ontem. Falhar não destrói nada — só não faz crescer.
 Não tem conta, não tem nuvem, não tem sincronização e não manda nada para
 lugar nenhum. O banco é um arquivo na sua máquina.
 
+## O que fica na parede
+
+O calendário do mês, um relógio de parede e um bilhete com a lista do dia. São
+cenário, não painel: ficam atrás da luz do abajur, em opacidade baixa, e o
+único que responde a clique é o bilhete — que abre a gaveta do "hoje".
+
+O relógio não tem ponteiro de segundos, e o calendário não marca os dias em que
+você trabalhou. Os dois seriam fáceis de fazer e os dois puxariam a tela para o
+lugar errado: um vira cronômetro, o outro vira mapa de assiduidade.
+
+No bilhete, o que você concluiu hoje fica na folha, riscado, até o dia virar.
+
 ## Os dois momentos
 
 O tema acompanha o relógio: claro de dia, escuro à noite, com uma travessia de
@@ -48,6 +60,10 @@ Linux. Para experimentar sem sujar seus dados de verdade:
 python -m cantinho.main --db ./teste.db --log DEBUG
 ```
 
+Um banco por vez: abrir o mesmo banco duas vezes traz para a frente a janela
+que já existe, em vez de subir uma segunda cópia. Bancos diferentes convivem —
+é o que deixa você abrir um app de teste com o de verdade na bandeja.
+
 ### Como se usa
 
 | | |
@@ -56,10 +72,25 @@ python -m cantinho.main --db ./teste.db --log DEBUG
 | **começar** | prende o timer a uma tarefa. Ou clique em "começar" na barra para uma sessão solta. |
 | **o círculo** | conclui a tarefa. É o que põe um objeto na estante. |
 | **Ctrl+Shift+C** | guarda uma ideia de qualquer lugar, mesmo com o app escondido. |
+| **ideias** | o mural. A ideia que virar tarefa continua lá, riscada. |
 | **fechar o dia** | a retrospectiva já vem montada das suas sessões. Você só diz como estava. |
+| **som** | liga e desliga o ambiente e os cliques, de uma vez. |
 | **mini** | uma janelinha só com o timer, sempre por cima. Arrasta pelo corpo. |
 
 Fechar a janela não encerra o app: ele continua na bandeja, ao lado do relógio.
+
+### Um quarto para olhar
+
+O app novo abre um quarto vazio, que é honesto mas não mostra grande coisa.
+Para ver a estante ocupada e a planta crescida sem esperar duas semanas:
+
+```bash
+python tools/semear.py                          # escreve em build/demo.db
+python -m cantinho.main --db build/demo.db
+```
+
+A semeadura escreve pelos construtores de evento de verdade, com o relógio
+deslocado para trás. O banco que sai dali é um log legítimo, não um fixture.
 
 ## Executável portátil
 
@@ -74,37 +105,54 @@ pyinstaller cantinho.spec --noconfirm
 Sai uma pasta `dist/Cantinho/` de uns 200 MB que roda sem instalação e sem
 admin. O build é por plataforma: o do Windows não serve no Linux e vice-versa.
 
+```powershell
+.\dist\Cantinho\Cantinho.exe                        # seu banco de verdade
+.\dist\Cantinho\Cantinho.exe --db ~/cantinho/x.db   # um banco à parte
+```
+
 ## Desenvolvimento
 
 ```bash
 pip install -r requirements-dev.txt
 
-python -m pytest              # 212 testes, sem abrir janela
-python tools/simular_uso.py   # percorre a interface clicando de verdade
-python tools/check_svg.py     # rasteriza os SVGs em build/svg_check/
-python tools/gerar_audio.py   # regera os loops de ambiente
-python tools/gerar_icone.py   # regera o ícone do app
+python -m pytest                # 238 testes, sem abrir janela
+python tools/simular_uso.py     # percorre a interface clicando de verdade
+python tools/check_svg.py       # rasteriza os SVGs em build/svg_check/
+python tools/semear.py          # banco descartável com duas semanas de uso
+python tools/gerar_audio.py     # regera os sons
+python tools/gerar_icone.py     # regera o ícone do app
+python tools/gerar_capturas.py  # regera as imagens deste README
 ```
 
 O `pytest` não cobre o QML. Quem faz isso é o `simular_uso.py`: ele abre as
-janelas, cria tarefa, roda sessão, arrasta, captura ideia e fecha o dia com
-mouse e teclado sintéticos, depois reabre o banco do zero e confere o log
-evento por evento. Rode depois de mexer em qualquer `.qml`.
+janelas, cria tarefa, roda sessão, conclui, arrasta, captura ideia, transforma
+ideia em tarefa, estica a janela e fecha o dia com mouse e teclado sintéticos,
+depois reabre o banco do zero e confere o log evento por evento. Rode depois de
+mexer em qualquer `.qml`.
+
+Áudio, ícone e capturas são gerados e versionados prontos, para que um clone
+limpo funcione sem etapa extra de build. Os três geradores são determinísticos
+o bastante para que uma mudança no `git status` depois de rodá-los signifique
+que o código mudou, não que o resultado variou.
 
 ### Por dentro
 
 Só existe uma tabela, `events`, e ela só recebe `INSERT`. Backlog, sessões,
-estante, planta e histórico não são guardados: são recalculados a partir do log
-toda vez, por funções puras. Corrigir alguma coisa é acrescentar um evento
-novo, nunca editar o que já passou.
+estante, planta, mural e histórico não são guardados: são recalculados a partir
+do log toda vez, por funções puras. Corrigir alguma coisa é acrescentar um
+evento novo, nunca editar o que já passou.
 
 Isso significa que o estado da tela nunca pode divergir do que está em disco —
 e que apagar o arquivo de banco é a única forma de perder alguma coisa.
 
+É também o que dá o mural de graça: "essa ideia virou tarefa" não é um campo
+que muda, é um evento posterior que aponta para a tarefa que nasceu.
+
 ```
 cantinho/
-  core/       events.py store.py projections.py clock.py   (sem Qt)
-  services/   scene.py timer.py audio.py hotkey.py tray.py (plataforma)
+  core/       events.py store.py projections.py clock.py    (sem Qt)
+  services/   scene.py timer.py audio.py hotkey.py tray.py
+              single_instance.py                            (plataforma)
   backend.py  a fronteira entre o log e a interface
   ui/         Main.qml Mini.qml theme/ room/ panels/
 ```
@@ -113,10 +161,10 @@ O ícone é o próprio vaso do quarto: nos tamanhos grandes ele aparece sobre um
 ladrilho com a luz do abajur atrás, e nos pequenos o ladrilho sai para a planta
 caber. Na bandeja ele é vivo — acompanha o crescimento da planta.
 
-O som de ambiente é sintetizado, não gravado: `tools/gerar_audio.py` monta
-chuva, acorde e estalo de vinil com a biblioteca padrão do Python. Os SVGs do
-cenário têm camadas com os mesmos ids nos dois temas, o que deixa a planta e a
-estante mudarem sem redesenhar o quarto.
+O som é sintetizado, não gravado: `tools/gerar_audio.py` monta chuva, acorde e
+estalo de vinil com a biblioteca padrão do Python, mais os três estalos curtos
+que respondem ao mouse. Os SVGs do cenário têm camadas com os mesmos ids nos
+dois temas, o que deixa a planta e a estante mudarem sem redesenhar o quarto.
 
 `CLAUDE.md` tem as regras de arquitetura em detalhe, incluindo o que
 deliberadamente não se faz aqui e por quê.

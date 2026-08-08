@@ -1,31 +1,34 @@
-"""Som ambiente.
+"""Som: o loop de ambiente e as reações curtas de interface.
 
-Toca um arquivo local em loop, se existir um. O projeto não versiona áudio, e
-adicionar binário grande ao repositório é decisão que não me cabe tomar
-sozinho — então o serviço nasce funcionando e silencioso: sem arquivo em
-`assets/audio/`, ele simplesmente não toca e não reclama em runtime.
+Tudo é arquivo local em `assets/audio/`, gerado por `tools/gerar_audio.py` e
+versionado pronto. Ausência de arquivo nunca é erro: o serviço nasce
+funcionando e silencioso, e um clone sem os wavs roda mudo sem reclamar em
+runtime.
 
-Para ligar o som, basta soltar um `.wav`, `.mp3` ou `.ogg` em `assets/audio/`
-com um destes nomes:
+Nomes procurados (qualquer extensão de `EXTENSOES`):
 
-    ambiente_noite.*   toca no tema noite (chuva, por exemplo)
-    ambiente_tarde.*   toca no tema fim de tarde
+    ambiente_noite.*   loop do tema noite (chuva)
+    ambiente_tarde.*   loop do tema fim de tarde
     ambiente.*         usado quando não existe um específico do tema
+    ui_toque.*         mouse passando por cima
+    ui_clique.*        clique
+    ui_entrega.*       tarefa concluída
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QUrl
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QSoundEffect
 
 from cantinho.services import scene
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["Ambience"]
+__all__ = ["Ambience", "Sfx"]
 
 EXTENSOES = (".ogg", ".wav", ".mp3", ".m4a")
 VOLUME_PADRAO = 0.35
@@ -88,3 +91,59 @@ class Ambience(QObject):
 
     def stop(self) -> None:
         self._player.stop()
+
+
+# Reações de interface. Volumes bem separados de propósito: passar o mouse tem
+# que ficar no limite do perceptível, senão vira barulho; concluir uma tarefa é
+# o único momento que pode soar como recompensa.
+SFX_VOLUMES: dict[str, float] = {
+    "toque": 0.10,
+    "clique": 0.26,
+    "entrega": 0.38,
+}
+
+# Intervalo mínimo entre dois toques. Sem isso, arrastar o mouse por uma fileira
+# de botões dispara uma metralhadora de cliques.
+SFX_INTERVALO = 0.075
+
+
+class Sfx(QObject):
+    """Sons curtos de interação.
+
+    `QSoundEffect` e não `QMediaPlayer`: o efeito fica decodificado em memória e
+    dispara na hora. O player de mídia leva dezenas de milissegundos para
+    começar, o que num retorno de clique é atraso audível.
+
+    Sem arquivo em `assets/audio/`, cada nome vira um no-op silencioso — igual
+    ao ambiente, o serviço nasce funcionando e mudo.
+    """
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._mudo = False
+        self._ultimo = 0.0
+        self._efeitos: dict[str, QSoundEffect] = {}
+        for nome, volume in SFX_VOLUMES.items():
+            caminho = _find((f"ui_{nome}",))
+            if caminho is None:
+                logger.debug("sem som de interface para %s", nome)
+                continue
+            efeito = QSoundEffect(self)
+            efeito.setSource(QUrl.fromLocalFile(str(caminho)))
+            efeito.setVolume(volume)
+            self._efeitos[nome] = efeito
+
+    def set_muted(self, mudo: bool) -> None:
+        self._mudo = bool(mudo)
+
+    def play(self, nome: str) -> None:
+        if self._mudo:
+            return
+        efeito = self._efeitos.get(nome)
+        if efeito is None:
+            return
+        agora = time.monotonic()
+        if agora - self._ultimo < SFX_INTERVALO:
+            return
+        self._ultimo = agora
+        efeito.play()

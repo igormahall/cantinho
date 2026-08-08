@@ -1,8 +1,10 @@
-"""Os loops de ambiente.
+"""O som: os loops de ambiente e as reações de interface.
 
 Os arquivos são sintetizados por `tools/gerar_audio.py` e versionados prontos,
 para que o app funcione num clone limpo sem etapa extra de build. Estes testes
-seguram o contrato entre o gerador e `services/audio.py`.
+seguram o contrato entre o gerador e `services/audio.py` — se o gerador mudar
+um nome ou um formato, o app fica mudo em silêncio, que é a pior forma de
+quebrar.
 """
 
 from __future__ import annotations
@@ -107,3 +109,63 @@ def test_o_servico_encontra_o_arquivo_do_tema(tema: str) -> None:
 
 def test_temas_diferentes_dao_arquivos_diferentes() -> None:
     assert caminho("noite").read_bytes() != caminho("tarde").read_bytes()
+
+
+# ------------------------------------------------------- reações de interface
+
+REACOES = tuple(audio.SFX_VOLUMES)
+
+
+def caminho_reacao(nome: str) -> Path:
+    return scene.assets_dir() / "audio" / f"ui_{nome}.wav"
+
+
+def amostras_reacao(nome: str) -> list[float]:
+    with wave.open(str(caminho_reacao(nome))) as arquivo:
+        dados = array.array("h")
+        dados.frombytes(arquivo.readframes(arquivo.getnframes()))
+    return [v / 32768.0 for v in dados]
+
+
+@pytest.mark.parametrize("nome", REACOES)
+def test_o_servico_encontra_a_reacao(nome: str) -> None:
+    """Mesmo contrato do ambiente: nome errado deixa a UI muda sem avisar."""
+    achado = audio._find((f"ui_{nome}",))
+    assert achado is not None
+    assert achado.name == f"ui_{nome}.wav"
+
+
+@pytest.mark.parametrize("nome", REACOES)
+def test_reacao_e_curta_e_no_formato_do_qsoundeffect(nome: str) -> None:
+    """`QSoundEffect` só toca PCM sem compressão, e som de UI tem que ser curto."""
+    with wave.open(str(caminho_reacao(nome))) as arquivo:
+        assert arquivo.getnchannels() == 1
+        assert arquivo.getsampwidth() == 2
+        assert arquivo.getframerate() == 22050
+        duracao = arquivo.getnframes() / arquivo.getframerate()
+    assert 0.02 < duracao < 1.2, f"{nome} dura {duracao:.2f}s"
+
+
+@pytest.mark.parametrize("nome", REACOES)
+def test_reacao_entra_e_sai_no_zero(nome: str) -> None:
+    """Rampa nas duas pontas.
+
+    Começar ou terminar com amplitude é um degrau na saída de áudio, e degrau
+    é estalo. Num som que dispara a cada clique, isso apareceria o dia inteiro.
+    """
+    valores = amostras_reacao(nome)
+    assert abs(valores[0]) < 0.02, "ataque seco no começo"
+    assert abs(valores[-1]) < 0.02, "corte seco no fim"
+
+
+@pytest.mark.parametrize("nome", REACOES)
+def test_reacao_tem_som_sem_estourar(nome: str) -> None:
+    valores = amostras_reacao(nome)
+    pico = max(abs(v) for v in valores)
+    assert 0.2 < pico < 0.95, f"{nome} com pico {pico:.2f}"
+
+
+def test_o_toque_e_mais_discreto_que_o_clique() -> None:
+    """Passar o mouse tem que ficar abaixo de clicar, senão vira barulho."""
+    assert audio.SFX_VOLUMES["toque"] < audio.SFX_VOLUMES["clique"]
+    assert audio.SFX_VOLUMES["clique"] < audio.SFX_VOLUMES["entrega"]

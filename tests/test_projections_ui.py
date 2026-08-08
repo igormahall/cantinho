@@ -120,6 +120,62 @@ def test_ideia_nao_vira_tarefa_sozinha(clock: FakeClock) -> None:
     assert len(ideas(log)) == 1
 
 
+def _ideia(clock: FakeClock, texto: str) -> tuple[list, str]:
+    evento = ev.idea_captured(clock, DEVICE, text=texto)
+    return [evento], evento.payload["id"]
+
+
+def test_ideia_aproveitada_continua_no_mural(clock: FakeClock) -> None:
+    """Riscada, não apagada: o mural é o registro de onde a tarefa veio."""
+    log, ideia_id = _ideia(clock, "trocar a fonte")
+    clock.advance(timedelta(minutes=5))
+    log.append(ev.idea_promoted(clock, DEVICE, id=ideia_id, task_id="task-9"))
+
+    mural = ideas(log)
+    assert len(mural) == 1
+    assert mural[0].used
+    assert mural[0].task_id == "task-9"
+
+
+def test_ideia_descartada_sai_do_mural(clock: FakeClock) -> None:
+    log, ideia_id = _ideia(clock, "não era nada")
+    clock.advance(timedelta(minutes=1))
+    log.append(ev.idea_archived(clock, DEVICE, id=ideia_id))
+    assert ideas(log) == []
+
+
+def test_aproveitadas_descem_para_o_fim_do_mural(clock: FakeClock) -> None:
+    """O que ainda está solto fica em cima; o que já rendeu, embaixo."""
+    log: list = []
+    ids = {}
+    for texto in ["primeira", "segunda", "terceira"]:
+        evento = ev.idea_captured(clock, DEVICE, text=texto)
+        log.append(evento)
+        ids[texto] = evento.payload["id"]
+        clock.advance(timedelta(minutes=2))
+
+    log.append(ev.idea_promoted(clock, DEVICE, id=ids["terceira"], task_id="t1"))
+
+    assert [i.text for i in ideas(log)] == ["segunda", "primeira", "terceira"]
+
+
+def test_promocao_repetida_nao_muda_o_mural(clock: FakeClock) -> None:
+    """Idempotência: o mesmo lote reaplicado dá o mesmo mural."""
+    log, ideia_id = _ideia(clock, "uma ideia")
+    clock.advance(timedelta(minutes=1))
+    primeira = ev.idea_promoted(clock, DEVICE, id=ideia_id, task_id="task-1")
+    clock.advance(timedelta(minutes=1))
+    segunda = ev.idea_promoted(clock, DEVICE, id=ideia_id, task_id="task-2")
+
+    assert ideas(log + [primeira])[0].task_id == "task-1"
+    assert ideas(log + [primeira, segunda])[0].task_id == "task-1"
+
+
+def test_promocao_de_ideia_inexistente_e_ignorada(clock: FakeClock) -> None:
+    log = [ev.idea_promoted(clock, DEVICE, id="não existe", task_id="task-1")]
+    assert ideas(log) == []
+
+
 # --------------------------------------------------------------- sessões do dia
 
 

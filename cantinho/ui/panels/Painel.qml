@@ -5,9 +5,19 @@ import theme
 // folha apoiada no ambiente, não uma tela que cobre o ambiente.
 Rectangle {
     id: painel
+
+    // Quanto o painel cobre o quarto. Quem tem texto para ler sobe; quem é só
+    // controle desce. Ver os três níveis em Theme.qml.
+    property real opacidadeFundo: Theme.opacidadePainel
+
     color: Qt.rgba(Theme.superficie.r, Theme.superficie.g, Theme.superficie.b,
-                   Theme.opacidadePainel)
+                   painel.opacidadeFundo)
     radius: Theme.raio
-    border.color: Theme.borda
+    border.color: Qt.rgba(Theme.borda.r, Theme.borda.g, Theme.borda.b,
+                          0.35 + 0.65 * painel.opacidadeFundo)
     border.width: 1
+
+    Behavior on opacidadeFundo {
+        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+    }
 }

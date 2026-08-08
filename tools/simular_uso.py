@@ -39,7 +39,7 @@ from PySide6.QtWidgets import QApplication
 
 from cantinho.backend import Backend
 from cantinho.core.clock import SystemClock
-from cantinho.core.projections import open_tasks, shelf_objects
+from cantinho.core.projections import ideas, open_tasks, shelf_objects
 from cantinho.core.store import EventStore
 from cantinho.services import scene
 
@@ -87,10 +87,10 @@ def caminhar(item):
         yield from caminhar(filho)
 
 
-def visiveis():
+def visiveis(raiz=None):
     return [
         it
-        for it in caminhar(principal.contentItem())
+        for it in caminhar(raiz if raiz is not None else principal.contentItem())
         if it.isVisible() and it.width() > 0 and it.height() > 0
     ]
 
@@ -100,8 +100,8 @@ def centro(item) -> QPoint:
     return QPoint(round(ponto.x()), round(ponto.y()))
 
 
-def achar(texto, perto_de_y=None, max_y=None):
-    achados = [it for it in visiveis() if it.property("text") == texto]
+def achar(texto, perto_de_y=None, max_y=None, raiz=None):
+    achados = [it for it in visiveis(raiz) if it.property("text") == texto]
     if max_y is not None:
         achados = [it for it in achados if centro(it).y() < max_y]
     if not achados:
@@ -187,10 +187,36 @@ def passo(fn):
 # ---------------------------------------------------------------------- roteiro
 
 
+def achar_por_nome(nome):
+    for item in caminhar(principal.contentItem()):
+        if item.objectName() == nome:
+            return item
+    raise LookupError(f"não achei item chamado {nome!r}")
+
+
+def na_barra(texto):
+    """Desambigua o botão da barra de baixo.
+
+    O bilhete da parede também tem um rótulo "hoje", e ele aparece antes na
+    varredura. Procurar pelo texto sozinho pegaria o papel em vez do botão.
+    """
+    return achar(texto, perto_de_y=principal.height() - 60)
+
+
+def na_gaveta(texto, **kwargs):
+    """Procura só dentro do painel lateral.
+
+    O bilhete da parede mostra os mesmos rótulos das tarefas do dia e vem antes
+    na varredura da cena. Sem restringir a raiz, clicar em "a tarefa X" acerta
+    o papel pendurado e a lista nunca recebe o clique.
+    """
+    return achar(texto, raiz=achar_por_nome("gaveta"), **kwargs)
+
+
 @passo
 def abrir_hoje():
     print("\n-- abre o painel 'hoje'")
-    clicar(achar("hoje"))
+    clicar(na_barra("hoje"))
 
 
 @passo
@@ -212,8 +238,8 @@ def escrever_tarefas():
 @passo
 def comecar_sessao():
     print("-- começa uma sessão pela primeira tarefa")
-    alvo = achar(TAREFAS[0])
-    clicar(achar("começar", perto_de_y=centro(alvo).y(), max_y=560))
+    alvo = na_gaveta(TAREFAS[0])
+    clicar(na_gaveta("começar", perto_de_y=centro(alvo).y(), max_y=560))
     checar(backend.timerRunning, "o timer está rodando")
     checar(backend.currentTaskLabel == TAREFAS[0], "ligada à tarefa certa")
 
@@ -221,7 +247,7 @@ def comecar_sessao():
 @passo
 def encerrar_sessao():
     print("-- encerra pela barra de baixo")
-    clicar(achar("encerrar"))
+    clicar(na_barra("encerrar"))
     checar(not backend.timerRunning, "o timer parou")
     checar(len(backend.todaySessions) == 1, "a sessão apareceu no dia")
 
@@ -230,7 +256,7 @@ def encerrar_sessao():
 def concluir_tarefa():
     print("-- conclui a primeira tarefa")
     antes = len(backend.shelf)
-    rotulo = achar(TAREFAS[0])
+    rotulo = na_gaveta(TAREFAS[0])
     ponto = rotulo.mapToItem(None, QPointF(0, rotulo.height() / 2))
     QTest.mouseClick(
         principal,
@@ -262,16 +288,82 @@ def capturar_ideia():
 def arrastar_backlog():
     print("-- arrasta a segunda tarefa para cima da primeira")
     antes = [t["label"] for t in backend.backlog]
-    arrastar(achar(antes[1]), achar(antes[0]))
+    arrastar(na_gaveta(antes[1]), na_gaveta(antes[0]))
     depois = [t["label"] for t in backend.backlog]
     checar(depois == [antes[1], antes[0]], f"a ordem virou {depois}")
     foto("03_apos_arrasto")
 
 
 @passo
+def aproveitar_ideia():
+    print("-- transforma a ideia do mural em tarefa")
+    clicar(na_barra("ideias"))
+    # O botão só aparece com o mouse em cima do cartaz.
+    cartaz = na_gaveta(IDEIA)
+    QTest.mouseMove(principal, centro(cartaz))
+    QTest.qWait(300)
+    clicar(na_gaveta("virar tarefa"))
+    checar(backend.ideas[0]["used"], "a ideia consta como aproveitada")
+    checar(backend.ideas[0]["taskId"] != "", "aponta para a tarefa que nasceu")
+    checar(
+        [t["label"] for t in backend.backlog][-1] == IDEIA,
+        "a tarefa entrou no fim do backlog",
+    )
+    foto("04_mural")
+    clicar(na_barra("ideias"))
+
+
+@passo
+def alternar_som():
+    print("-- desliga e liga o som pela barra")
+    clicar(na_barra("som"))
+    checar(not backend.soundOn, "o som foi desligado")
+    clicar(na_barra("mudo"))
+    checar(backend.soundOn, "o som voltou")
+
+
+@passo
+def redimensionar():
+    """A regressão que motivou este passo.
+
+    As camadas do quarto usam `PreserveAspectFit`, então o desenho é
+    centralizado e sobra faixa vazia. Enquanto a janela ficou em 1100x700 a
+    folga era zero e o erro não aparecia; ao maximizar, a chuva e a poeira, que
+    se posicionam por conta própria, ficavam ancoradas no canto do Item e
+    saíam de dentro da janela do quarto.
+    """
+    print("-- estica a janela e confere os efeitos dentro da cena")
+    principal.setWidth(1400)
+    principal.setHeight(760)
+    # As camadas do cenário são rasterizadas de novo no tamanho novo, fora da
+    # thread da UI. O app repinta em uns 300 ms, mas `grabWindow` logo depois de
+    # um resize pega quadro velho e a captura sai com o quarto vazio.
+    QTest.qWait(3500)
+
+    quarto = achar_por_nome("chuva").parentItem()
+    escala = min(quarto.width() / 1100, quarto.height() / 700)
+    folga_x = (quarto.width() - 1100 * escala) / 2
+    folga_y = (quarto.height() - 700 * escala) / 2
+
+    for nome, (vx, vy) in (("chuva", (424, 94)), ("poeira", (400, 94))):
+        item = achar_por_nome(nome)
+        esperado_x = folga_x + vx * escala
+        esperado_y = folga_y + vy * escala
+        checar(
+            abs(item.x() - esperado_x) < 1.5 and abs(item.y() - esperado_y) < 1.5,
+            f"{nome} acompanhou a cena ({item.x():.0f},{item.y():.0f})"
+            f" ~ ({esperado_x:.0f},{esperado_y:.0f})",
+        )
+    foto("06_esticada")
+    principal.setWidth(1100)
+    principal.setHeight(700)
+    QTest.qWait(400)
+
+
+@passo
 def fechar_o_dia():
     print("-- fecha o dia com humor e energia")
-    clicar(achar("fechar o dia"))
+    clicar(na_barra("fechar o dia"))
     escalas = [it for it in visiveis() if it.property("rotulo") in ("humor", "energia")]
     checar(len(escalas) == 2, "as duas escalas apareceram")
     foto("04_retrospectiva")
@@ -294,7 +386,7 @@ def trocar_tema():
 @passo
 def mini_janela():
     print("-- abre a mini janela")
-    clicar(achar("mini"))
+    clicar(na_barra("mini"))
     checar(backend.miniVisible, "a mini está visível")
     QTest.qWait(400)
     if SAIDA:
@@ -313,18 +405,24 @@ def conferir_o_log():
         contagem[evento.kind] = contagem.get(evento.kind, 0) + 1
 
     esperado = {
-        "task.created": 3,
+        "task.created": 4,
         "session.started": 1,
         "session.ended": 1,
         "task.completed": 1,
         "idea.captured": 1,
+        "idea.promoted": 1,
         "backlog.reordered": 1,
         "day.review": 1,
     }
     checar(contagem == esperado, f"o log é exatamente {esperado}")
     checar(
-        [t.label for t in open_tasks(eventos)] == [TAREFAS[2], TAREFAS[1]],
+        [t.label for t in open_tasks(eventos)] == [TAREFAS[2], TAREFAS[1], IDEIA],
         "o backlog reconstruído mantém a ordem arrastada",
+    )
+    reidratadas = ideas(eventos)
+    checar(
+        len(reidratadas) == 1 and reidratadas[0].used,
+        "a ideia reconstruída continua no mural, aproveitada",
     )
     checar(len(shelf_objects(eventos)) == 1, "a estante reconstruída tem o objeto")
     relido.close()

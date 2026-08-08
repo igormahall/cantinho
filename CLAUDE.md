@@ -46,10 +46,17 @@ python -m pytest tests/test_projections.py::test_planta_decai_ao_avancar_14_dias
 python -m pytest -k planta -x     # por nome, parando no primeiro erro
 python tools/check_svg.py         # validar SVGs -> build/svg_check/*.png
 python tools/simular_uso.py       # percorre a UI com mouse e teclado sintéticos
+python tools/semear.py            # banco de demonstração em build/demo.db
 python tools/gerar_audio.py       # regera assets/audio/*.wav
 python tools/gerar_icone.py       # regera assets/icon/cantinho.{ico,png}
+python tools/gerar_capturas.py    # regera docs/quarto-*.png do README
 pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 ```
+
+`tools/semear.py` existe porque um banco vazio não mostra quase nada: sem ele,
+avaliar estante, planta, mural ou bilhete exige usar o app por duas semanas.
+Ele escreve pelos construtores de evento, com o relógio deslocado para trás, e
+imprime as projeções resultantes — o log que sai é legítimo, não um fixture.
 
 `tools/simular_uso.py` é o que cobre o QML — o pytest não cobre. Ele cria
 tarefa, roda sessão, conclui, arrasta, captura ideia e fecha o dia clicando de
@@ -60,11 +67,22 @@ capturas de cada etapa.
 Linux (casa) é o mesmo com `source .venv/bin/activate`.
 
 `--db` e `--device-id` existem para teste: sem eles o banco vai para a pasta de
-dados do sistema, e é fácil sujar o banco real ao experimentar.
+dados do sistema, e é fácil sujar o banco real ao experimentar. `--db` expande
+`~` por conta própria — o PowerShell não expande til em argumento de executável
+nativo, e sem isso `--db ~/x/t.db` cria uma pasta chamada `~` no diretório atual
+e o app abre num banco vazio sem dar erro nenhum.
+
+Cada banco aceita **uma instância**. Abrir de novo o mesmo banco traz a janela
+que já existe para a frente e sai; bancos diferentes abrem em paralelo.
 
 Para rodar a suíte sem abrir janela: `$env:QT_QPA_PLATFORM="offscreen"`. Cuidado
 que nesse modo o Qt fica **sem nenhuma família de fonte** — texto vira tofu em
 screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
+
+`tools/gerar_capturas.py` semeia um banco temporário e fotografa os dois temas
+em `docs/`. As imagens do README são versionadas, e capturar à mão significa
+que elas envelhecem em silêncio — a primeira leva delas ficou mostrando um
+quarto sem calendário, sem relógio e sem bilhete.
 
 `tools/check_svg.py` varre `assets/**/*.svg`, rasteriza cada um e sai com código
 1 se algum falhar. Não basta olhar o exit code: **abra os PNGs em
@@ -119,6 +137,8 @@ task.archived     {id}
 session.started   {id, task_id?}
 session.ended     {id, interrupted: bool, note?}
 idea.captured     {id, text}
+idea.promoted     {id, task_id}
+idea.archived     {id}
 day.checkin       {date, intents: [str]}
 day.review        {date, mood: int, energy: int, note?}
 ```
@@ -140,11 +160,16 @@ Novos kinds são aditivos. Nunca renomeie ou remova um kind existente.
    "Hoje" limitado a 5 itens.
 2. **Vitrine de entregas** — concluir uma tarefa coloca um objeto na estante.
    Esse é o feedback de progresso. Não existe outro.
-3. **Inbox de ideias** — atalho global, campo de texto, Enter, some. Zero
-   categorização no momento da captura.
+3. **Mural de ideias** — atalho global, campo de texto, Enter, some. Zero
+   categorização no momento da captura. Ideia aproveitada não sai do mural:
+   fica riscada, com a data. Sai só o que for descartado à mão.
 4. **Timer** — vinculado a um item do backlog. É o motor de tudo.
 5. **Retrospectiva noturna** — montada automaticamente das sessões do dia. O
    usuário só confirma e adiciona humor/energia.
+6. **Objetos de parede** — calendário do mês à esquerda, relógio analógico à
+   direita, bilhete com a lista do dia entre os dois. São cenário, não widget:
+   ficam atrás da luz do abajur, em opacidade baixa, e o único que responde a
+   clique é o bilhete (abre a gaveta do "hoje").
 
 ## Janelas
 
@@ -196,6 +221,15 @@ SVG Tiny 1.2 apenas. Sem `<filter>`, sem `<foreignObject>`, sem CSS externo.
 Qt não renderiza. Validar com `tools/check_svg.py`, que rasteriza em
 `build/svg_check/` — `isValid()` sozinho mente.
 
+### Coordenadas dentro do quarto
+
+As camadas usam `PreserveAspectFit`, então o desenho é centralizado e sobra
+faixa vazia no eixo mais folgado. Qualquer coisa posicionada à mão sobre a cena
+**precisa somar essa folga**: `Room.qml` expõe `px(v)` para comprimento e
+`cx(v)`/`cy(v)` para posição. Usar `px` onde deveria ser `cx` funciona em
+1100x700, onde a folga é zero, e só quebra quando a janela é maximizada — que é
+como a chuva e a poeira já saíram da cena uma vez.
+
 ### Efeitos que ficam em QML, não no SVG
 
 - Luz do abajur: `RadialGradient` com `SequentialAnimation` de ±3% no raio (~6s)
@@ -206,19 +240,18 @@ Qt não renderiza. Validar com `tools/check_svg.py`, que rasteriza em
 
 ## Estrutura
 
-Estrutura-alvo (a maior parte ainda não existe — ver "Estado atual" abaixo):
-
 ```
 cantinho/
-  assets/scenes/  assets/plant/
-  build/
+  assets/    scenes/ plant/ audio/ icon/     (gerados ou desenhados, versionados)
+  docs/      quarto-noite.png quarto-tarde.png   (capturas do README)
+  build/     saída de ferramenta e cache, nada versionado
   cantinho/
     main.py
     core/      events.py store.py projections.py clock.py
-    services/  timer.py audio.py hotkey.py tray.py
-    ui/        Main.qml Mini.qml theme/Theme.qml room/
+    services/  timer.py audio.py hotkey.py tray.py scene.py single_instance.py
+    ui/        Main.qml Mini.qml theme/ room/ panels/
   tests/
-  tools/check_svg.py
+  tools/     check_svg.py simular_uso.py semear.py gerar_{audio,icone,capturas}.py
 ```
 
 `core/clock.py` é injetável. Sem isso, nada que dependa da janela de 14 dias é
@@ -248,6 +281,19 @@ Todas deliberadas, todas com motivo:
   diferentes, a regra do relógio já entrega o efeito descrito.
 - **Sessão interrompida conta no `foco_14d`.** O tempo foi gasto, e zerá-lo
   seria a penalidade explícita que o decaimento da janela dispensa.
+- **Uma instância por banco, não por máquina** (`services/single_instance.py`).
+  Duas cópias sobre o mesmo log carregam as projeções separadas e divergem na
+  tela. Travar por máquina proibiria abrir o app de teste com o de verdade na
+  bandeja, que é o fluxo de quem mexe no projeto. A trava é um `QLocalServer`,
+  que além de detectar serve de campainha: a segunda cópia avisa a primeira e
+  sai, e a janela da primeira aparece.
+- **O som liga e desliga, e é um interruptor só** para o ambiente e para as
+  reações de clique. A preferência vive só na sessão: `events` é a única tabela
+  persistida, e "liguei o som" não é fato do histórico.
+- **Todo desenho de SVG passa por uma trava** (`_desenho`, em `services/scene.py`).
+  `QQuickImageProvider` do tipo Image roda em thread de trabalho quando o
+  `Image` do QML é assíncrono, e as camadas do quarto compartilham um
+  `QSvgRenderer` em cache, que não é reentrante.
 
 ### Limites conhecidos do MVP
 
@@ -259,6 +305,11 @@ Todas deliberadas, todas com motivo:
 - O som é sintetizado, não gravado, e é curto: 24 s em loop. Não tem melodia,
   é textura. Trocar por faixa de verdade é só pôr outro arquivo com o mesmo
   nome em `assets/audio/`.
+- O bilhete da parede comporta **seis linhas** (`BOARD_LIMIT`). É a folha que
+  limita, não a projeção: uma lista que rola na parede deixa de ser bilhete.
+- Os objetos de parede vivem nas duas áreas que a arte deixou livres (acima da
+  estante à esquerda, e a coluna à direita entre o teto e a folhagem do vaso).
+  Mexer nos SVGs de cena pode invalidar essas posições.
 
 ### Ícone
 
@@ -288,9 +339,20 @@ do usuário.
 
 ### Áudio
 
-`assets/audio/ambiente_noite.wav` e `ambiente_tarde.wav` são gerados por
-`tools/gerar_audio.py` e versionados prontos, para que um clone limpo já tenha
-som sem etapa extra de build.
+`assets/audio/ambiente_noite.wav`, `ambiente_tarde.wav` e os três `ui_*.wav`
+(toque, clique, entrega) são gerados por `tools/gerar_audio.py` e versionados
+prontos, para que um clone limpo já tenha som sem etapa extra de build.
+
+O ambiente toca por `QMediaPlayer`; as reações de mouse por `QSoundEffect`, que
+mantém o efeito decodificado em memória — o player de mídia leva dezenas de
+milissegundos para começar, o que num retorno de clique é atraso audível. Em
+compensação, `QSoundEffect` só aceita PCM sem compressão, e é isso que fixa o
+formato dos `ui_*.wav`.
+
+As reações têm rampa nas duas pontas e um intervalo mínimo entre disparos.
+Sem a rampa, o começo e o fim do arquivo são degraus na saída de áudio — o
+mesmo estalo da emenda do loop, do outro lado. Sem o intervalo, arrastar o
+mouse pela barra dispara uma metralhadora de cliques.
 
 A síntese é determinística (semente fixa), então regerar produz o mesmo arquivo
 byte a byte — se o `git status` acusar mudança depois de rodar o gerador, foi o
@@ -311,7 +373,8 @@ estala — e num som que fica horas tocando isso é insuportável.
 | F3 | Cena, planta, estante | feito |
 | F4 | Retrospectiva, humor, inbox de ideias | feito |
 | F5 | Áudio local, ambiente, ciclo dia/noite | feito |
-| F6 | PyInstaller portable | feito, ~207 MB em `dist/Cantinho/` |
+| F6 | PyInstaller portable | feito, ~198 MB em `dist/Cantinho/` |
+| F7 | Parede viva, mural, reação de mouse | feito |
 
 Não pule fase. Não adiante arte. Se o modelo de eventos estiver errado,
 descobrir na F3 custa caro.

@@ -27,6 +27,9 @@ hiddenimports = [
     "PySide6.QtSvg",
     "PySide6.QtMultimedia",
     "PySide6.QtWidgets",
+    # QLocalServer, usado pela trava de instância única. Nada de rede sai da
+    # máquina: é named pipe local.
+    "PySide6.QtNetwork",
 ]
 
 a = Analysis(

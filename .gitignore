@@ -1,9 +1,18 @@
+# Ambiente
 .venv/
-build/
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Saída de build e das ferramentas: `build/` recebe o cache do PyInstaller, as
+# rasterizações do check_svg, o banco do semear e as capturas da simulação.
+# Tudo regerável, nada versionado.
+build/
+dist/
+*.spec.bak
+
+# Bancos de evento, incluindo os descartáveis de teste. O log é dado do
+# usuário; nenhum deles entra no repositório.
 *.db
 *.db-wal
 *.db-shm
-dist/
-*.spec.bak
