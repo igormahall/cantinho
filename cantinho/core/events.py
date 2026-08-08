@@ -36,6 +36,7 @@ __all__ = [
     "idea_captured",
     "day_checkin",
     "day_review",
+    "backlog_reordered",
 ]
 
 
@@ -162,6 +163,10 @@ KINDS: Mapping[str, _Spec] = {
         required={"date": _iso_date, "mood": _strict_int, "energy": _strict_int},
         optional={"note": _any_str},
     ),
+    # Aditivo, não estava no desenho original. A lista do backlog é arrastável,
+    # e a ordem escolhida pelo usuário é decisão dele, não estado derivado:
+    # precisa de evento próprio para sobreviver ao fechamento do app.
+    "backlog.reordered": _Spec(required={"order": _list_of_str}),
 }
 
 
@@ -377,3 +382,7 @@ def day_review(
         "day.review",
         {"date": date, "mood": mood, "energy": energy, "note": note},
     )
+
+
+def backlog_reordered(clock: Clock, device_id: str, *, order: list[str]) -> Event:
+    return make_event(clock, device_id, "backlog.reordered", {"order": list(order)})

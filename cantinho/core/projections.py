@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, tzinfo
 from typing import Iterable
 
 from cantinho.core.clock import ensure_utc
@@ -21,38 +21,47 @@ from cantinho.core.events import Event
 __all__ = [
     "Task",
     "Session",
+    "Idea",
+    "DayReview",
     "ShelfObject",
     "SHELF_OBJECT_TYPES",
     "FOCUS_WINDOW",
     "PLANT_THRESHOLDS_MINUTES",
+    "TODAY_LIMIT",
     "open_tasks",
+    "today_tasks",
     "completed_tasks",
     "sessions",
+    "sessions_on",
     "focus_minutes_14d",
     "plant_stage",
     "shelf_objects",
+    "ideas",
+    "day_reviews",
+    "review_for",
 ]
 
 FOCUS_WINDOW = timedelta(days=14)
 
+# "Hoje" são os primeiros itens do backlog, e são no máximo cinco. O limite é
+# a feature: uma lista de hoje que aceita tudo não é uma lista de hoje.
+TODAY_LIMIT = 5
+
 # Cortes de estágio da planta em minutos: 0h / 3h / 8h / 16h / 30h.
 PLANT_THRESHOLDS_MINUTES: tuple[int, ...] = (0, 180, 480, 960, 1800)
 
-# Catálogo da estante. Só pode crescer no fim: inserir ou reordenar mudaria o
-# objeto de tarefas já concluídas, e o quarto tem que ser sempre o mesmo.
+# Catálogo da estante: são os ids dos objetos desenhados na camada
+# `objetos_estante` dos SVGs de cena. O tipo é literalmente qual arte usar.
+#
+# Só pode crescer no fim. Inserir ou reordenar mudaria o objeto de tarefas já
+# concluídas, e o quarto tem que ser sempre o mesmo.
 SHELF_OBJECT_TYPES: tuple[str, ...] = (
-    "mug",
-    "book",
-    "small_vase",
-    "box",
-    "candle",
-    "frame",
-    "book_stack",
-    "succulent",
-    "clock",
-    "seashell",
-    "teapot",
-    "paper_crane",
+    "obj_0",
+    "obj_1",
+    "obj_2",
+    "obj_3",
+    "obj_4",
+    "obj_5",
 )
 
 
@@ -90,6 +99,22 @@ class Session:
     def duration_minutes(self) -> float:
         delta = self.duration
         return 0.0 if delta is None else delta.total_seconds() / 60.0
+
+
+@dataclass(frozen=True)
+class Idea:
+    id: str
+    text: str
+    captured_at: datetime
+
+
+@dataclass(frozen=True)
+class DayReview:
+    date: str
+    mood: int
+    energy: int
+    note: str | None
+    reviewed_at: datetime
 
 
 @dataclass(frozen=True)
@@ -148,14 +173,42 @@ def _index_tasks(events: Iterable[Event]) -> dict[str, Task]:
     return tasks
 
 
+def _manual_order(events: Iterable[Event]) -> list[str]:
+    """Última ordem escolhida à mão, ou lista vazia se nunca arrastaram nada."""
+    ultima: list[str] = []
+    for event in _ordered(events):
+        if event.kind == "backlog.reordered":
+            ultima = list(event.payload["order"])
+    return ultima
+
+
 def open_tasks(events: Iterable[Event]) -> list[Task]:
-    """Backlog: criadas, não concluídas e não arquivadas. Em ordem de criação."""
-    abertas = [
-        task
-        for task in _index_tasks(events).values()
+    """Backlog: criadas, não concluídas e não arquivadas.
+
+    A ordem é a que o usuário arrastou. Tarefa criada depois do último arrasto
+    entra no fim, por ordem de criação — aparecer no meio da lista sem ninguém
+    ter pedido seria pior que aparecer no fim.
+    """
+    materializados = _ordered(events)
+    abertas = {
+        task.id: task
+        for task in _index_tasks(materializados).values()
         if task.completed_at is None and task.archived_at is None
-    ]
-    return sorted(abertas, key=lambda task: (task.created_at, task.id))
+    }
+
+    ordenadas: list[Task] = []
+    for task_id in _manual_order(materializados):
+        task = abertas.pop(task_id, None)
+        if task is not None:
+            ordenadas.append(task)
+
+    restantes = sorted(abertas.values(), key=lambda task: (task.created_at, task.id))
+    return ordenadas + restantes
+
+
+def today_tasks(events: Iterable[Event]) -> list[Task]:
+    """O topo do backlog, limitado a cinco itens."""
+    return open_tasks(events)[:TODAY_LIMIT]
 
 
 def completed_tasks(events: Iterable[Event]) -> list[Task]:
@@ -252,6 +305,54 @@ def _object_type_for(task_id: str) -> str:
     """
     digest = hashlib.blake2s(task_id.encode("utf-8"), digest_size=8).digest()
     return SHELF_OBJECT_TYPES[int.from_bytes(digest, "big") % len(SHELF_OBJECT_TYPES)]
+
+
+def sessions_on(events: Iterable[Event], day: date, tz: tzinfo) -> list[Session]:
+    """Sessões encerradas em um dia do calendário local.
+
+    O banco guarda UTC; o dia é o do usuário. A conversão acontece aqui, na
+    apresentação, e não na gravação.
+    """
+    return [
+        session
+        for session in sessions(events)
+        if session.ended_at is not None
+        and session.ended_at.astimezone(tz).date() == day
+    ]
+
+
+def ideas(events: Iterable[Event]) -> list[Idea]:
+    """Inbox, da mais recente para a mais antiga."""
+    capturadas = [
+        Idea(
+            id=event.payload["id"],
+            text=event.payload["text"],
+            captured_at=event.occurred_at,
+        )
+        for event in _ordered(events)
+        if event.kind == "idea.captured"
+    ]
+    return list(reversed(capturadas))
+
+
+def day_reviews(events: Iterable[Event]) -> dict[str, DayReview]:
+    """Retrospectivas por data. A última do dia vence: revisar de novo corrige."""
+    revisoes: dict[str, DayReview] = {}
+    for event in _ordered(events):
+        if event.kind != "day.review":
+            continue
+        revisoes[event.payload["date"]] = DayReview(
+            date=event.payload["date"],
+            mood=event.payload["mood"],
+            energy=event.payload["energy"],
+            note=event.payload.get("note"),
+            reviewed_at=event.occurred_at,
+        )
+    return revisoes
+
+
+def review_for(events: Iterable[Event], day: date) -> DayReview | None:
+    return day_reviews(events).get(day.isoformat())
 
 
 def shelf_objects(events: Iterable[Event]) -> list[ShelfObject]:

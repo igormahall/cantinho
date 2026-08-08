@@ -322,10 +322,10 @@ def test_tipos_de_objeto_sao_valores_fixos() -> None:
     """
     from cantinho.core.projections import _object_type_for
 
-    assert SHELF_OBJECT_TYPES[:4] == ("mug", "book", "small_vase", "box")
-    assert _object_type_for("task-fixa") == "succulent"
-    assert _object_type_for("00000000-0000-0000-0000-000000000000") == "box"
-    assert _object_type_for("outra") == "teapot"
+    assert SHELF_OBJECT_TYPES == ("obj_0", "obj_1", "obj_2", "obj_3", "obj_4", "obj_5")
+    assert _object_type_for("task-fixa") == "obj_1"
+    assert _object_type_for("00000000-0000-0000-0000-000000000000") == "obj_3"
+    assert _object_type_for("outra") == "obj_4"
 
 
 def test_estante_nao_muda_entre_processos() -> None:
