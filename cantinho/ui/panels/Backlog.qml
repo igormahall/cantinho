@@ -83,11 +83,22 @@ Item {
                 visible: index === raiz.limiteHoje
             }
 
+            // Altura de uma linha, usada para converter o quanto o cartão
+            // subiu ou desceu em quantas posições ele andou.
+            readonly property int passo: envelope.height + lista.spacing
+
+            function repousar() {
+                cartao.y = Qt.binding(function () {
+                    return index === raiz.limiteHoje ? 4 : 0
+                })
+            }
+
             Rectangle {
                 id: cartao
                 width: envelope.width
                 height: 42
                 y: index === raiz.limiteHoje ? 4 : 0
+                z: arraste.drag.active ? 2 : 0
                 radius: Theme.raio
                 color: arraste.drag.active
                        ? Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b, 0.16)
@@ -98,18 +109,7 @@ Item {
                 opacity: index < raiz.limiteHoje ? 1.0 : 0.5
                 Behavior on color { ColorAnimation { duration: 150 } }
 
-                Drag.active: arraste.drag.active
-                Drag.source: envelope
-                Drag.hotSpot.x: width / 2
-                Drag.hotSpot.y: height / 2
-
                 HoverHandler { id: hover }
-
-                states: State {
-                    when: arraste.drag.active
-                    ParentChange { target: cartao; parent: lista }
-                    AnchorChanges { target: cartao; anchors.verticalCenter: undefined }
-                }
 
                 Row {
                     anchors.fill: parent
@@ -228,21 +228,28 @@ Item {
                     drag.axis: Drag.YAxis
 
                     onPressed: raiz.arrastando = true
-                    onReleased: {
-                        cartao.Drag.drop()
-                        raiz.arrastando = false
-                        raiz.publicarOrdem()
-                    }
-                }
-            }
 
-            DropArea {
-                anchors.fill: parent
-                onEntered: function (arrasto) {
-                    var de = arrasto.source.indiceVisual
-                    var para = envelope.indiceVisual
-                    if (de !== para)
-                        modelo.move(de, para, 1)
+                    // A posição nova é calculada uma vez, ao soltar.
+                    //
+                    // A versão anterior trocava as linhas ao vivo, por DropArea:
+                    // cada troca reposicionava as linhas debaixo do cursor, o
+                    // que disparava a DropArea vizinha e desfazia a troca. O
+                    // cartão ficava indo e voltando, e o resultado dependia de
+                    // em que ponto da oscilação o usuário soltasse.
+                    onReleased: {
+                        var andou = Math.round(cartao.y / envelope.passo)
+                        var destino = Math.max(
+                            0, Math.min(modelo.count - 1, index + andou))
+                        var de = index
+
+                        envelope.repousar()
+                        raiz.arrastando = false
+
+                        if (destino !== de) {
+                            modelo.move(de, destino, 1)
+                            raiz.publicarOrdem()
+                        }
+                    }
                 }
             }
         }
