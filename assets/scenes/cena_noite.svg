@@ -1,0 +1,355 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny" viewBox="0 0 1100 700">
+<defs>
+  <linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#221C19"></stop>
+    <stop offset="0.55" stop-color="#2A2320"></stop>
+    <stop offset="1" stop-color="#241E1B"></stop>
+  </linearGradient>
+  <radialGradient id="gWallLight">
+    <stop offset="0" stop-color="#312924" stop-opacity="0.55"></stop>
+    <stop offset="0.5" stop-color="#312924" stop-opacity="0.24"></stop>
+    <stop offset="1" stop-color="#312924" stop-opacity="0"></stop>
+  </radialGradient>
+  <radialGradient id="gWallDark">
+    <stop offset="0" stop-color="#1C1714" stop-opacity="0.7"></stop>
+    <stop offset="0.55" stop-color="#1C1714" stop-opacity="0.3"></stop>
+    <stop offset="1" stop-color="#1C1714" stop-opacity="0"></stop>
+  </radialGradient>
+  <radialGradient id="gBand" gradientUnits="userSpaceOnUse" cx="333" cy="566" r="540">
+    <stop offset="0" stop-color="#6E5442"></stop>
+    <stop offset="0.28" stop-color="#4A3A30"></stop>
+    <stop offset="1" stop-color="#241E1A"></stop>
+  </radialGradient>
+  <linearGradient id="gBandHi" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#8A6A50" stop-opacity="0.22"></stop>
+    <stop offset="1" stop-color="#8A6A50" stop-opacity="0.22"></stop>
+  </linearGradient>
+  <linearGradient id="gFloor" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#221B17"></stop>
+    <stop offset="1" stop-color="#171310"></stop>
+  </linearGradient>
+  <radialGradient id="gRug">
+    <stop offset="0" stop-color="#2B2320" stop-opacity="0.8"></stop>
+    <stop offset="1" stop-color="#2B2320" stop-opacity="0"></stop>
+  </radialGradient>
+  <radialGradient id="gFloorGlow" gradientUnits="userSpaceOnUse" cx="333" cy="642" r="560">
+    <stop offset="0" stop-color="#E0A458" stop-opacity="0.17"></stop>
+    <stop offset="0.5" stop-color="#E0A458" stop-opacity="0.06"></stop>
+    <stop offset="1" stop-color="#E0A458" stop-opacity="0"></stop>
+  </radialGradient>
+  <linearGradient id="gSky" x1="0" y1="0" x2="0.15" y2="1">
+    <stop offset="0" stop-color="#131920"></stop>
+    <stop offset="0.6" stop-color="#1B2226"></stop>
+    <stop offset="1" stop-color="#232B2A"></stop>
+  </linearGradient>
+  <radialGradient id="gBloom">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </radialGradient>
+  <linearGradient id="gHorizon" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="gCloud" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="gDrops" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#C8DCE7" stop-opacity="0.26"></stop>
+    <stop offset="1" stop-color="#C8DCE7" stop-opacity="0.26"></stop>
+  </linearGradient>
+  <linearGradient id="gFrame" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#725644"></stop>
+    <stop offset="0.5" stop-color="#4B3C32"></stop>
+    <stop offset="1" stop-color="#2B231E"></stop>
+  </linearGradient>
+  <linearGradient id="gFrameHiL" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#8A6A50" stop-opacity="0.3"></stop>
+    <stop offset="1" stop-color="#8A6A50" stop-opacity="0.3"></stop>
+  </linearGradient>
+  <linearGradient id="gFrameHiR" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="gShelf" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#1E1917"></stop>
+    <stop offset="0.7" stop-color="#2A2320"></stop>
+    <stop offset="1" stop-color="#453629"></stop>
+  </linearGradient>
+  <linearGradient id="gShelfEdge" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#E0A458" stop-opacity="0.13"></stop>
+    <stop offset="1" stop-color="#E0A458" stop-opacity="0.13"></stop>
+  </linearGradient>
+  <radialGradient id="gDeskTop" gradientUnits="userSpaceOnUse" cx="333" cy="470" r="470">
+    <stop offset="0" stop-color="#856448"></stop>
+    <stop offset="0.22" stop-color="#5E4B3C"></stop>
+    <stop offset="1" stop-color="#332920"></stop>
+  </radialGradient>
+  <linearGradient id="gDeskEdge" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#9A7454" stop-opacity="0.16"></stop>
+    <stop offset="1" stop-color="#9A7454" stop-opacity="0.16"></stop>
+  </linearGradient>
+  <linearGradient id="gLampBase" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#725644"></stop>
+    <stop offset="0.5" stop-color="#4B3C32"></stop>
+    <stop offset="1" stop-color="#2B231E"></stop>
+  </linearGradient>
+  <linearGradient id="gClay" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#D98A61"></stop>
+    <stop offset="0.45" stop-color="#A85B40"></stop>
+    <stop offset="1" stop-color="#5F3325"></stop>
+  </linearGradient>
+  <linearGradient id="gShadeHiL" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#F0B47C" stop-opacity="0.25"></stop>
+    <stop offset="1" stop-color="#F0B47C" stop-opacity="0.25"></stop>
+  </linearGradient>
+  <linearGradient id="gShadeHiR" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="gPotHiL" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#EDA477" stop-opacity="0.18"></stop>
+    <stop offset="1" stop-color="#EDA477" stop-opacity="0.18"></stop>
+  </linearGradient>
+  <linearGradient id="gPotHiR" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="gRimHi" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#F0B187" stop-opacity="0.2"></stop>
+    <stop offset="1" stop-color="#F0B187" stop-opacity="0.2"></stop>
+  </linearGradient>
+  <linearGradient id="gBulb" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#FFE7C2" stop-opacity="0.9"></stop>
+    <stop offset="1" stop-color="#FFE7C2" stop-opacity="0.9"></stop>
+  </linearGradient>
+  <radialGradient id="gLampGlow" gradientUnits="userSpaceOnUse" cx="333" cy="404" r="840">
+    <stop offset="0" stop-color="#FFDCB2" stop-opacity="0.42"></stop>
+    <stop offset="0.08" stop-color="#F8C489" stop-opacity="0.31"></stop>
+    <stop offset="0.19" stop-color="#EDB068" stop-opacity="0.21"></stop>
+    <stop offset="0.34" stop-color="#E0A458" stop-opacity="0.125"></stop>
+    <stop offset="0.55" stop-color="#E0A458" stop-opacity="0.06"></stop>
+    <stop offset="0.78" stop-color="#E0A458" stop-opacity="0.022"></stop>
+    <stop offset="1" stop-color="#E0A458" stop-opacity="0"></stop>
+  </radialGradient>
+  <radialGradient id="gLampCore" gradientUnits="userSpaceOnUse" cx="334" cy="404" r="210">
+    <stop offset="0" stop-color="#FFEFD4" stop-opacity="0.5"></stop>
+    <stop offset="0.3" stop-color="#FFD199" stop-opacity="0.2"></stop>
+    <stop offset="1" stop-color="#FFD199" stop-opacity="0"></stop>
+  </radialGradient>
+  <linearGradient id="gBeam" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="gBeamFloor" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="gDust" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <linearGradient id="gLongSh" x1="1" y1="0" x2="0" y2="0">
+    <stop offset="0" stop-color="#000000" stop-opacity="0"></stop>
+    <stop offset="1" stop-color="#000000" stop-opacity="0"></stop>
+  </linearGradient>
+  <radialGradient id="gCtc">
+    <stop offset="0" stop-color="#0C0907" stop-opacity="0.62"></stop>
+    <stop offset="0.5" stop-color="#0C0907" stop-opacity="0.26"></stop>
+    <stop offset="1" stop-color="#0C0907" stop-opacity="0"></stop>
+  </radialGradient>
+  <linearGradient id="gMossA" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#A2B18E"></stop>
+    <stop offset="0.5" stop-color="#7A8B6F"></stop>
+    <stop offset="1" stop-color="#485442"></stop>
+  </linearGradient>
+  <linearGradient id="gMossB" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#8FA07C"></stop>
+    <stop offset="0.55" stop-color="#6B7C61"></stop>
+    <stop offset="1" stop-color="#3E4A39"></stop>
+  </linearGradient>
+  <linearGradient id="gShelfClay" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#33211A"></stop>
+    <stop offset="0.7" stop-color="#472D22"></stop>
+    <stop offset="1" stop-color="#6B4531"></stop>
+  </linearGradient>
+  <linearGradient id="gShelfMoss" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#262C25"></stop>
+    <stop offset="0.7" stop-color="#333C31"></stop>
+    <stop offset="1" stop-color="#525F4B"></stop>
+  </linearGradient>
+  <linearGradient id="gShelfMoss2" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#222720"></stop>
+    <stop offset="0.7" stop-color="#2E362C"></stop>
+    <stop offset="1" stop-color="#4A5645"></stop>
+  </linearGradient>
+  <linearGradient id="gCurtain" x1="0" y1="0" x2="1" y2="0.2">
+    <stop offset="0" stop-color="#3E2D23"></stop>
+    <stop offset="1" stop-color="#241C17"></stop>
+  </linearGradient>
+</defs>
+<g id="parede">
+  <rect x="0" y="0" width="1100" height="586" fill="url(#gWall)"></rect>
+  <ellipse cx="333" cy="336" rx="480" ry="370" fill="url(#gWallLight)"></ellipse>
+  <ellipse cx="1020" cy="80" rx="380" ry="280" fill="url(#gWallDark)"></ellipse>
+  <ellipse cx="50" cy="60" rx="300" ry="230" fill="url(#gWallDark)"></ellipse>
+  <ellipse cx="1050" cy="520" rx="330" ry="250" fill="url(#gWallDark)"></ellipse>
+  <rect x="0" y="556" width="1100" height="32" fill="url(#gBand)"></rect>
+  <rect x="0" y="556" width="1100" height="6" fill="url(#gBandHi)"></rect>
+</g>
+<g id="janela">
+  <path d="M356 60 C368 130 366 226 358 332 L392 332 C400 226 402 130 392 60 Z" fill="url(#gCurtain)"></path>
+  <path d="M744 60 C732 130 734 226 742 332 L708 332 C700 226 698 130 708 60 Z" fill="url(#gCurtain)"></path>
+  <rect x="398" y="68" width="304" height="264" rx="22" ry="22" fill="#1B1512"></rect>
+  <rect x="406" y="76" width="288" height="248" rx="17" ry="17" fill="url(#gFrame)"></rect>
+  <rect x="424" y="94" width="252" height="212" rx="9" ry="9" fill="url(#gSky)"></rect>
+  <ellipse cx="632" cy="132" rx="140" ry="140" fill="url(#gBloom)"></ellipse>
+  <path d="M430 252 C480 246 540 252 592 246 C630 242 660 246 670 242 L670 296 C670 301 666 304 660 304 L440 304 C434 304 430 301 430 296 Z" fill="url(#gHorizon)"></path>
+  <path d="M452 156 C452 148 462 142 474 142 C482 132 500 132 508 142 C520 142 528 148 528 156 C528 164 518 168 506 168 L470 168 C458 168 452 164 452 156 Z" fill="url(#gCloud)"></path>
+  <path d="M540 196 C540 190 548 186 558 186 C566 178 580 178 586 186 C596 186 602 190 602 196 C602 202 594 206 584 206 L556 206 C546 206 540 202 540 196 Z" fill="url(#gCloud)"></path>
+  <rect x="436" y="104" width="2" height="20" rx="1" ry="1" fill="url(#gDrops)" fill-opacity="0.9"></rect>
+  <rect x="452" y="150" width="1.6" height="13" rx="0.8" ry="0.8" fill="url(#gDrops)" fill-opacity="0.55"></rect>
+  <rect x="468" y="196" width="2.2" height="26" rx="1.1" ry="1.1" fill="url(#gDrops)" fill-opacity="1"></rect>
+  <rect x="487" y="118" width="1.5" height="11" rx="0.75" ry="0.75" fill="url(#gDrops)" fill-opacity="0.45"></rect>
+  <rect x="503" y="240" width="2" height="17" rx="1" ry="1" fill="url(#gDrops)" fill-opacity="0.8"></rect>
+  <rect x="521" y="166" width="2.4" height="24" rx="1.2" ry="1.2" fill="url(#gDrops)" fill-opacity="1"></rect>
+  <rect x="539" y="262" width="1.6" height="14" rx="0.8" ry="0.8" fill="url(#gDrops)" fill-opacity="0.6"></rect>
+  <rect x="557" y="110" width="2.1" height="21" rx="1.05" ry="1.05" fill="url(#gDrops)" fill-opacity="0.85"></rect>
+  <rect x="576" y="204" width="1.5" height="12" rx="0.75" ry="0.75" fill="url(#gDrops)" fill-opacity="0.5"></rect>
+  <rect x="594" y="142" width="2.3" height="25" rx="1.15" ry="1.15" fill="url(#gDrops)" fill-opacity="0.95"></rect>
+  <rect x="612" y="250" width="1.8" height="16" rx="0.9" ry="0.9" fill="url(#gDrops)" fill-opacity="0.7"></rect>
+  <rect x="631" y="180" width="2" height="19" rx="1" ry="1" fill="url(#gDrops)" fill-opacity="0.8"></rect>
+  <rect x="649" y="126" width="1.6" height="13" rx="0.8" ry="0.8" fill="url(#gDrops)" fill-opacity="0.55"></rect>
+  <rect x="666" y="216" width="2.2" height="22" rx="1.1" ry="1.1" fill="url(#gDrops)" fill-opacity="0.9"></rect>
+  <rect x="463" y="120" width="2.6" height="15" rx="1.3" ry="1.3" fill="url(#gDrops)" fill-opacity="0.9"></rect>
+  <circle cx="464.3" cy="137" r="2.3" fill="url(#gDrops)"></circle>
+  <rect x="540" y="180" width="2.6" height="15" rx="1.3" ry="1.3" fill="url(#gDrops)" fill-opacity="0.9"></rect>
+  <circle cx="541.3" cy="197" r="2.3" fill="url(#gDrops)"></circle>
+  <rect x="622" y="146" width="2.6" height="15" rx="1.3" ry="1.3" fill="url(#gDrops)" fill-opacity="0.9"></rect>
+  <circle cx="623.3" cy="163" r="2.3" fill="url(#gDrops)"></circle>
+  <rect x="498" y="232" width="2.6" height="15" rx="1.3" ry="1.3" fill="url(#gDrops)" fill-opacity="0.9"></rect>
+  <circle cx="499.3" cy="249" r="2.3" fill="url(#gDrops)"></circle>
+  <rect x="424" y="94" width="252" height="212" rx="9" ry="9" fill="none" stroke="#11100F" stroke-opacity="0.55" stroke-width="14"></rect>
+  <rect x="546" y="94" width="8" height="212" rx="4" ry="4" fill="url(#gFrame)"></rect>
+  <rect x="424" y="196" width="252" height="8" rx="4" ry="4" fill="url(#gFrame)"></rect>
+  <rect x="406" y="76" width="9" height="248" rx="4" ry="4" fill="url(#gFrameHiL)"></rect>
+  <rect x="685" y="76" width="9" height="248" rx="4" ry="4" fill="url(#gFrameHiR)"></rect>
+  <rect x="384" y="320" width="332" height="24" rx="12" ry="12" fill="url(#gBand)"></rect>
+  <ellipse cx="546" cy="352" rx="155" ry="10" fill="url(#gCtc)"></ellipse>
+</g>
+<g id="chao">
+  <rect x="0" y="586" width="1100" height="114" fill="url(#gFloor)"></rect>
+  <ellipse cx="540" cy="640" rx="350" ry="44" fill="url(#gRug)"></ellipse>
+  <ellipse cx="333" cy="642" rx="540" ry="84" fill="url(#gFloorGlow)"></ellipse>
+  <path d="M186 586 L436 586 L352 664 L96 664 Z" fill="url(#gBeamFloor)"></path>
+  <path d="M270 584 L296 584 L196 616 L150 616 Z" fill="url(#gLongSh)"></path>
+  <path d="M806 584 L832 584 L724 616 L678 616 Z" fill="url(#gLongSh)"></path>
+  <path d="M912 578 L980 578 L820 620 L742 620 Z" fill="url(#gLongSh)"></path>
+  <ellipse cx="284" cy="588" rx="58" ry="12" fill="url(#gCtc)"></ellipse>
+  <ellipse cx="816" cy="588" rx="58" ry="12" fill="url(#gCtc)"></ellipse>
+  <ellipse cx="940" cy="582" rx="80" ry="14" fill="url(#gCtc)"></ellipse>
+</g>
+<g id="estante">
+  <path d="M67 407 L265 407 L212 432 L20 432 Z" fill="url(#gLongSh)"></path>
+  <rect x="67" y="392" width="198" height="15" rx="6" ry="6" fill="url(#gShelf)"></rect>
+  <path d="M88 407 C88 421 93 428 104 431" fill="none" stroke="#1C1815" stroke-width="5" stroke-linecap="round"></path>
+  <path d="M244 407 C244 421 239 428 228 431" fill="none" stroke="#1C1815" stroke-width="5" stroke-linecap="round"></path>
+  <rect x="256" y="392" width="9" height="15" rx="4" ry="4" fill="url(#gShelfEdge)"></rect>
+  <ellipse cx="99" cy="392" rx="19" ry="4" fill="url(#gCtc)"></ellipse>
+  <ellipse cx="152" cy="392" rx="17" ry="4" fill="url(#gCtc)"></ellipse>
+  <ellipse cx="190" cy="392" rx="21" ry="4.5" fill="url(#gCtc)"></ellipse>
+  <path d="M67 493 L265 493 L212 518 L20 518 Z" fill="url(#gLongSh)"></path>
+  <rect x="67" y="478" width="198" height="15" rx="6" ry="6" fill="url(#gShelf)"></rect>
+  <path d="M88 493 C88 507 93 514 104 517" fill="none" stroke="#1C1815" stroke-width="5" stroke-linecap="round"></path>
+  <path d="M244 493 C244 507 239 514 228 517" fill="none" stroke="#1C1815" stroke-width="5" stroke-linecap="round"></path>
+  <rect x="256" y="478" width="9" height="15" rx="4" ry="4" fill="url(#gShelfEdge)"></rect>
+  <ellipse cx="99" cy="478" rx="19" ry="4" fill="url(#gCtc)"></ellipse>
+  <ellipse cx="135" cy="478" rx="15" ry="3.5" fill="url(#gCtc)"></ellipse>
+  <ellipse cx="191" cy="478" rx="21" ry="4.5" fill="url(#gCtc)"></ellipse>
+</g>
+<g id="mesa_esquerda">
+  <path d="M282 492 C277 522 275 552 279 582" fill="none" stroke="#3E3129" stroke-width="14" stroke-linecap="round"></path>
+  <path d="M262 484 L560 484 L560 500 L262 500 C256 500 252 497 252 492 C252 487 256 484 262 484 Z" fill="#3A2E26"></path>
+  <path d="M258 464 L560 464 L560 488 L258 488 C250 488 244 483 244 476 C244 469 250 464 258 464 Z" fill="url(#gDeskTop)"></path>
+  <path d="M258 464 L560 464 L560 476 L244 476 C244 469 250 464 258 464 Z" fill="url(#gDeskEdge)"></path>
+</g>
+<g id="abajur">
+  <path d="M306 466 L360 466 L250 478 L206 478 Z" fill="url(#gLongSh)"></path>
+  <ellipse cx="333" cy="466" rx="40" ry="10" fill="url(#gCtc)"></ellipse>
+  <path d="M306 462 C306 452 317 446 333 446 C349 446 360 452 360 462 C360 466 355 468 348 468 L318 468 C311 468 306 466 306 462 Z" fill="url(#gLampBase)"></path>
+  <path d="M333 448 C329 428 331 414 333 400" fill="none" stroke="#4B3C32" stroke-width="7" stroke-linecap="round"></path>
+  <path d="M298 400 C298 372 313 352 334 352 C355 352 370 372 370 400 C370 404 366 406 360 406 L308 406 C302 406 298 404 298 400 Z" fill="url(#gClay)"></path>
+  <path d="M298 400 C298 372 313 352 334 352 C340 352 345 354 349 358 C333 362 322 380 320 406 L308 406 C302 406 298 404 298 400 Z" fill="url(#gShadeHiL)"></path>
+  <path d="M348 356 C360 366 370 382 370 400 C370 404 366 406 360 406 L344 406 C348 384 350 368 348 356 Z" fill="url(#gShadeHiR)"></path>
+  <ellipse cx="334" cy="404" rx="34" ry="7" fill="url(#gBulb)"></ellipse>
+  <rect x="0" y="0" width="1100" height="700" fill="url(#gLampGlow)"></rect>
+  <circle cx="334" cy="404" r="210" fill="url(#gLampCore)"></circle>
+  <path d="M676 98 L424 98 L104 586 L392 586 Z" fill="url(#gBeam)"></path>
+  <circle cx="612" cy="180" r="2.2" fill="url(#gDust)"></circle>
+  <circle cx="560" cy="238" r="1.5" fill="url(#gDust)"></circle>
+  <circle cx="500" cy="300" r="2.6" fill="url(#gDust)"></circle>
+  <circle cx="452" cy="212" r="1.8" fill="url(#gDust)"></circle>
+  <circle cx="392" cy="356" r="2.1" fill="url(#gDust)"></circle>
+  <circle cx="330" cy="420" r="1.4" fill="url(#gDust)"></circle>
+  <circle cx="286" cy="330" r="2.4" fill="url(#gDust)"></circle>
+  <circle cx="236" cy="470" r="1.7" fill="url(#gDust)"></circle>
+  <circle cx="190" cy="536" r="2.2" fill="url(#gDust)"></circle>
+  <circle cx="540" cy="140" r="1.6" fill="url(#gDust)"></circle>
+  <circle cx="648" cy="260" r="1.9" fill="url(#gDust)"></circle>
+  <circle cx="430" cy="470" r="2.3" fill="url(#gDust)"></circle>
+  <circle cx="356" cy="240" r="1.5" fill="url(#gDust)"></circle>
+  <circle cx="146" cy="440" r="2" fill="url(#gDust)"></circle>
+</g>
+<g id="mesa_direita">
+  <path d="M818 492 C823 522 825 552 821 582" fill="none" stroke="#3E3129" stroke-width="14" stroke-linecap="round"></path>
+  <path d="M560 484 L838 484 C844 484 848 487 848 492 C848 497 844 500 838 500 L560 500 Z" fill="#3A2E26"></path>
+  <path d="M560 464 L842 464 C850 464 856 469 856 476 C856 483 850 488 842 488 L560 488 Z" fill="url(#gDeskTop)"></path>
+  <path d="M560 464 L842 464 C850 464 856 469 856 476 L560 476 Z" fill="url(#gDeskEdge)"></path>
+  <path d="M780 470 L810 470 L742 482 L706 482 Z" fill="url(#gLongSh)"></path>
+  <ellipse cx="796" cy="472" rx="24" ry="6" fill="url(#gCtc)"></ellipse>
+  <path d="M780 448 C780 444 783 442 787 442 L803 442 C807 442 810 444 810 448 L810 464 C810 469 806 472 800 472 L790 472 C784 472 780 469 780 464 Z" fill="url(#gMossA)"></path>
+  <path d="M812 450 C820 450 824 455 824 460 C824 465 820 470 812 470" fill="none" stroke="#7A8B6F" stroke-width="4" stroke-linecap="round"></path>
+  <path d="M818 458 L862 458 C866 458 869 461 869 465 C869 469 866 472 862 472 L818 472 C814 472 811 469 811 465 C811 461 814 458 818 458 Z" fill="url(#gShelfClay)"></path>
+  <path d="M822 448 L858 448 C862 448 865 451 865 455 C865 459 862 462 858 462 L822 462 C818 462 815 459 815 455 C815 451 818 448 822 448 Z" fill="url(#gLampBase)"></path>
+  <path d="M826 440 L854 440 C858 440 860 442 860 446 C860 450 858 452 854 452 L826 452 C822 452 820 450 820 446 C820 442 822 440 826 440 Z" fill="url(#gMossB)"></path>
+</g>
+<g id="vaso">
+  <path d="M906 502 C906 496 910 492 916 492 L972 492 C978 492 983 496 983 502 C980 530 975 558 968 570 C963 578 955 581 944 581 C933 581 925 578 920 570 C913 558 908 530 906 502 Z" fill="url(#gClay)"></path>
+  <path d="M906 502 C906 496 910 492 916 492 L936 492 C930 520 928 552 934 580 C928 578 923 575 920 570 C913 558 908 530 906 502 Z" fill="url(#gPotHiL)"></path>
+  <path d="M954 492 L972 492 C978 492 983 496 983 502 C980 530 975 558 968 570 C965 575 960 578 953 580 C960 552 962 520 954 492 Z" fill="url(#gPotHiR)"></path>
+  <path d="M900 486 L988 486 C994 486 998 490 998 496 C998 502 994 506 988 506 L900 506 C894 506 890 502 890 496 C890 490 894 486 900 486 Z" fill="url(#gClay)"></path>
+  <path d="M900 486 L988 486 C994 486 998 490 998 496 L890 496 C890 490 894 486 900 486 Z" fill="url(#gRimHi)"></path>
+</g>
+<g id="planta">
+  <path d="M942 494 C932 470 918 448 900 430" fill="none" stroke="#5A6A50" stroke-width="3.5" stroke-linecap="round"></path>
+  <path d="M944 492 C948 466 950 440 946 412" fill="none" stroke="#63734F" stroke-width="3.5" stroke-linecap="round"></path>
+  <path d="M946 494 C962 478 976 462 990 448" fill="none" stroke="#586848" stroke-width="3.5" stroke-linecap="round"></path>
+  <path d="M900 430 C884 420 876 400 884 386 C898 384 910 400 912 416 C913 424 908 430 900 430 Z" fill="url(#gMossB)"></path>
+  <path d="M946 412 C932 396 928 372 940 360 C954 368 960 392 954 410 C952 416 949 416 946 412 Z" fill="url(#gMossA)"></path>
+  <path d="M990 448 C1004 436 1008 414 998 404 C984 410 976 430 980 444 C982 450 986 452 990 448 Z" fill="url(#gMossB)"></path>
+  <path d="M940 496 C920 490 902 480 900 464 C916 462 934 476 942 490 C945 496 944 497 940 496 Z" fill="url(#gMossA)"></path>
+  <path d="M948 496 C966 494 984 486 988 472 C972 468 954 480 946 490 C943 495 944 497 948 496 Z" fill="url(#gMossB)"></path>
+  <path d="M944 492 C938 470 942 444 956 432 C964 448 962 478 950 492 C948 496 945 496 944 492 Z" fill="url(#gMossA)"></path>
+  <path d="M918 484 C906 476 898 462 902 452 C914 454 922 468 922 478 C922 484 920 486 918 484 Z" fill="url(#gMossB)"></path>
+</g>
+<g id="objetos_estante">
+  <g id="obj_0">
+    <rect x="88" y="358" width="23" height="34" rx="6" ry="6" fill="url(#gShelfMoss2)"></rect>
+  </g>
+  <g id="obj_1">
+    <circle cx="152" cy="379" r="13" fill="url(#gShelfClay)"></circle>
+  </g>
+  <g id="obj_2">
+    <rect x="176" y="354" width="28" height="38" rx="8" ry="8" fill="url(#gShelf)"></rect>
+  </g>
+  <g id="obj_3">
+    <circle cx="99" cy="464" r="14" fill="url(#gShelfClay)"></circle>
+  </g>
+  <g id="obj_4">
+    <rect x="124" y="448" width="22" height="30" rx="7" ry="7" fill="url(#gShelfMoss)"></rect>
+  </g>
+  <g id="obj_5">
+    <rect x="176" y="446" width="30" height="32" rx="8" ry="8" fill="url(#gShelf)"></rect>
+  </g>
+</g>
+</svg>

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny" viewBox="0 0 200 260">
+<defs>
+  <linearGradient id="gClay" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#D98A61"></stop>
+    <stop offset="0.45" stop-color="#A85B40"></stop>
+    <stop offset="1" stop-color="#5F3325"></stop>
+  </linearGradient>
+  <linearGradient id="gPotHiL" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#EDA477" stop-opacity="0.18"></stop>
+    <stop offset="1" stop-color="#EDA477" stop-opacity="0.18"></stop>
+  </linearGradient>
+  <linearGradient id="gRimHi" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#F0B187" stop-opacity="0.2"></stop>
+    <stop offset="1" stop-color="#F0B187" stop-opacity="0.2"></stop>
+  </linearGradient>
+  <linearGradient id="gSoil" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#3A2A21"></stop>
+    <stop offset="1" stop-color="#241A15"></stop>
+  </linearGradient>
+  <linearGradient id="gMossA" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#A2B18E"></stop>
+    <stop offset="0.5" stop-color="#7A8B6F"></stop>
+    <stop offset="1" stop-color="#485442"></stop>
+  </linearGradient>
+  <linearGradient id="gMossB" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#8FA07C"></stop>
+    <stop offset="0.55" stop-color="#6B7C61"></stop>
+    <stop offset="1" stop-color="#3E4A39"></stop>
+  </linearGradient>
+  <radialGradient id="gCtc">
+    <stop offset="0" stop-color="#0C0907" stop-opacity="0.62"></stop>
+    <stop offset="0.5" stop-color="#0C0907" stop-opacity="0.26"></stop>
+    <stop offset="1" stop-color="#0C0907" stop-opacity="0"></stop>
+  </radialGradient>
+</defs>
+<g id="vaso">
+  <ellipse cx="96" cy="247" rx="80" ry="14" fill="url(#gCtc)"></ellipse>
+  <path d="M62 167 C62 161 66 157 72 157 L128 157 C134 157 139 161 139 167 C136 195 131 223 124 235 C119 243 111 246 100 246 C89 246 81 243 76 235 C69 223 64 195 62 167 Z" fill="url(#gClay)"></path>
+  <path d="M62 167 C62 161 66 157 72 157 L92 157 C86 185 84 217 90 245 C84 243 79 240 76 235 C69 223 64 195 62 167 Z" fill="url(#gPotHiL)"></path>
+  <path d="M56 151 L144 151 C150 151 154 155 154 161 C154 167 150 171 144 171 L56 171 C50 171 46 167 46 161 C46 155 50 151 56 151 Z" fill="url(#gClay)"></path>
+  <path d="M56 151 L144 151 C150 151 154 155 154 161 L46 161 C46 155 50 151 56 151 Z" fill="url(#gRimHi)"></path>
+  <ellipse cx="100" cy="159" rx="46" ry="6" fill="url(#gSoil)"></ellipse>
+</g>
+<g id="planta">
+  <path d="M97 158 C91 143 84 128 74 117" fill="none" stroke="#5A6A50" stroke-width="3" stroke-linecap="round"></path>
+  <path d="M104 158 C110 145 118 132 128 122" fill="none" stroke="#63734F" stroke-width="3" stroke-linecap="round"></path>
+  <path d="M100 157 C101 141 102 126 100 110" fill="none" stroke="#586848" stroke-width="3" stroke-linecap="round"></path>
+  <path d="M74 117 C60 109 52 92 60 82 C74 86 84 102 82 113 C81 119 78 120 74 117 Z" fill="url(#gMossB)"></path>
+  <path d="M128 122 C142 114 150 98 142 88 C128 93 119 108 121 118 C122 124 125 125 128 122 Z" fill="url(#gMossB)"></path>
+  <path d="M100 110 C90 96 88 76 98 66 C110 74 114 96 107 109 C105 113 102 113 100 110 Z" fill="url(#gMossA)"></path>
+  <path d="M92 155 C78 150 66 141 66 130 C78 129 90 139 96 149 C98 154 96 156 92 155 Z" fill="url(#gMossA)"></path>
+  <path d="M108 155 C120 152 132 145 135 135 C123 132 111 141 105 150 C103 154 104 156 108 155 Z" fill="url(#gMossB)"></path>
+</g>
+</svg>
