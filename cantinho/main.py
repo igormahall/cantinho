@@ -1,0 +1,123 @@
+"""Ponto de entrada.
+
+Uma `QQmlApplicationEngine`, dois `Window` QML, um backend só. As janelas se
+ligam à mesma instância exposta como context property — sem IPC, sem estado
+duplicado.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QIcon
+from PySide6.QtQml import QQmlApplicationEngine
+
+# QApplication, e não QGuiApplication, por causa da bandeja. Ver services/tray.py.
+from PySide6.QtWidgets import QApplication
+
+from cantinho.backend import Backend
+from cantinho.core.clock import SystemClock
+from cantinho.core.store import EventStore
+from cantinho.services import scene
+from cantinho.services.audio import Ambience
+from cantinho.services.hotkey import create_hotkey
+from cantinho.services.tray import Tray
+
+logger = logging.getLogger(__name__)
+
+UI_DIR = Path(__file__).resolve().parent / "ui"
+
+
+def _ui_dir() -> Path:
+    empacotado = getattr(sys, "_MEIPASS", None)
+    if empacotado:
+        return Path(empacotado) / "cantinho" / "ui"
+    return UI_DIR
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="cantinho", description="Cantinho")
+    parser.add_argument(
+        "--db",
+        type=Path,
+        default=None,
+        help="caminho do banco (padrão: pasta de dados do sistema)",
+    )
+    parser.add_argument(
+        "--device-id",
+        default=None,
+        help="força o device_id, útil para testar",
+    )
+    parser.add_argument(
+        "--log",
+        default="INFO",
+        help="nível de log (DEBUG, INFO, WARNING...)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+    logging.basicConfig(
+        level=getattr(logging, str(args.log).upper(), logging.INFO),
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    )
+
+    app = QApplication(sys.argv)
+    app.setApplicationName("Cantinho")
+    app.setOrganizationName("Cantinho")
+    # Fechar a janela principal não encerra o app: ele continua na bandeja.
+    app.setQuitOnLastWindowClosed(False)
+
+    store = EventStore(args.db, device_id=args.device_id)
+    logger.info("banco em %s", store.db_path)
+
+    clock = SystemClock()
+    backend = Backend(store, clock)
+
+    engine = QQmlApplicationEngine()
+    engine.addImageProvider("cena", scene.SceneImageProvider())
+    engine.addImportPath(str(_ui_dir()))
+    engine.rootContext().setContextProperty("backend", backend)
+
+    ui = _ui_dir()
+    for arquivo in ("Main.qml", "Mini.qml"):
+        engine.load(QUrl.fromLocalFile(str(ui / arquivo)))
+
+    if len(engine.rootObjects()) != 2:
+        logger.error("as janelas não carregaram")
+        return 1
+
+    ambiente = Ambience(app)
+    ambiente.set_theme(backend.themeName)
+    backend.themeChanged.connect(lambda: ambiente.set_theme(backend.themeName))
+
+    bandeja = Tray(app)
+    if bandeja.install(backend.plantStage):
+        bandeja.openRequested.connect(backend.showMain)
+        bandeja.miniToggleRequested.connect(backend.toggleMini)
+        bandeja.quitRequested.connect(app.quit)
+        backend.stateChanged.connect(lambda: bandeja.set_stage(backend.plantStage))
+        app.setWindowIcon(QIcon())
+    else:
+        # Sem bandeja não há como reabrir a janela: fechar precisa encerrar.
+        logger.info("sem bandeja: fechar a janela encerra o app")
+        app.setQuitOnLastWindowClosed(True)
+
+    atalho = create_hotkey()
+    if atalho.install():
+        atalho.triggered.connect(backend.requestCapture)
+
+    codigo = app.exec()
+    atalho.remove()
+    ambiente.stop()
+    store.close()
+    return codigo
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

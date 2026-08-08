@@ -1,0 +1,254 @@
+import QtQuick
+import theme
+
+// Backlog leve: sem projeto aninhado, sem prazo, sem contagem.
+//
+// Os cinco primeiros são "Hoje". O limite não é enfeite: uma lista de hoje que
+// aceita tudo deixa de ser uma lista de hoje. Passou de cinco, o resto fica
+// visivelmente mais apagado, embaixo de uma linha.
+Item {
+    id: raiz
+
+    property var tarefas: []
+    property int limiteHoje: 5
+    property string tarefaAtual: ""
+
+    signal iniciar(string taskId)
+    signal concluir(string taskId)
+    signal arquivar(string taskId)
+    signal reordenar(var ids)
+
+    // O modelo é reconstruído a partir do backend, exceto durante um arrasto:
+    // reconstruir no meio do gesto faria o item sumir da mão do usuário.
+    property bool arrastando: false
+
+    onTarefasChanged: if (!arrastando) recarregar()
+    Component.onCompleted: recarregar()
+
+    function recarregar() {
+        modelo.clear()
+        for (var i = 0; i < tarefas.length; i++) {
+            modelo.append({
+                "taskId": tarefas[i].id,
+                "label": tarefas[i].label,
+                "project": tarefas[i].project
+            })
+        }
+    }
+
+    function publicarOrdem() {
+        var ids = []
+        for (var i = 0; i < modelo.count; i++)
+            ids.push(modelo.get(i).taskId)
+        raiz.reordenar(ids)
+    }
+
+    ListModel { id: modelo }
+
+    Text {
+        id: vazio
+        anchors.centerIn: parent
+        width: parent.width - 40
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        visible: modelo.count === 0
+        text: "Nada por aqui ainda.\nEscreva embaixo o que quiser fazer."
+        color: Theme.textoSuave
+        font.pixelSize: Theme.corpo
+        lineHeight: 1.4
+    }
+
+    ListView {
+        id: lista
+        anchors.fill: parent
+        spacing: 4
+        model: modelo
+        clip: true
+        cacheBuffer: 400
+
+        delegate: Item {
+            id: envelope
+            width: lista.width
+            height: 46
+
+            property int indiceVisual: index
+
+            // Divisória entre "Hoje" e o resto do backlog.
+            Rectangle {
+                width: parent.width - 8
+                height: 1
+                color: Theme.borda
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: index === raiz.limiteHoje
+            }
+
+            Rectangle {
+                id: cartao
+                width: envelope.width
+                height: 42
+                y: index === raiz.limiteHoje ? 4 : 0
+                radius: Theme.raio
+                color: arraste.drag.active
+                       ? Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b, 0.16)
+                       : (hover.hovered
+                          ? Qt.rgba(Theme.borda.r, Theme.borda.g, Theme.borda.b, 0.45)
+                          : "transparent")
+                // Fora do "Hoje" o item existe, mas não pede atenção.
+                opacity: index < raiz.limiteHoje ? 1.0 : 0.5
+                Behavior on color { ColorAnimation { duration: 150 } }
+
+                Drag.active: arraste.drag.active
+                Drag.source: envelope
+                Drag.hotSpot.x: width / 2
+                Drag.hotSpot.y: height / 2
+
+                HoverHandler { id: hover }
+
+                states: State {
+                    when: arraste.drag.active
+                    ParentChange { target: cartao; parent: lista }
+                    AnchorChanges { target: cartao; anchors.verticalCenter: undefined }
+                }
+
+                Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 8
+                    spacing: 10
+
+                    // Círculo de concluir. Clicar aqui é o que coloca um
+                    // objeto na estante.
+                    Item {
+                        width: 20
+                        height: parent.height
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 15; height: 15; radius: 8
+                            color: "transparent"
+                            border.width: 1.5
+                            border.color: marcar.containsMouse ? Theme.musgo : Theme.textoSuave
+                            Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 7; height: 7; radius: 4
+                                color: Theme.musgo
+                                opacity: marcar.containsMouse ? 1 : 0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                            }
+                        }
+
+                        MouseArea {
+                            id: marcar
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: raiz.concluir(model.taskId)
+                        }
+                    }
+
+                    Column {
+                        width: parent.width - 130
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
+
+                        Text {
+                            width: parent.width
+                            text: model.label
+                            color: model.taskId === raiz.tarefaAtual ? Theme.ambar : Theme.texto
+                            font.pixelSize: Theme.corpo
+                            elide: Text.ElideRight
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: model.project
+                            visible: model.project !== ""
+                            color: Theme.textoSuave
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Item { width: 1; height: 1 }
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+                    opacity: hover.hovered || model.taskId === raiz.tarefaAtual ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 180 } }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: model.taskId === raiz.tarefaAtual ? "em curso" : "começar"
+                        font.pixelSize: 11
+                        color: comecar.containsMouse ? Theme.ambar : Theme.textoSuave
+                        MouseArea {
+                            id: comecar
+                            anchors.fill: parent
+                            anchors.margins: -6
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: model.taskId !== raiz.tarefaAtual
+                            onClicked: raiz.iniciar(model.taskId)
+                        }
+                    }
+
+                    Item { width: 8; height: 1 }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "×"
+                        font.pixelSize: 16
+                        color: guardar.containsMouse ? Theme.terracota : Theme.textoSuave
+                        MouseArea {
+                            id: guardar
+                            anchors.fill: parent
+                            anchors.margins: -6
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: raiz.arquivar(model.taskId)
+                        }
+                    }
+                }
+
+                MouseArea {
+                    id: arraste
+                    anchors.fill: parent
+                    anchors.leftMargin: 30
+                    anchors.rightMargin: 96
+                    cursorShape: Qt.OpenHandCursor
+                    drag.target: cartao
+                    drag.axis: Drag.YAxis
+
+                    onPressed: raiz.arrastando = true
+                    onReleased: {
+                        cartao.Drag.drop()
+                        raiz.arrastando = false
+                        raiz.publicarOrdem()
+                    }
+                }
+            }
+
+            DropArea {
+                anchors.fill: parent
+                onEntered: function (arrasto) {
+                    var de = arrasto.source.indiceVisual
+                    var para = envelope.indiceVisual
+                    if (de !== para)
+                        modelo.move(de, para, 1)
+                }
+            }
+        }
+
+        displaced: Transition {
+            NumberAnimation { properties: "y"; duration: 180; easing.type: Easing.OutQuad }
+        }
+    }
+}
