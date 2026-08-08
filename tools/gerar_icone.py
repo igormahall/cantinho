@@ -36,7 +36,7 @@ TAMANHOS = (16, 24, 32, 48, 64, 128, 256)
 
 # Estágio fixo do ícone do app. Nem broto (irreconhecível), nem o maior
 # (folhagem espalhada demais para um quadrado pequeno).
-ESTAGIO_IDENTIDADE = 2
+ESTAGIO_IDENTIDADE = 3
 
 
 def _para_png(imagem: QImage) -> bytes:

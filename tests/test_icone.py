@@ -62,6 +62,43 @@ def test_o_ico_declara_os_tamanhos_esperados() -> None:
     assert lados == [16, 24, 32, 48, 64, 128, 256]
 
 
+def _estagio_do_gerador() -> int:
+    """Lê `ESTAGIO_IDENTIDADE` do texto de `tools/gerar_icone.py`.
+
+    Lê em vez de importar de propósito. Importar por caminho passa pelo cache
+    de bytecode, e trocar um dígito da constante mantém o tamanho do arquivo:
+    se as duas edições caírem no mesmo segundo, o Python valida um `.pyc`
+    velho e o teste compara contra o estágio errado — foi o que aconteceu aqui.
+    """
+    import re
+
+    fonte = (
+        Path(__file__).resolve().parents[1] / "tools" / "gerar_icone.py"
+    ).read_text(encoding="utf-8")
+    achado = re.search(r"^ESTAGIO_IDENTIDADE\s*=\s*(\d+)", fonte, re.MULTILINE)
+    assert achado, "não achei ESTAGIO_IDENTIDADE em tools/gerar_icone.py"
+    return int(achado.group(1))
+
+
+def test_o_arquivo_versionado_bate_com_o_gerador(app) -> None:
+    """O `.ico` no repositório tem que ser o que o gerador produz hoje.
+
+    Mudar `ESTAGIO_IDENTIDADE` e esquecer de rodar `tools/gerar_icone.py`
+    deixaria o arquivo versionado descrevendo outra coisa — e ninguém percebe,
+    porque o ícone só aparece na barra de tarefas depois do build.
+    """
+    from PySide6.QtGui import QIcon
+
+    estagio = _estagio_do_gerador()
+    esperado = scene.render_icon(estagio, 64)
+    gravado = QIcon(str(ICONE)).pixmap(64, 64).toImage()
+
+    assert gravado.convertToFormat(esperado.format()) == esperado, (
+        f"o .ico versionado não corresponde ao estágio {estagio}; "
+        "rode tools/gerar_icone.py"
+    )
+
+
 def test_o_qt_rele_todos_os_tamanhos(app) -> None:
     from PySide6.QtGui import QIcon
 
