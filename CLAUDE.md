@@ -46,6 +46,7 @@ python -m pytest tests/test_projections.py::test_planta_decai_ao_avancar_14_dias
 python -m pytest -k planta -x     # por nome, parando no primeiro erro
 python tools/check_svg.py         # validar SVGs -> build/svg_check/*.png
 python tools/simular_uso.py       # percorre a UI com mouse e teclado sintéticos
+python tools/gerar_audio.py       # regera assets/audio/*.wav
 pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 ```
 
@@ -253,13 +254,25 @@ Todas deliberadas, todas com motivo:
   guarda todos para sempre; é o desenho que lota. Passar disso pede arte nova.
 - Sessão é atribuída inteira ao instante em que terminou, sem teto. Timer
   esquecido a noite toda vira oito horas de foco.
-- `assets/scenes/*.svg` têm uma emenda visível em `x=560`, onde
-  `mesa_esquerda` termina e `mesa_direita` começa com gradientes que não se
-  encontram. É da arte, não da renderização — o composto por camada é
-  pixel-idêntico ao render do arquivo inteiro, e existe teste provando isso.
-- Sem áudio: `services/audio.py` funciona, mas o repositório não versiona som.
-  Ver o docstring do módulo para os nomes de arquivo que ele procura.
 - Atalho global só no Windows. No Linux `create_hotkey()` devolve um no-op.
+- O som é sintetizado, não gravado, e é curto: 24 s em loop. Não tem melodia,
+  é textura. Trocar por faixa de verdade é só pôr outro arquivo com o mesmo
+  nome em `assets/audio/`.
+
+### Áudio
+
+`assets/audio/ambiente_noite.wav` e `ambiente_tarde.wav` são gerados por
+`tools/gerar_audio.py` e versionados prontos, para que um clone limpo já tenha
+som sem etapa extra de build.
+
+A síntese é determinística (semente fixa), então regerar produz o mesmo arquivo
+byte a byte — se o `git status` acusar mudança depois de rodar o gerador, foi o
+código do gerador que mudou, não ruído aleatório.
+
+Duas coisas seguram a qualidade do loop e têm teste: as frequências dos senos
+são ajustadas para caber um número inteiro de ciclos na duração, e o fim do
+arquivo é misturado por crossfade sobre o começo. Sem as duas, a volta do loop
+estala — e num som que fica horas tocando isso é insuportável.
 
 ## Fases
 
@@ -270,8 +283,8 @@ Todas deliberadas, todas com motivo:
 | F2 | Backlog e "Hoje" (máx. 5) | feito |
 | F3 | Cena, planta, estante | feito |
 | F4 | Retrospectiva, humor, inbox de ideias | feito |
-| F5 | Áudio local, ambiente, ciclo dia/noite | ambiente e ciclo feitos; áudio sem arquivo |
-| F6 | PyInstaller portable | feito, 207 MB em `dist/Cantinho/` |
+| F5 | Áudio local, ambiente, ciclo dia/noite | feito |
+| F6 | PyInstaller portable | feito, ~207 MB em `dist/Cantinho/` |
 
 Não pule fase. Não adiante arte. Se o modelo de eventos estiver errado,
 descobrir na F3 custa caro.
