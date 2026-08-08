@@ -107,30 +107,44 @@ def _ordered(events: Iterable[Event]) -> list[Event]:
 def _index_tasks(events: Iterable[Event]) -> dict[str, Task]:
     """Reduz o log ao estado atual de cada tarefa.
 
-    O primeiro evento de cada transição vence. O log é append-only e não
+    Duas passadas, e não uma. A criação e a conclusão de uma tarefa podem cair
+    no mesmo microssegundo — timer rápido, relógio grosso — e aí o desempate
+    por uuid é sorteio: metade das vezes a conclusão viria antes da criação e
+    seria descartada por falar de uma tarefa que "ainda não existe". Coletando
+    todas as criações primeiro, a ordem relativa entre um evento e o que ele
+    referencia deixa de importar.
+
+    Dentro de cada passada o primeiro evento vence. O log é append-only e não
     deveria ter duplicata, mas se tiver, ignorar as repetições mantém a
     projeção idempotente.
     """
+    ordenados = _ordered(events)
+
     tasks: dict[str, Task] = {}
-    for event in _ordered(events):
-        payload = event.payload
+    for event in ordenados:
         if event.kind == "task.created":
-            task_id = payload["id"]
+            task_id = event.payload["id"]
             if task_id not in tasks:
                 tasks[task_id] = Task(
                     id=task_id,
-                    label=payload["label"],
-                    project=payload.get("project"),
+                    label=event.payload["label"],
+                    project=event.payload.get("project"),
                     created_at=event.occurred_at,
                 )
-        elif event.kind == "task.completed":
-            atual = tasks.get(payload["id"])
-            if atual is not None and atual.completed_at is None:
-                tasks[atual.id] = replace(atual, completed_at=event.occurred_at)
-        elif event.kind == "task.archived":
-            atual = tasks.get(payload["id"])
-            if atual is not None and atual.archived_at is None:
-                tasks[atual.id] = replace(atual, archived_at=event.occurred_at)
+
+    for event in ordenados:
+        if event.kind not in ("task.completed", "task.archived"):
+            continue
+        atual = tasks.get(event.payload["id"])
+        if atual is None:
+            # Referência a tarefa que não existe no log. Dado corrompido:
+            # ignorar é melhor que inventar uma tarefa sem rótulo.
+            continue
+        if event.kind == "task.completed" and atual.completed_at is None:
+            tasks[atual.id] = replace(atual, completed_at=event.occurred_at)
+        elif event.kind == "task.archived" and atual.archived_at is None:
+            tasks[atual.id] = replace(atual, archived_at=event.occurred_at)
+
     return tasks
 
 
@@ -160,28 +174,36 @@ def sessions(events: Iterable[Event]) -> list[Session]:
 
     `session.ended` sem `session.started` correspondente é descartado: sem
     início não há duração.
+
+    Duas passadas pelo mesmo motivo de `_index_tasks`: início e fim podem
+    compartilhar timestamp, e o fim não pode depender de sortear a ordem certa.
     """
-    abertas: dict[str, Session] = {}
-    for event in _ordered(events):
-        payload = event.payload
+    ordenados = _ordered(events)
+
+    encontradas: dict[str, Session] = {}
+    for event in ordenados:
         if event.kind == "session.started":
-            session_id = payload["id"]
-            if session_id not in abertas:
-                abertas[session_id] = Session(
+            session_id = event.payload["id"]
+            if session_id not in encontradas:
+                encontradas[session_id] = Session(
                     id=session_id,
-                    task_id=payload.get("task_id"),
+                    task_id=event.payload.get("task_id"),
                     started_at=event.occurred_at,
                 )
-        elif event.kind == "session.ended":
-            atual = abertas.get(payload["id"])
-            if atual is not None and atual.ended_at is None:
-                abertas[atual.id] = replace(
-                    atual,
-                    ended_at=event.occurred_at,
-                    interrupted=payload["interrupted"],
-                    note=payload.get("note"),
-                )
-    return sorted(abertas.values(), key=lambda s: (s.started_at, s.id))
+
+    for event in ordenados:
+        if event.kind != "session.ended":
+            continue
+        atual = encontradas.get(event.payload["id"])
+        if atual is not None and atual.ended_at is None:
+            encontradas[atual.id] = replace(
+                atual,
+                ended_at=event.occurred_at,
+                interrupted=event.payload["interrupted"],
+                note=event.payload.get("note"),
+            )
+
+    return sorted(encontradas.values(), key=lambda s: (s.started_at, s.id))
 
 
 def focus_minutes_14d(events: Iterable[Event], now: datetime) -> float:
