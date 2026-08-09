@@ -11,8 +11,20 @@ build/
 dist/
 *.spec.bak
 
+# O pacote portátil de distribuição, montado por tools/empacotar_portatil.py.
+# São ~200 MB de Python e Qt que não são código deste projeto: vão como anexo
+# de release, não como conteúdo do repositório.
+portatil/
+Cantinho-*.zip
+
 # Bancos de evento, incluindo os descartáveis de teste. O log é dado do
 # usuário; nenhum deles entra no repositório.
 *.db
 *.db-wal
 *.db-shm
+
+# Editores. Configuração de IDE é preferência de máquina, e este repo vive em
+# duas.
+.vscode/
+.idea/
+*.swp

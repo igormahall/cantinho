@@ -1,1 +1,16 @@
-*.svg text eol=lf
+# O repositório guarda todo texto em LF, e o checkout no Windows não converte.
+#
+# Este projeto é editado em duas máquinas — Windows e Ubuntu — sobre o mesmo
+# log de commits. Sem uma regra explícita aqui, quem manda é o `core.autocrlf`
+# de cada máquina, que é configuração local e não viaja junto com o clone. O
+# resultado é o clássico: um `git status` que acusa todos os arquivos como
+# modificados depois de trocar de sistema, sem uma linha de diferença real.
+#
+# LF nos dois lados. Python, Qt e o git do Windows leem LF sem reclamar.
+* text=auto eol=lf
+
+# Binários gerados: normalizar corromperia o arquivo.
+*.png binary
+*.ico binary
+*.wav binary
+*.db  binary
