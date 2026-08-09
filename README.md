@@ -52,6 +52,9 @@ Precisa de Python 3.10 ou mais novo. A única dependência de execução é o
 PySide6.
 
 ```bash
+git clone https://github.com/igormahall/cantinho.git
+cd cantinho
+
 python -m venv .venv
 .venv\Scripts\Activate.ps1        # Windows
 source .venv/bin/activate         # Linux
@@ -59,6 +62,10 @@ source .venv/bin/activate         # Linux
 pip install -r requirements.txt
 python -m cantinho.main
 ```
+
+O `.venv/` não é versionado e não atravessa sistema: cada máquina cria o seu.
+Rode sempre com o Python do venv — o `python` do PATH é o do sistema e não tem
+PySide6.
 
 O banco fica em `%APPDATA%\Cantinho` no Windows e `~/.local/share/cantinho` no
 Linux. Para experimentar sem sujar seus dados de verdade:
@@ -131,6 +138,23 @@ admin. O build é por plataforma: o do Windows não serve no Linux e vice-versa.
 .\dist\Cantinho\Cantinho.exe                        # seu banco de verdade
 .\dist\Cantinho\Cantinho.exe --db ~/cantinho/x.db   # um banco à parte
 ```
+
+### Quando o antivírus apaga o executável
+
+Acontece, e não é acaso: o executável do PyInstaller é um *bootloader* genérico
+igual em todo programa empacotado com ele, e sem assinatura de editor não tem
+como se distinguir do malware que usa o mesmo empacotador.
+
+Para esse caso existe um segundo empacotador, que não gera binário nenhum — ele
+monta o app sobre o `python.exe` oficial da Python Software Foundation, que já
+vem assinado:
+
+```powershell
+python tools/empacotar_portatil.py     # Cantinho-portatil-windows.zip
+```
+
+O porquê, o passo a passo em máquina corporativa e o que fazer se ainda assim
+for bloqueado estão em **[docs/fabrica.md](docs/fabrica.md)**.
 
 ## Desenvolvimento
 

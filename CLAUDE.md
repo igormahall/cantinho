@@ -59,6 +59,7 @@ python tools/gerar_audio.py       # regera assets/audio/*.wav
 python tools/gerar_icone.py       # regera assets/icon/cantinho.{ico,png}
 python tools/gerar_capturas.py    # regera docs/quarto-*.png do README
 pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
+python tools/empacotar_portatil.py      # pacote sobre o Python oficial
 ```
 
 `tools/semear.py` existe porque um banco vazio não mostra quase nada: sem ele,
@@ -112,6 +113,52 @@ quarto sem calendário, sem relógio e sem bilhete.
 1 se algum falhar. Não basta olhar o exit code: **abra os PNGs em
 `build/svg_check/`**, porque um SVG com feature não suportada renderiza vazio ou
 parcial sem que `isValid()` reclame.
+
+## Duas máquinas, um log de commits
+
+O repositório é público em `github.com/<usuário>/cantinho` e é editado de dois
+lugares: Windows e Ubuntu, na mesma máquina dual-boot. O código sincroniza pelo
+GitHub; **os bancos de evento não sincronizam nunca** e não estão no repositório.
+
+O `.gitattributes` fixa LF para todo texto (`* text=auto eol=lf`). Sem isso,
+quem decide a quebra de linha é o `core.autocrlf` de cada sistema — que é
+configuração local, não viaja no clone — e trocar de sistema faz o `git status`
+acusar o repositório inteiro como modificado sem uma linha de diferença real.
+Se isso acontecer, o conserto é `git add --renormalize .`, não commitar o ruído.
+
+O `.venv/` é por máquina e não é versionado. Depois de trocar de sistema ou de
+puxar mudança em `requirements*.txt`, refaça: `pip install -r requirements-dev.txt`.
+
+Antes de trocar de sistema, empurre o que está pendente — o pior conflito neste
+projeto é um `.qml` editado nos dois lados. Fluxo normal:
+
+```bash
+git pull --rebase     # antes de começar
+git push              # antes de desligar
+```
+
+## Distribuição
+
+São dois empacotadores, para dois problemas diferentes.
+
+- `cantinho.spec` (PyInstaller) → `dist/Cantinho/`, ~198 MB. É o build de casa.
+- `tools/empacotar_portatil.py` → `Cantinho-portatil-windows.zip`, ~235 MB
+  descompactado. É o build da fábrica.
+
+O segundo existe porque o antivírus corporativo (AhnLab V3) apaga o executável
+do PyInstaller, e lá não há administrador do antivírus para criar exceção. O
+bootloader do PyInstaller é o mesmo binário em todo programa empacotado com
+ele, inclusive nos maliciosos, e sem assinatura de editor não tem como se
+distinguir. Em vez de tentar contornar o efeito, o empacotador portátil remove
+a causa: monta o app sobre o `python.exe` oficial da PSF, que já vem assinado,
+e não constrói binário nenhum.
+
+A poda do Qt no portátil compara nomes **em minúsculas**. A primeira versão
+comparava sensível a maiúsculas e deixou 83 MB de recurso do WebEngine para
+trás, porque o Qt escreve `Qt6WebEngine` na DLL e `qtwebengine` no `.pak`.
+
+Detalhes, instruções de instalação na máquina do trabalho e o que fazer se
+mesmo assim for bloqueado: `docs/fabrica.md`.
 
 ## Contexto de uso (restrições reais)
 
