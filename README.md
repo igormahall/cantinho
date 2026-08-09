@@ -149,6 +149,34 @@ O conda entra nesta história por um segundo motivo: com o `base` ativo, o
 `python3-dev` de cima servem, e evita que as bibliotecas próprias do Anaconda
 se sobreponham às do sistema que o plugin `xcb` carrega.
 
+### O atalho na grade de aplicativos
+
+Na primeira vez que o app abre sem encontrar um atalho, ele cria um — e depois
+disso não toca mais no assunto. O Cantinho passa a aparecer na tela inicial do
+GNOME, dá para fixar na barra e abre sem terminal.
+
+Se precisar mexer à mão:
+
+```bash
+python tools/instalar_atalho.py             # cria, se ainda não houver
+python tools/instalar_atalho.py --de-novo   # reescreve o que existe
+python tools/instalar_atalho.py --remover   # apaga o atalho e o ícone
+```
+
+São dois arquivos, os dois em `~/.local/share`: `applications/cantinho.desktop`
+e o ícone em `icons/hicolor/256x256/apps/`. Apagar o atalho basta para ele sumir
+— o app só o recria se você pedir.
+
+**Mudou o repositório de pasta? Rode `--de-novo`.** O `Exec=` guarda o caminho
+absoluto do Python do venv, e o app nunca sobrescreve um atalho que já existe —
+é justamente essa recusa que impede um clone de teste de roubar o ícone do menu
+apontando para si.
+
+Duas execuções não criam atalho: as que passam `--db`, porque essa é a flag de
+teste e um atalho permanente apontando para banco descartável seria a pior
+herança possível de um experimento; e as de qualquer sistema que não seja
+Linux, onde `.desktop` não existe.
+
 ### Duas diferenças no Linux
 
 **O atalho global não funciona.** `Ctrl+Shift+C` para capturar ideia é a única
@@ -268,6 +296,7 @@ python tools/semear.py          # banco descartável com duas semanas de uso
 python tools/gerar_audio.py     # regera os sons
 python tools/gerar_icone.py     # regera o ícone do app
 python tools/gerar_capturas.py  # regera as imagens deste README
+python tools/instalar_atalho.py # atalho do Linux na grade de aplicativos
 ```
 
 O `pytest` não cobre o QML. Quem faz isso é o `simular_uso.py`: ele abre as

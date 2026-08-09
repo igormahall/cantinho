@@ -58,6 +58,7 @@ python tools/semear.py --de-novo  # refaz um banco já semeado
 python tools/gerar_audio.py       # regera assets/audio/*.wav
 python tools/gerar_icone.py       # regera assets/icon/cantinho.{ico,png}
 python tools/gerar_capturas.py    # regera docs/quarto-*.png do README
+python tools/instalar_atalho.py   # atalho .desktop (Linux); --de-novo, --remover
 pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 python tools/empacotar_portatil.py      # pacote sobre o Python oficial
 ```
@@ -343,10 +344,11 @@ cantinho/
     main.py
     core/      events.py store.py projections.py clock.py
     services/  timer.py audio.py hotkey.py tray.py scene.py single_instance.py
-               graphics.py
+               graphics.py desktop_entry.py
     ui/        Main.qml Mini.qml theme/ room/ panels/
   tests/
   tools/     check_svg.py simular_uso.py semear.py gerar_{audio,icone,capturas}.py
+             instalar_atalho.py
 ```
 
 `core/clock.py` é injetável. Sem isso, nada que dependa da janela de 14 dias é
@@ -412,6 +414,19 @@ Todas deliberadas, todas com motivo:
 - **Objetos de parede não têm inclinação.** A primeira versão pendurava tudo
   torto pela ideia de papel preso por um prego só; na tela leu como
   desalinhado, não como espontâneo. O prego ficou, a inclinação não.
+- **`cantinho/services/desktop_entry.py` é a única coisa que escreve fora da
+  pasta de dados.** Um `.desktop` em `~/.local/share/applications` mais o ícone
+  em `icons/hicolor/256x256/apps` — só no Linux, no-op nos outros sistemas como
+  em `hotkey.py`. A regra que sustenta o resto é **criar uma vez e nunca
+  sobrescrever**: revalidar o `Exec=` a cada abertura sobreviveria a mover o
+  repositório sozinho, mas daria a qualquer clone de teste o poder de roubar o
+  atalho do menu apontando para si. Para mudar de ideia existe `--de-novo`.
+  Execução com `--db` não cria atalho: é a flag de teste, e um atalho
+  permanente apontando para banco descartável seria a pior herança de um
+  experimento. **O `Exec=` não resolve o symlink do `sys.executable`** —
+  `.venv/bin/python` aponta para o Python do sistema, sem PySide6, e seguir
+  esse link produz um atalho que aparece na grade, abre e morre com
+  `ModuleNotFoundError` sem terminal onde reclamar. Há teste para isso.
 - **`cantinho/services/graphics.py` limpa o ambiente antes de o Qt subir.** Com
   o `base` do Anaconda ativo, o `qt-main` do conda exporta
   `QT_XCB_GL_INTEGRATION=none` em todo shell, e o Qt Quick não sobe — o app

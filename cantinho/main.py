@@ -24,6 +24,7 @@ from cantinho.core.clock import SystemClock
 from cantinho.core.store import DATABASE_FILENAME, EventStore, default_data_dir
 from cantinho.services import scene
 from cantinho.services.audio import Ambience, Sfx
+from cantinho.services.desktop_entry import ensure_installed
 from cantinho.services.graphics import ensure_gl_integration
 from cantinho.services.hotkey import create_hotkey
 from cantinho.services.single_instance import SingleInstance
@@ -87,6 +88,9 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Cantinho")
     app.setOrganizationName("Cantinho")
+    # Liga a janela ao `.desktop` do Linux. Sem isto o GNOME não reconhece a
+    # janela como sendo daquele atalho e mostra um ícone genérico ao lado dele.
+    app.setDesktopFileName("cantinho")
     # Fechar a janela principal não encerra o app: ele continua na bandeja.
     app.setQuitOnLastWindowClosed(False)
 
@@ -99,6 +103,12 @@ def main(argv: list[str] | None = None) -> int:
         logger.warning("ícone não encontrado em %s", icone)
 
     db_path = args.db if args.db is not None else default_data_dir() / DATABASE_FILENAME
+
+    # O atalho da grade de aplicativos, criado na primeira abertura que não o
+    # encontra. `--db` fica de fora de propósito: é a flag de teste, e não é
+    # uma execução de experimento que deve definir o atalho permanente do menu.
+    if args.db is None:
+        ensure_installed()
 
     # Antes de abrir o banco e antes de qualquer janela: se já existe uma cópia
     # sobre este mesmo banco, o certo é trazer a dela para a frente e sair.
