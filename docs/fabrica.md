@@ -103,7 +103,7 @@ Get-FileHash runtime\pythonw.exe -Algorithm SHA256
 
 O argumento do chamado é curto e verificável: *o executável é o interpretador
 Python oficial, assinado pela Python Software Foundation, e o restante da pasta
-é código-fonte legível. O repositório é público em `github.com/<usuário>/cantinho`.*
+é código-fonte legível. O repositório é público em `github.com/igormahall/cantinho`.*
 
 Um binário assinado e auditável é um pedido muito mais fácil de aprovar do que
 um `.exe` sem procedência.
@@ -114,7 +114,7 @@ Se a política bloquear a pasta inteira mas houver Python instalado na máquina 
 acesso ao PyPI:
 
 ```powershell
-git clone https://github.com/<usuário>/cantinho.git
+git clone https://github.com/igormahall/cantinho.git
 cd cantinho
 python -m venv .venv
 .venv\Scripts\Activate.ps1

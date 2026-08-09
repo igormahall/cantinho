@@ -116,7 +116,7 @@ parcial sem que `isValid()` reclame.
 
 ## Duas máquinas, um log de commits
 
-O repositório é público em `github.com/<usuário>/cantinho` e é editado de dois
+O repositório é público em `github.com/igormahall/cantinho` e é editado de dois
 lugares: Windows e Ubuntu, na mesma máquina dual-boot. O código sincroniza pelo
 GitHub; **os bancos de evento não sincronizam nunca** e não estão no repositório.
 
