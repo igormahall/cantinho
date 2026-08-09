@@ -32,6 +32,12 @@ RAIZ = Path(__file__).resolve().parents[1]
 # isto, `import cantinho` falha mesmo rodando da raiz do repositório.
 sys.path.insert(0, str(RAIZ))
 
+# Como em `simular_uso.py`: `QT_XCB_GL_INTEGRATION=none`, herdado do conda,
+# impede o Qt Quick de subir — e sem ele não há captura nenhuma.
+from cantinho.services.graphics import ensure_gl_integration  # noqa: E402
+
+ensure_gl_integration()
+
 from PySide6.QtCore import QTimer, QUrl  # noqa: E402
 from PySide6.QtQml import QQmlApplicationEngine  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402

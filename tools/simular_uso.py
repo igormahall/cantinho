@@ -50,6 +50,13 @@ os.environ.setdefault("QSG_RENDER_LOOP", "basic")
 # propósito; esta é a alternativa de uma linha.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# Mesma razão do app: com o `base` do conda ativo, o ambiente traz
+# `QT_XCB_GL_INTEGRATION=none` e o Qt Quick não sobe. Aqui a falha seria lida
+# como regressão da interface, que é o que esta ferramenta existe para achar.
+from cantinho.services.graphics import ensure_gl_integration  # noqa: E402
+
+ensure_gl_integration()
+
 from PySide6.QtCore import (  # noqa: E402
     QEvent,
     QPoint,

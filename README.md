@@ -99,6 +99,56 @@ Se o app abrir mas ficar mudo, falta o áudio: `sudo apt install libpulse0`.
 O resto é igual ao Windows: `python -m venv .venv`, `pip install -r
 requirements.txt`, `python -m cantinho.main`.
 
+#### Quando o Anaconda desliga o OpenGL
+
+Se você tem Anaconda com o ambiente `base` ativado por padrão, ele deixa esta
+variável em todo terminal seu:
+
+```bash
+echo $QT_XCB_GL_INTEGRATION    # none
+```
+
+`none` manda o Qt não carregar integração GL nenhuma, e o Qt Quick precisa de
+uma. Quem escreve isso é o `qt-main` do conda, em
+`~/anaconda3/etc/conda/activate.d/qt-main_activate.sh` — não adianta procurar
+no `.bashrc`, ela não está lá.
+
+**O app cuida disso sozinho**: ao subir, ele remove a variável do próprio
+processo e registra um aviso no log. Não precisa fazer nada. `none` não tem
+leitura válida aqui — não existe modo em que este app funcione sem integração
+GL —, então não é preferência sua sendo atropelada. Um valor deliberado como
+`xcb_glx` ou `xcb_egl` passa intacto.
+
+Fica registrado porque o sintoma, se você o encontrar por outro caminho — um
+checkout antigo, outro programa Qt —, imita o de biblioteca faltando da seção
+acima e leva a instalar pacote atrás de pacote sem nada mudar:
+
+```
+QXcbIntegration: Cannot create platform OpenGL context, neither GLX nor EGL
+are enabled
+Failed to initialize graphics backend for OpenGL.
+```
+
+O que separa os dois casos: aqui o `QT_DEBUG_PLUGINS=1` **nem chega a varrer**
+o diretório `xcbglintegrations`; no caso de `.so` ausente ele varre e falha ao
+carregar.
+
+Para tirar a variável do seu shell de vez, o caminho limpo é não ativar o
+`base` por padrão — e com ele nem o `qt-main`:
+
+```bash
+conda config --set auto_activate_base false
+```
+
+Um `unset QT_XCB_GL_INTEGRATION` no fim do `.bashrc`, **depois** do bloco do
+conda, também serve.
+
+O conda entra nesta história por um segundo motivo: com o `base` ativo, o
+`python` do PATH é o dele. Crie o venv com o Python do sistema —
+`/usr/bin/python3.10 -m venv .venv` — que é o que os `python3-venv` e
+`python3-dev` de cima servem, e evita que as bibliotecas próprias do Anaconda
+se sobreponham às do sistema que o plugin `xcb` carrega.
+
 ### Duas diferenças no Linux
 
 **O atalho global não funciona.** `Ctrl+Shift+C` para capturar ideia é a única

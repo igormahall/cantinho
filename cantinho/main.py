@@ -24,6 +24,7 @@ from cantinho.core.clock import SystemClock
 from cantinho.core.store import DATABASE_FILENAME, EventStore, default_data_dir
 from cantinho.services import scene
 from cantinho.services.audio import Ambience, Sfx
+from cantinho.services.graphics import ensure_gl_integration
 from cantinho.services.hotkey import create_hotkey
 from cantinho.services.single_instance import SingleInstance
 from cantinho.services.tray import Tray
@@ -78,6 +79,10 @@ def main(argv: list[str] | None = None) -> int:
         level=getattr(logging, str(args.log).upper(), logging.INFO),
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
     )
+
+    # Depois do log e antes da aplicação: o Qt lê o ambiente ao construí-la, e
+    # o aviso desta chamada precisa ter para onde sair.
+    ensure_gl_integration()
 
     app = QApplication(sys.argv)
     app.setApplicationName("Cantinho")

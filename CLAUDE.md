@@ -343,6 +343,7 @@ cantinho/
     main.py
     core/      events.py store.py projections.py clock.py
     services/  timer.py audio.py hotkey.py tray.py scene.py single_instance.py
+               graphics.py
     ui/        Main.qml Mini.qml theme/ room/ panels/
   tests/
   tools/     check_svg.py simular_uso.py semear.py gerar_{audio,icone,capturas}.py
@@ -411,6 +412,18 @@ Todas deliberadas, todas com motivo:
 - **Objetos de parede não têm inclinação.** A primeira versão pendurava tudo
   torto pela ideia de papel preso por um prego só; na tela leu como
   desalinhado, não como espontâneo. O prego ficou, a inclinação não.
+- **`cantinho/services/graphics.py` limpa o ambiente antes de o Qt subir.** Com
+  o `base` do Anaconda ativo, o `qt-main` do conda exporta
+  `QT_XCB_GL_INTEGRATION=none` em todo shell, e o Qt Quick não sobe — o app
+  morre logo depois de abrir. É o único módulo que mexe no `os.environ` de
+  quem roda o app, e a licença para isso é estreita: `none` não tem leitura
+  válida aqui, porque não existe modo degradado sem integração GL. `xcb_glx` e
+  `xcb_egl` passam intactos, e a remoção sai no log. **Não importa PySide6**,
+  de propósito: o Qt lê a variável ao construir a aplicação, então a limpeza
+  tem de acontecer antes. Chamam `ensure_gl_integration()` o `main.py` e as
+  duas ferramentas que sobem Qt Quick (`simular_uso.py`, `gerar_capturas.py`);
+  `check_svg.py` e `gerar_icone.py` não precisam, porque só usam
+  `QPainter`/`QImage`.
 - **Todo desenho de SVG passa por uma trava** (`_desenho`, em `services/scene.py`).
   `QQuickImageProvider` do tipo Image roda em thread de trabalho quando o
   `Image` do QML é assíncrono, e as camadas do quarto compartilham um
