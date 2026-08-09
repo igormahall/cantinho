@@ -62,6 +62,29 @@ def test_o_ico_declara_os_tamanhos_esperados() -> None:
     assert lados == [16, 24, 32, 48, 64, 128, 256]
 
 
+def _quadro_de(caminho: Path, lado: int):
+    """Lê do `.ico` o quadro exatamente deste tamanho.
+
+    `QIcon.pixmap(64, 64)` seria mais curto e está errado: ele devolve o
+    pixmap já escalado para a densidade da tela. Num monitor a 125% isso vira
+    uma imagem de 80x80 com `devicePixelRatio` 1,25, que nunca vai bater com os
+    64x64 do gerador — e o teste passa ou falha conforme o monitor de quem
+    roda, que é a pior espécie de teste.
+
+    `QImageReader` percorre os quadros do contêiner e devolve o pixel como ele
+    está gravado no arquivo, que é o que este teste quer comparar.
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QImageReader
+
+    leitor = QImageReader(str(caminho))
+    for indice in range(leitor.imageCount()):
+        leitor.jumpToImage(indice)
+        if leitor.size() == QSize(lado, lado):
+            return leitor.read()
+    return None
+
+
 def _estagio_do_gerador() -> int:
     """Lê `ESTAGIO_IDENTIDADE` do texto de `tools/gerar_icone.py`.
 
@@ -87,11 +110,10 @@ def test_o_arquivo_versionado_bate_com_o_gerador(app) -> None:
     deixaria o arquivo versionado descrevendo outra coisa — e ninguém percebe,
     porque o ícone só aparece na barra de tarefas depois do build.
     """
-    from PySide6.QtGui import QIcon
-
     estagio = _estagio_do_gerador()
     esperado = scene.render_icon(estagio, 64)
-    gravado = QIcon(str(ICONE)).pixmap(64, 64).toImage()
+    gravado = _quadro_de(ICONE, 64)
+    assert gravado is not None, "o .ico não tem quadro de 64 px"
 
     assert gravado.convertToFormat(esperado.format()) == esperado, (
         f"o .ico versionado não corresponde ao estágio {estagio}; "

@@ -30,8 +30,15 @@ Sem dependências além de PySide6 e pytest sem discussão prévia.
 
 ## Comandos
 
-Sempre a partir da raiz do repositório. Não há `pyproject.toml`/`setup.py`: os
-imports de `cantinho.*` e os caminhos relativos de `tools/` dependem do cwd.
+Sempre a partir da raiz do repositório, **e sempre com o Python do venv** — o
+`python` do PATH é o do sistema e não tem PySide6.
+
+Não há `pyproject.toml`/`setup.py`, de propósito. Como o Python põe no
+`sys.path` o diretório do *script* e não o diretório atual, cada ferramenta de
+`tools/` que importa `cantinho.*` insere a raiz do repositório no `sys.path`
+por conta própria. Sem isso, `python tools/x.py` falha com
+`ModuleNotFoundError: No module named 'cantinho'` mesmo rodando da raiz — que
+é justamente o que estas instruções mandam fazer.
 
 Windows (PowerShell), venv em `.venv/`:
 
@@ -47,6 +54,7 @@ python -m pytest -k planta -x     # por nome, parando no primeiro erro
 python tools/check_svg.py         # validar SVGs -> build/svg_check/*.png
 python tools/simular_uso.py       # percorre a UI com mouse e teclado sintéticos
 python tools/semear.py            # banco de demonstração em build/demo.db
+python tools/semear.py --de-novo  # refaz um banco já semeado
 python tools/gerar_audio.py       # regera assets/audio/*.wav
 python tools/gerar_icone.py       # regera assets/icon/cantinho.{ico,png}
 python tools/gerar_capturas.py    # regera docs/quarto-*.png do README
@@ -57,6 +65,13 @@ pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 avaliar estante, planta, mural ou bilhete exige usar o app por duas semanas.
 Ele escreve pelos construtores de evento, com o relógio deslocado para trás, e
 imprime as projeções resultantes — o log que sai é legítimo, não um fixture.
+
+Ele se recusa a semear um banco que já tem eventos: os uuids são novos a cada
+execução, então o `INSERT OR IGNORE` do store não protege, e semear duas vezes
+empilha duas semanas sobre outras duas — a estante passa da lotação do desenho
+e a planta trava no estágio 4. `--de-novo` apaga e refaz, mas só se **tudo** no
+log tiver saído desta ferramenta; se houver evento de outro `device_id`, ele
+recusa mesmo com a flag, porque aí é banco de uso real.
 
 **Rode `tools/simular_uso.py` com a tela ligada.** Com o monitor apagado ou a
 sessão bloqueada, o Windows para de apresentar quadros; o render loop threaded

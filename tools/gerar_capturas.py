@@ -26,19 +26,21 @@ from pathlib import Path
 # ou com o painel que deveria estar aberto ainda invisível.
 os.environ.setdefault("QSG_RENDER_LOOP", "basic")
 
-from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtWidgets import QApplication
-
-from cantinho.backend import Backend
-from cantinho.core.clock import SystemClock
-from cantinho.core.store import EventStore
-from cantinho.services import scene
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from semear import semear  # noqa: E402
-
 RAIZ = Path(__file__).resolve().parents[1]
+
+# O Python põe no sys.path o diretório do script, não o diretório atual: sem
+# isto, `import cantinho` falha mesmo rodando da raiz do repositório.
+sys.path.insert(0, str(RAIZ))
+
+from PySide6.QtCore import QTimer, QUrl  # noqa: E402
+from PySide6.QtQml import QQmlApplicationEngine  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+from cantinho.backend import Backend  # noqa: E402
+from cantinho.core.clock import SystemClock  # noqa: E402
+from cantinho.core.store import EventStore  # noqa: E402
+from cantinho.services import scene  # noqa: E402
+from tools.semear import semear  # noqa: E402
 DESTINO = RAIZ / "docs"
 
 # O crossfade de cenário leva três segundos. Fotografar antes disso pega a

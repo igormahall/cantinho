@@ -103,8 +103,13 @@ Para ver a estante ocupada e a planta crescida sem esperar duas semanas:
 
 ```bash
 python tools/semear.py                          # escreve em build/demo.db
+python tools/semear.py --de-novo                # refaz um já semeado
 python -m cantinho.main --db build/demo.db
 ```
+
+Semear duas vezes no mesmo banco empilharia duas semanas sobre outras duas, e a
+ferramenta se recusa a fazer isso. Se o banco tiver eventos vindos do app de
+verdade, ela recusa mesmo com `--de-novo`.
 
 A semeadura escreve pelos construtores de evento de verdade, com o relógio
 deslocado para trás. O banco que sai dali é um log legítimo, não um fixture.
@@ -129,10 +134,12 @@ admin. O build é por plataforma: o do Windows não serve no Linux e vice-versa.
 
 ## Desenvolvimento
 
+Com o venv ativado — sem isso, `python` é o do sistema e não tem PySide6:
+
 ```bash
 pip install -r requirements-dev.txt
 
-python -m pytest                # 238 testes, sem abrir janela
+python -m pytest                # 272 testes, sem abrir janela
 python tools/simular_uso.py     # percorre a interface clicando de verdade
 python tools/check_svg.py       # rasteriza os SVGs em build/svg_check/
 python tools/semear.py          # banco descartável com duas semanas de uso

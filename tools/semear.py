@@ -6,6 +6,7 @@ o banco de verdade.
 
     python tools/semear.py                    # escreve em build/demo.db
     python tools/semear.py ~/cantinho/x.db    # ou onde você quiser
+    python tools/semear.py --de-novo          # refaz do zero um já semeado
 
 Depois:
 
@@ -26,11 +27,15 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from cantinho.core import events as ev
-from cantinho.core.clock import FakeClock
-from cantinho.core.store import EventStore
-
 RAIZ = Path(__file__).resolve().parents[1]
+
+# O Python põe no sys.path o diretório do script, não o diretório atual: sem
+# isto, `import cantinho` falha mesmo rodando da raiz do repositório.
+sys.path.insert(0, str(RAIZ))
+
+from cantinho.core import events as ev  # noqa: E402
+from cantinho.core.clock import FakeClock  # noqa: E402
+from cantinho.core.store import EventStore  # noqa: E402
 PADRAO = RAIZ / "build" / "demo.db"
 
 DEVICE = "semeadura"
@@ -179,8 +184,48 @@ def semear(caminho: Path) -> int:
     return gravados
 
 
+def _ja_semeado(caminho: Path) -> list[ev.Event]:
+    store = EventStore(caminho, device_id=DEVICE)
+    eventos = store.read_all()
+    store.close()
+    return eventos
+
+
+def _apagar(caminho: Path) -> None:
+    """Some com o banco e o device_id ao lado dele.
+
+    Só é chamado depois de conferir que tudo lá dentro foi escrito por esta
+    ferramenta. O log é append-only por regra do projeto; a exceção aqui é que
+    o arquivo inteiro é descartável e foi este script que o criou.
+    """
+    for sufixo in ("", "-wal", "-shm"):
+        Path(str(caminho) + sufixo).unlink(missing_ok=True)
+    (caminho.parent / "device_id").unlink(missing_ok=True)
+
+
 def main(argv: list[str]) -> int:
-    caminho = Path(argv[0]).expanduser() if argv else PADRAO
+    de_novo = "--de-novo" in argv
+    posicionais = [a for a in argv if not a.startswith("--")]
+    caminho = Path(posicionais[0]).expanduser() if posicionais else PADRAO
+
+    # Semear duas vezes no mesmo banco empilha duas semanas em cima de outras
+    # duas: a estante passa da lotação do desenho, a planta trava no estágio 4
+    # e o quarto deixa de servir para avaliar qualquer coisa. Os eventos têm
+    # uuid novo a cada execução, então o `INSERT OR IGNORE` do store não
+    # protege contra isso.
+    existentes = _ja_semeado(caminho)
+    if existentes:
+        de_outros = {e.device_id for e in existentes} - {DEVICE}
+        if de_outros:
+            print(f"{caminho} tem eventos que não vieram daqui. Não vou mexer.")
+            print(f"  dispositivos no log: {', '.join(sorted(de_outros))}")
+            return 1
+        if not de_novo:
+            print(f"{caminho} já tem {len(existentes)} eventos semeados.")
+            print("  use --de-novo para refazer, ou passe outro caminho.")
+            return 1
+        _apagar(caminho)
+
     gravados = semear(caminho)
 
     # Relata pelas projeções, não pela contagem de eventos: o que interessa

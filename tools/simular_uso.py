@@ -43,7 +43,14 @@ from pathlib import Path
 # threaded é o que dá a suavidade.
 os.environ.setdefault("QSG_RENDER_LOOP", "basic")
 
-from PySide6.QtCore import (
+# `python tools/simular_uso.py` põe `tools/` no sys.path, não a raiz do
+# repositório — o Python usa o diretório do script, não o diretório atual. Sem
+# esta linha, `import cantinho` falha mesmo rodando da raiz, que é exatamente o
+# que a documentação manda fazer. O projeto não tem `pyproject.toml` de
+# propósito; esta é a alternativa de uma linha.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from PySide6.QtCore import (  # noqa: E402
     QEvent,
     QPoint,
     QPointF,

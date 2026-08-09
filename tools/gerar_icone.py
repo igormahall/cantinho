@@ -19,14 +19,19 @@ bandeja, que `services/tray.py` regera a cada mudança de estágio.
 from __future__ import annotations
 
 import struct
+import sys
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice
-from PySide6.QtGui import QGuiApplication, QImage
-
-from cantinho.services import scene
-
 RAIZ = Path(__file__).resolve().parents[1]
+
+# O Python põe no sys.path o diretório do script, não o diretório atual: sem
+# isto, `import cantinho` falha mesmo rodando da raiz do repositório.
+sys.path.insert(0, str(RAIZ))
+
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice  # noqa: E402
+from PySide6.QtGui import QGuiApplication, QImage  # noqa: E402
+
+from cantinho.services import scene  # noqa: E402
 DESTINO = RAIZ / "assets" / "icon"
 
 # O que o Windows pede na prática: bandeja e lista de detalhes usam 16, a barra
