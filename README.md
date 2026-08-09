@@ -177,6 +177,14 @@ teste e um atalho permanente apontando para banco descartável seria a pior
 herança possível de um experimento; e as de qualquer sistema que não seja
 Linux, onde `.desktop` não existe.
 
+**Se o ícone da grade se comportar como antes depois de uma correção**, o
+problema não está no arquivo: o GNOME Shell guarda os atalhos em memória e
+continua servindo a versão velha. O sintoma engana, porque o arquivo em disco
+está certo e `gtk-launch cantinho` funciona — o que manda procurar o defeito
+onde ele não está. A instalação já avisa o ambiente com
+`update-desktop-database`; quando nem isso basta, `Alt+F2`, `r`, Enter
+recarrega a interface no X11, e no Wayland é sair e entrar na sessão.
+
 ### Duas diferenças no Linux
 
 **O atalho global não funciona.** `Ctrl+Shift+C` para capturar ideia é a única

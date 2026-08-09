@@ -427,6 +427,10 @@ Todas deliberadas, todas com motivo:
   `.venv/bin/python` aponta para o Python do sistema, sem PySide6, e seguir
   esse link produz um atalho que aparece na grade, abre e morre com
   `ModuleNotFoundError` sem terminal onde reclamar. Há teste para isso.
+  Instalar e remover chamam **`update-desktop-database`** em melhor-esforço:
+  sem isso o GNOME Shell segue servindo o atalho que tem em memória, e um
+  `Exec=` corrigido em disco continua abrindo pela linha antiga — com
+  `gtk-launch` funcionando, o que manda procurar o defeito onde ele não está.
 - **`cantinho/services/graphics.py` limpa o ambiente antes de o Qt subir.** Com
   o `base` do Anaconda ativo, o `qt-main` do conda exporta
   `QT_XCB_GL_INTEGRATION=none` em todo shell, e o Qt Quick não sobe — o app

@@ -58,6 +58,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ícone  em {desktop_entry.icon_path()}")
         print()
         print("pode levar alguns segundos para aparecer na grade de aplicativos")
+        print("se o ícone continuar se comportando como antes, o GNOME está")
+        print("servindo o atalho antigo da memória: Alt+F2, r, Enter recarrega")
+        print("a interface no X11; no Wayland, é sair e entrar na sessão")
         return 0
 
     print(f"o atalho já existe em {desktop_entry.entry_path()}")

@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -129,6 +130,36 @@ def _source_icon() -> Path | None:
     return origem if origem.is_file() else None
 
 
+def _refresh_desktop_database() -> None:
+    """Avisa o ambiente que a pasta de atalhos mudou.
+
+    Sem isto o GNOME Shell continua servindo o que tinha em memória, e um
+    atalho corrigido em disco segue abrindo pela linha antiga. O sintoma é
+    cruel: o arquivo está certo, `gtk-launch` funciona, e clicar no ícone da
+    grade falha do mesmo jeito de antes — o que manda procurar o defeito
+    exatamente onde ele não está.
+
+    É melhor-esforço de propósito. O binário faz parte do `desktop-file-utils`
+    e pode não existir; quando não existe, o atalho continua correto e só
+    demora mais a ser notado. Falhar a instalação por causa disso seria trocar
+    um incômodo por um impedimento.
+    """
+    ferramenta = shutil.which("update-desktop-database")
+    if ferramenta is None:
+        logger.debug("update-desktop-database não encontrado; cache não atualizado")
+        return
+
+    try:
+        subprocess.run(
+            [ferramenta, str(entry_path().parent)],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as erro:
+        logger.debug("update-desktop-database falhou: %s", erro)
+
+
 def install(force: bool = False) -> bool:
     """Escreve atalho e ícone. Devolve se escreveu.
 
@@ -155,6 +186,7 @@ def install(force: bool = False) -> bool:
     alvo.write_text(desktop_entry_text(), encoding="utf-8")
     # Sem o bit de execução, o GNOME marca o atalho como não confiável.
     alvo.chmod(0o755)
+    _refresh_desktop_database()
 
     logger.info("atalho criado em %s", alvo)
     return True
@@ -175,4 +207,7 @@ def remove() -> bool:
         if caminho.exists():
             caminho.unlink()
             achou = True
+
+    if achou:
+        _refresh_desktop_database()
     return achou

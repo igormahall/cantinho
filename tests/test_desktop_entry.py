@@ -129,6 +129,53 @@ def test_remover_sem_nada_instalado_nao_reclama(data_home: Path) -> None:
     assert desktop_entry.remove() is False
 
 
+# --------------------------------------------------------- o cache do ambiente
+
+
+def test_avisa_o_ambiente_ao_instalar(
+    data_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sem este aviso o GNOME serve da memória e ignora o arquivo corrigido.
+
+    Foi exatamente o que aconteceu: um `Exec=` errado ficou em cache, e clicar
+    no ícone continuou falhando depois de o arquivo em disco já estar certo.
+    """
+    chamadas: list[list[str]] = []
+    monkeypatch.setattr(desktop_entry.shutil, "which", lambda _: "/usr/bin/upd")
+    monkeypatch.setattr(
+        desktop_entry.subprocess, "run", lambda cmd, **k: chamadas.append(cmd)
+    )
+
+    desktop_entry.install()
+
+    assert len(chamadas) == 1
+    assert chamadas[0][0] == "/usr/bin/upd"
+    assert chamadas[0][1] == str(desktop_entry.entry_path().parent)
+
+
+def test_sem_a_ferramenta_o_atalho_ainda_e_criado(
+    data_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`desktop-file-utils` pode não estar instalado; isso não impede nada."""
+    monkeypatch.setattr(desktop_entry.shutil, "which", lambda _: None)
+
+    assert desktop_entry.install() is True
+    assert desktop_entry.entry_path().is_file()
+
+
+def test_ferramenta_quebrada_nao_derruba_a_instalacao(
+    data_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def explode(*_args: object, **_kwargs: object) -> None:
+        raise OSError("sem permissão")
+
+    monkeypatch.setattr(desktop_entry.shutil, "which", lambda _: "/usr/bin/upd")
+    monkeypatch.setattr(desktop_entry.subprocess, "run", explode)
+
+    assert desktop_entry.install() is True
+    assert desktop_entry.entry_path().is_file()
+
+
 # ------------------------------------------------------------ outros sistemas
 
 
