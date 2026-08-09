@@ -18,6 +18,7 @@ from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
 from cantinho.core import events as ev
 from cantinho.core import projections as proj
+from cantinho.core import schedule
 from cantinho.core.clock import Clock
 from cantinho.core.store import EventStore
 from cantinho.services.timer import SessionTimer
@@ -25,10 +26,6 @@ from cantinho.services.timer import SessionTimer
 logger = logging.getLogger(__name__)
 
 __all__ = ["Backend"]
-
-# Depois desta hora o tema vira noite; antes das seis da manhã ainda é noite.
-NIGHT_FROM_HOUR = 18
-NIGHT_UNTIL_HOUR = 6
 
 # Quantas linhas cabem no bilhete da parede. É a folha que limita, não a
 # projeção: uma lista que rola na parede deixaria de ser um bilhete.
@@ -60,6 +57,7 @@ class Backend(QObject):
     miniVisibleChanged = Signal()
     mainVisibleChanged = Signal()
     soundChanged = Signal()
+    routineChanged = Signal()
     # Reação curta de interface (passar o mouse, clicar, concluir). Quem toca é
     # `services/audio.py`; o backend só avisa, para o QML não precisar conhecer
     # o serviço de áudio.
@@ -94,6 +92,7 @@ class Backend(QObject):
         self._relogio_tema.timeout.connect(self._reavaliar_tema)
         self._relogio_tema.start()
         self._era_noite = self._noite_pelo_relogio()
+        self._marca = self._proxima_virada()
 
         self._recomputar()
 
@@ -459,9 +458,12 @@ class Backend(QObject):
 
     # ----------------------------------------------------------------- tema
 
+    def _agora_local(self) -> datetime:
+        """Horário de parede. O expediente é definido nele, não em UTC."""
+        return datetime.now().astimezone()
+
     def _noite_pelo_relogio(self) -> bool:
-        hora = datetime.now().astimezone().hour
-        return hora >= NIGHT_FROM_HOUR or hora < NIGHT_UNTIL_HOUR
+        return not schedule.is_daylight(self._agora_local())
 
     def _reavaliar_tema(self) -> None:
         agora = self._noite_pelo_relogio()
@@ -469,6 +471,30 @@ class Backend(QObject):
             self._era_noite = agora
             if self._theme_mode == "auto":
                 self.themeChanged.emit()
+
+        # A marca do relógio de parede anda junto: ela muda quatro vezes por
+        # dia útil, então reavaliar de minuto em minuto é de sobra.
+        marca = self._proxima_virada()
+        if marca != self._marca:
+            self._marca = marca
+            self.routineChanged.emit()
+
+    def _proxima_virada(self) -> int:
+        virada = schedule.next_boundary(self._agora_local())
+        return -1 if virada is None else schedule.minutes_of(virada)
+
+    @Property(int, notify=routineChanged)
+    def nextBoundaryMinutes(self) -> int:
+        """Minutos desde a meia-noite da próxima virada do expediente.
+
+        -1 quando não há nenhuma pela frente — fim de semana, ou depois do fim
+        do turno. É o que o relógio de parede marca.
+        """
+        return self._marca
+
+    @Property(bool, notify=routineChanged)
+    def inShift(self) -> bool:
+        return schedule.in_shift(self._agora_local())
 
     @Property(bool, notify=themeChanged)
     def isNight(self) -> bool:

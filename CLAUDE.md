@@ -58,6 +58,15 @@ avaliar estante, planta, mural ou bilhete exige usar o app por duas semanas.
 Ele escreve pelos construtores de evento, com o relógio deslocado para trás, e
 imprime as projeções resultantes — o log que sai é legítimo, não um fixture.
 
+**Rode `tools/simular_uso.py` com a tela ligada.** Com o monitor apagado ou a
+sessão bloqueada, o Windows para de apresentar quadros; o render loop threaded
+do Qt congela junto e **toda animação para**. Os cliques continuam funcionando e
+as propriedades mudam, mas os `Behavior` não avançam: `aba` vira "backlog" e a
+gaveta fica com opacidade zero, então o roteiro não acha nada lá dentro e falha
+em cascata como se a interface estivesse quebrada. A ferramenta já força
+`QSG_RENDER_LOOP=basic` para contornar a parte das animações, mas o clique que
+dá foco a um campo de texto continua não funcionando nesse estado.
+
 `tools/simular_uso.py` é o que cobre o QML — o pytest não cobre. Ele cria
 tarefa, roda sessão, conclui, arrasta, captura ideia e fecha o dia clicando de
 verdade; depois reabre o banco e confere o log evento por evento. Rode depois
@@ -197,6 +206,16 @@ funcionado.
 
 Dois temas completos, mesma geometria de cena, só cores mudam.
 
+Os ids internos são `noite` e `tarde` — são os nomes dos arquivos de cena e de
+áudio, e não mudam. Na tela o tema claro se chama **dia**: a paleta foi
+desenhada pensando em luz baixa de fim de tarde e o nome vazou do desenho para
+a interface, mas quem abre o app às sete da manhã lê "fim de tarde" e o app
+está errado sobre o próprio momento do dia.
+
+O modo `auto` segue o expediente (`core/schedule.py`), não uma hora fixa: em dia
+útil o quarto acende quando o turno começa e vira noite quando ele termina.
+Fora de dia útil vale a regra do relógio, 6h às 18h.
+
 **Noite** (abajur aceso, chuva na janela)
 ```
 fundo #221D1A · superficie #2E2723 · borda #3D342E
@@ -318,6 +337,15 @@ Todas deliberadas, todas com motivo:
 - **Humor e energia também ficam no menu do quarto**, gravando na hora e
   preservando a nota existente. No painel do dia eles só apareciam depois de
   rolar a lista de sessões, o que na prática os deixava para as dez da noite.
+- **`core/schedule.py` é o único módulo do core que trabalha em horário local.**
+  Os demais são UTC, porque timestamp de evento não tem fuso. Expediente tem:
+  ninguém trabalha "das 10h UTC". A jornada é constante e não configuração — é
+  um app pessoal de uma pessoa com horário fixo, e um painel de preferências
+  para editar isto seria mais código do que a informação que guarda.
+- **O relógio de parede marca a próxima virada do turno**, não o fim dele.
+  Saber que faltam duas horas para ir embora não ajuda às oito da manhã; saber
+  onde termina o trecho em que se está, ajuda. É marca de bezel de relógio, não
+  contagem regressiva: o olho lê a distância sem que apareça número nenhum.
 - **Objetos de parede não têm inclinação.** A primeira versão pendurava tudo
   torto pela ideia de papel preso por um prego só; na tela leu como
   desalinhado, não como espontâneo. O prego ficou, a inclinação não.

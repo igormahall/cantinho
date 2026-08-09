@@ -34,8 +34,15 @@ No bilhete, o que você concluiu hoje fica na folha, riscado, até o dia virar.
 
 ## Os dois momentos
 
-O tema acompanha o relógio: claro de dia, escuro à noite, com uma travessia de
-três segundos entre um e outro. Nunca corta seco.
+Em dia de semana o quarto segue o seu expediente: acende quando o turno começa
+e vira noite quando ele termina, com uma travessia de três segundos entre um e
+outro. Nunca corta seco. Fora disso vale o relógio — claro de dia, escuro à
+noite. A jornada fica em `cantinho/core/schedule.py`, e dá para fixar o tema à
+mão em **o quarto → luz**.
+
+O relógio de parede ganha um traço âmbar onde o trecho atual termina: de manhã
+é o almoço, à tarde é a hora de ir embora. Não é contagem regressiva — é uma
+marca no mostrador, do tipo que se lê de relance e não mostra número nenhum.
 
 ![O cantinho de tarde, com o backlog aberto](docs/quarto-tarde.png)
 

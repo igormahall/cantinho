@@ -13,8 +13,14 @@ import theme
 Item {
     id: relogio
 
+    objectName: "relogioParede"
+
     // Escala da cena. Vem do Room.
     property real unidade: 1.0
+
+    // Minutos desde a meia-noite da próxima virada do expediente, ou -1 para
+    // não marcar nada. Ver `core/schedule.py`.
+    property int marca: -1
 
     readonly property real diametroBase: 128
     width: diametroBase * unidade
@@ -84,6 +90,42 @@ Item {
                 color: Theme.textoSuave
                 opacity: cheia ? 0.75 : 0.4
             }
+        }
+    }
+
+    // ------------------------------------------------------ marca do dia
+    //
+    // Um traço âmbar onde o trecho atual do expediente termina: de manhã é o
+    // almoço, à tarde é a hora de ir embora. Some fora de dia útil e depois
+    // que o turno acaba.
+    //
+    // Não é contagem regressiva nem barra de progresso — é a mesma coisa que
+    // uma marca na borda de um relógio de mergulho. O olho lê a distância
+    // entre o ponteiro e o traço sem precisar de número, e sem que apareça em
+    // lugar nenhum quanto falta.
+    //
+    // Fica no mostrador de 12 horas, então 16h43 cai na posição de 4h43. Não
+    // confunde na prática: quem tem turno fixo sabe de que lado do dia está.
+    Item {
+        // Nomeado para `tools/simular_uso.py` conferir o ângulo: a marca só
+        // aparece em dia útil dentro do turno, e a suíte roda a qualquer hora.
+        objectName: "marcaExpediente"
+        anchors.centerIn: parent
+        width: 0
+        height: 0
+        visible: relogio.marca >= 0
+        opacity: visible ? 1 : 0
+        rotation: (relogio.marca % 720) / 720 * 360
+        Behavior on opacity { NumberAnimation { duration: 600 } }
+
+        Rectangle {
+            width: 2.6 * relogio.unidade
+            height: 13 * relogio.unidade
+            radius: width / 2
+            x: -width / 2
+            y: -(relogio.width / 2 - 7 * relogio.unidade)
+            color: Theme.ambar
+            opacity: 0.7
         }
     }
 

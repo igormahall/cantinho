@@ -15,10 +15,16 @@ sai como tofu.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 import tempfile
 from pathlib import Path
+
+# Pelo mesmo motivo de `simular_uso.py`: com a tela apagada, o render loop
+# threaded para de avançar as animações e a captura sai no meio de um fade —
+# ou com o painel que deveria estar aberto ainda invisível.
+os.environ.setdefault("QSG_RENDER_LOOP", "basic")
 
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtQml import QQmlApplicationEngine

@@ -509,11 +509,18 @@ Window {
                 width: parent.width; height: 1; color: Theme.borda
             }
 
+            // "dia" e não "fim de tarde".
+            //
+            // A paleta clara foi desenhada pensando em luz baixa de fim de
+            // tarde, e o nome vazou do desenho para a tela. Só que quem abre o
+            // app às sete da manhã lê "fim de tarde" e o app está errado sobre
+            // o próprio momento do dia. O id interno continua `tarde`, que é o
+            // nome dos arquivos de cena e de áudio.
             LinhaMenu {
                 width: parent.width
                 rotulo: "luz"
-                valor: backend.themeMode === "auto" ? "pelo relógio"
-                       : backend.themeMode === "noite" ? "noite" : "fim de tarde"
+                valor: backend.themeMode === "auto" ? "pelo seu dia"
+                       : backend.themeMode === "noite" ? "noite" : "dia"
                 onClicado: backend.cycleThemeMode()
             }
 

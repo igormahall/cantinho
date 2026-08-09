@@ -18,10 +18,30 @@ válido, mas as capturas saem com tofu no lugar do texto.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 import tempfile
 from pathlib import Path
+
+# Render loop no thread principal, e não o `threaded` que o Qt usa por padrão
+# no Windows.
+#
+# O loop threaded avança as animações junto com a apresentação de quadros. Com
+# a tela apagada ou a sessão bloqueada, o Windows para de apresentar, o thread
+# de render fica parado e **toda animação congela** — inclusive os `Behavior`
+# que abrem a gaveta e os painéis.
+#
+# O efeito é cruel de diagnosticar: os cliques funcionam, as propriedades
+# mudam, `aba` vira "backlog" — e a gaveta continua com opacidade zero, então
+# o roteiro não acha nada lá dentro e falha em cascata como se a interface
+# estivesse quebrada. Foi exatamente o que aconteceu quando esta suíte passou
+# a rodar sem ninguém na frente do monitor.
+#
+# `basic` desenha no thread principal e avança as animações pelo relógio, sem
+# depender do compositor. Vale para a ferramenta, não para o app: lá o loop
+# threaded é o que dá a suavidade.
+os.environ.setdefault("QSG_RENDER_LOOP", "basic")
 
 from PySide6.QtCore import (
     QEvent,
@@ -225,6 +245,7 @@ def na_gaveta(texto, **kwargs):
 def abrir_hoje():
     print("\n-- abre o painel 'hoje'")
     clicar(na_barra("hoje"))
+    checar(principal.property("aba") == "backlog", "a gaveta do hoje abriu")
 
 
 @passo
@@ -381,6 +402,35 @@ def humor_pelo_menu():
         "o humor foi para o quinto ponto",
     )
     clicar(na_barra("o quarto"))
+
+
+@passo
+def marca_do_expediente():
+    """O traço do fim do trecho no relógio de parede.
+
+    A marca depende do calendário de verdade — só aparece em dia útil dentro do
+    turno — e a suíte roda a qualquer hora, inclusive no sábado. Por isso o
+    valor é forçado aqui: o que se confere é o desenho, não a regra, que tem
+    teste próprio em `tests/test_schedule.py`.
+    """
+    print("-- marca do expediente no relógio de parede")
+    relogio = achar_por_nome("relogioParede")
+    marca = achar_por_nome("marcaExpediente")
+
+    relogio.setProperty("marca", -1)
+    QTest.qWait(200)
+    checar(not marca.isVisible(), "sem expediente, o relógio não marca nada")
+
+    # 16h43 no mostrador de 12 horas: 4h43 -> 141,5 graus.
+    relogio.setProperty("marca", 16 * 60 + 43)
+    QTest.qWait(700)
+    checar(marca.isVisible(), "com expediente, a marca aparece")
+    checar(
+        abs(marca.rotation() - 141.5) < 1.0,
+        f"e aponta para o fim do turno ({marca.rotation():.1f} graus)",
+    )
+    relogio.setProperty("marca", -1)
+    QTest.qWait(200)
 
 
 @passo

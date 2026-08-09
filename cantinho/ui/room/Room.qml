@@ -159,6 +159,7 @@ Item {
         unidade: quarto.escala
         x: quarto.cx(quarto.eixoDireito) - width / 2
         y: quarto.cy(quarto.topoParede)
+        marca: backend.nextBoundaryMinutes
     }
 
     BilheteDoDia {
