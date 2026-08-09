@@ -67,8 +67,56 @@ O `.venv/` não é versionado e não atravessa sistema: cada máquina cria o seu
 Rode sempre com o Python do venv — o `python` do PATH é o do sistema e não tem
 PySide6.
 
+### No Linux, antes do venv
+
+O PySide6 vem do PyPI com o Qt inteiro dentro, mas não traz as bibliotecas de
+sistema de que o Qt depende para falar com o X11 e com o áudio. Numa Ubuntu
+22.04 recém-instalada faltam algumas, e a falha é sempre a mesma linha:
+
+```
+qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though
+it was found.
+```
+
+Não é erro do app — é biblioteca faltando. O conjunto que resolve:
+
+```bash
+sudo apt install python3-venv python3-dev \
+     libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+     libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
+     libxkbcommon-x11-0 libegl1 libgl1 libdbus-1-3
+```
+
+`libxcb-cursor0` é a que mais falta: o Qt 6 passou a exigi-la e ela não vem no
+desktop padrão do 22.04. Para descobrir o que ainda falta em vez de adivinhar:
+
+```bash
+QT_DEBUG_PLUGINS=1 python -m cantinho.main
+```
+
+Se o app abrir mas ficar mudo, falta o áudio: `sudo apt install libpulse0`.
+
+O resto é igual ao Windows: `python -m venv .venv`, `pip install -r
+requirements.txt`, `python -m cantinho.main`.
+
+### Duas diferenças no Linux
+
+**O atalho global não funciona.** `Ctrl+Shift+C` para capturar ideia é a única
+parte específica de plataforma que não tem equivalente: no Linux
+`create_hotkey()` devolve um no-op deliberado, e a captura de ideia continua
+disponível pelo mural, com a janela à vista.
+
+**A bandeja depende do seu desktop.** O GNOME não mostra ícone de bandeja sem
+extensão — no Ubuntu é a *AppIndicator and KStatusNotifierItem Support*, que
+vem instalada e às vezes desligada. Isso importa porque fechar a janela **não**
+encerra o app: ele fica na bandeja. Sem bandeja visível, o jeito de trazê-lo de
+volta é abrir de novo pelo terminal, que a trava de instância única detecta e
+usa para mostrar a janela que já existe. Para encerrar de verdade, **o quarto →
+sair**.
+
 O banco fica em `%APPDATA%\Cantinho` no Windows e `~/.local/share/cantinho` no
-Linux. Para experimentar sem sujar seus dados de verdade:
+Linux — bancos independentes, que nunca sincronizam entre os dois sistemas.
+Para experimentar sem sujar seus dados de verdade:
 
 ```bash
 python -m cantinho.main --db ./teste.db --log DEBUG

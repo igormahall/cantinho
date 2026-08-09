@@ -423,6 +423,14 @@ Todas deliberadas, todas com motivo:
 - Sessão é atribuída inteira ao instante em que terminou, sem teto. Timer
   esquecido a noite toda vira oito horas de foco.
 - Atalho global só no Windows. No Linux `create_hotkey()` devolve um no-op.
+- No Linux o PySide6 do PyPI traz o Qt mas não as bibliotecas de sistema que
+  ele carrega em runtime. Numa Ubuntu 22.04 limpa falta pelo menos
+  `libxcb-cursor0`, e o sintoma é o plugin `xcb` não carregar. A lista está no
+  README; `QT_DEBUG_PLUGINS=1` diz qual está faltando.
+- A bandeja no GNOME depende da extensão AppIndicator. Sem ela o ícone não
+  aparece — e como fechar a janela não encerra o app, some o caminho de volta.
+  Reabrir pelo terminal resolve: a trava de instância única mostra a janela que
+  já existe em vez de subir uma segunda.
 - O som é sintetizado, não gravado, e é curto: 24 s em loop. Não tem melodia,
   é textura. Trocar por faixa de verdade é só pôr outro arquivo com o mesmo
   nome em `assets/audio/`.
