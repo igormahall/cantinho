@@ -167,9 +167,13 @@ Novos kinds são aditivos. Nunca renomeie ou remova um kind existente.
 5. **Retrospectiva noturna** — montada automaticamente das sessões do dia. O
    usuário só confirma e adiciona humor/energia.
 6. **Objetos de parede** — calendário do mês à esquerda, relógio analógico à
-   direita, bilhete com a lista do dia entre os dois. São cenário, não widget:
-   ficam atrás da luz do abajur, em opacidade baixa, e o único que responde a
-   clique é o bilhete (abre a gaveta do "hoje").
+   direita, bilhete com a lista do dia embaixo dele. São cenário, não widget:
+   ficam atrás da luz do abajur, em opacidade baixa, retos, e o único que
+   responde a clique é o bilhete (abre a gaveta do "hoje"). O bilhete leva o
+   tempo de cada tarefa e o total do dia.
+7. **Menu do quarto** — luz, som, humor/energia e a saída do app. Não é gosto
+   por menu: com "terminei" na barra, a fileira de botões passava da largura da
+   janela, e esses são ajustes do ambiente, não ações do dia.
 
 ## Janelas
 
@@ -177,8 +181,17 @@ Uma `QQmlApplicationEngine`, dois `Window` QML ligados ao **mesmo** backend
 Python exposto como context property. Sem IPC, sem estado duplicado.
 
 - `Main.qml` — 1100x700, cena completa.
-- `Mini.qml` — ~320x120, `Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
+- `Mini.qml` — ~340x120, `Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
   Qt.Tool`. Frameless exige drag manual via `DragHandler`.
+
+As duas são a mesma coisa em dois tamanhos e **nunca ficam visíveis juntas**.
+`setMainVisible(True)` esconde a mini e vice-versa; as duas escondidas é o app na
+bandeja. Ter as duas na tela era dois relógios contando o mesmo tempo, com a
+mini competindo com a janela que ela existe para substituir.
+
+Minimizar a principal traz a mini no lugar. Ao reaparecer, `Main.qml` desfaz o
+estado minimizado — sem isso a janela volta minimizada e "abrir" parece não ter
+funcionado.
 
 ## Temas
 
@@ -287,9 +300,27 @@ Todas deliberadas, todas com motivo:
   bandeja, que é o fluxo de quem mexe no projeto. A trava é um `QLocalServer`,
   que além de detectar serve de campainha: a segunda cópia avisa a primeira e
   sai, e a janela da primeira aparece.
-- **O som liga e desliga, e é um interruptor só** para o ambiente e para as
-  reações de clique. A preferência vive só na sessão: `events` é a única tabela
-  persistida, e "liguei o som" não é fato do histórico.
+- **O som tem três estados num controle só** (`SOUND_MODES`): `tudo`,
+  `sussurro` — ambiente calado, reações de clique ativas — e `mudo`. O do meio
+  existe porque as duas pontas não davam conta: quem está numa chamada não quer
+  chuva tocando, mas continua querendo o retorno do clique. A preferência vive
+  só na sessão: `events` é a única tabela persistida, e "liguei o som" não é
+  fato do histórico.
+- **`endSessionAndComplete` grava dois eventos, não um.** `session.ended` e
+  `task.completed` continuam sendo fatos distintos no log; o que o botão
+  "terminei" junta é o gesto. Antes eram dois movimentos em telas diferentes, e
+  só o segundo punha o objeto na estante — ou seja, o retorno do app dependia
+  de lembrar da metade que não estava à vista.
+- **O bilhete mostra o tempo de cada tarefa.** Nasceu de layout (metade da folha
+  ficava vazia) e resolveu uso: o tempo por tarefa só existia dentro da
+  retrospectiva, no fim do dia. Continua sendo diário e não placar — minutos de
+  hoje, sem meta, sem comparação com ontem, nada somando além da meia-noite.
+- **Humor e energia também ficam no menu do quarto**, gravando na hora e
+  preservando a nota existente. No painel do dia eles só apareciam depois de
+  rolar a lista de sessões, o que na prática os deixava para as dez da noite.
+- **Objetos de parede não têm inclinação.** A primeira versão pendurava tudo
+  torto pela ideia de papel preso por um prego só; na tela leu como
+  desalinhado, não como espontâneo. O prego ficou, a inclinação não.
 - **Todo desenho de SVG passa por uma trava** (`_desenho`, em `services/scene.py`).
   `QQuickImageProvider` do tipo Image roda em thread de trabalho quando o
   `Image` do QML é assíncrono, e as camadas do quarto compartilham um

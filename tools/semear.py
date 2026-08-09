@@ -94,16 +94,20 @@ def semear(caminho: Path) -> int:
         alvo = AGORA - timedelta(days=dias_atras)
         relogio.set(alvo.replace(hour=hora, minute=minuto, second=0, microsecond=0))
 
+    # Qual tarefa foi concluída em cada dia, para as sessões daquele dia
+    # apontarem para ela.
+    do_dia: dict[float, str] = {}
     for indice, (rotulo, dias) in enumerate(FEITAS):
         em(dias + 0.5, hora=9, minuto=indice * 3)
         criada = ev.task_created(relogio, DEVICE, label=rotulo)
         lote.append(criada)
+        do_dia.setdefault(dias, criada.payload["id"])
         em(dias, hora=17, minuto=indice * 5)
         lote.append(ev.task_completed(relogio, DEVICE, id=criada.payload["id"]))
 
-    for dias, minutos in RITMO:
-        em(dias, hora=14)
-        inicio = ev.session_started(relogio, DEVICE)
+    def sessao(dias: float, hora: int, minutos: int, task_id: str | None) -> None:
+        em(dias, hora=hora)
+        inicio = ev.session_started(relogio, DEVICE, task_id=task_id)
         lote.append(inicio)
         relogio.advance(timedelta(minutes=minutos))
         lote.append(
@@ -115,12 +119,25 @@ def semear(caminho: Path) -> int:
             )
         )
 
+    # Sessão presa à tarefa que foi concluída naquele dia, quando existe uma.
+    # Sessão solta continua acontecendo — é o dia em que se trabalhou sem
+    # nada marcado —, mas não pode ser a regra: é o vínculo que faz o tempo
+    # aparecer ao lado de cada linha do bilhete.
+    for dias, minutos in RITMO:
+        sessao(dias, 14, minutos, do_dia.get(dias))
+
     no_backlog: list[str] = []
     for indice, rotulo in enumerate(ABERTAS):
         em(2, hora=11, minuto=indice * 7)
         criada = ev.task_created(relogio, DEVICE, label=rotulo)
         lote.append(criada)
         no_backlog.append(criada.payload["id"])
+
+    # Duas sessões de hoje em tarefas que continuam abertas. Sem elas o bilhete
+    # só mostraria tempo em linha riscada, e o caso mais comum — estar no meio
+    # de alguma coisa — ficaria de fora.
+    for indice, (hora, minutos) in enumerate(((9, 95), (15, 40))):
+        sessao(0, hora, minutos, no_backlog[indice])
 
     for texto, dias, virou in IDEIAS:
         em(dias, hora=21, minuto=30)

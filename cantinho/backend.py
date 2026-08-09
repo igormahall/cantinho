@@ -34,6 +34,13 @@ NIGHT_UNTIL_HOUR = 6
 # projeção: uma lista que rola na parede deixaria de ser um bilhete.
 BOARD_LIMIT = 6
 
+# Modos de som, na ordem em que o botão gira.
+#
+# O do meio existe porque as duas pontas não davam conta: quem está numa
+# chamada não quer chuva tocando, mas continua querendo o retorno do clique.
+# "Sussurro" é o quarto calado com as mãos ainda fazendo barulho.
+SOUND_MODES: tuple[str, ...] = ("tudo", "sussurro", "mudo")
+
 
 def _format_elapsed(delta: timedelta) -> str:
     total = int(delta.total_seconds())
@@ -57,6 +64,7 @@ class Backend(QObject):
     # `services/audio.py`; o backend só avisa, para o QML não precisar conhecer
     # o serviço de áudio.
     sfxRequested = Signal(str)
+    quitRequested = Signal()
 
     def __init__(
         self,
@@ -77,7 +85,7 @@ class Backend(QObject):
         self._main_visible = True
         # Só nesta sessão. Preferência de som não vai a disco: `events` é a
         # única tabela persistida, e "liguei o som" não é fato do histórico.
-        self._sound_on = True
+        self._sound_mode = "tudo"
 
         # Reavalia o tema de tempos em tempos. Um minuto é folgado de sobra
         # para uma transição que leva três segundos.
@@ -246,6 +254,23 @@ class Backend(QObject):
         self._timer.stop()
         self.timerChanged.emit()
 
+    @Slot()
+    def endSessionAndComplete(self) -> None:
+        """Encerra a sessão e conclui a tarefa dela, num gesto só.
+
+        Sem isto, terminar de trabalhar em algo eram dois movimentos em lugares
+        diferentes: encerrar na barra e depois abrir a lista para marcar o
+        círculo. O objeto só ia para a estante no segundo, e é o objeto que dá
+        o retorno — então a metade que importa dependia de lembrar de fazê-la.
+
+        Dois eventos, não um: `session.ended` e `task.completed` são fatos
+        distintos e continuam separados no log. O que mudou é o gesto.
+        """
+        task_id = self._timer.task_id
+        self.endSession(False, "")
+        if task_id:
+            self.completeTask(task_id)
+
     # -------------------------------------------------------------- estante
 
     @Property("QVariantList", notify=stateChanged)
@@ -328,6 +353,19 @@ class Backend(QObject):
             for sessao in do_dia
         ]
 
+    def _minutos_por_tarefa_hoje(self) -> dict[str, float]:
+        """Minutos de sessão encerrada hoje, somados por tarefa.
+
+        Sessão sem tarefa cai na chave vazia. Sessão ainda aberta não entra: a
+        que está correndo agora é o relógio da barra, não um número que se
+        soma.
+        """
+        total: dict[str, float] = {}
+        for sessao in proj.sessions_on(self._events, self._hoje(), self._fuso()):
+            chave = sessao.task_id or ""
+            total[chave] = total.get(chave, 0.0) + sessao.duration_minutes
+        return total
+
     @Property("QVariantList", notify=stateChanged)
     def todayBoard(self) -> list[dict]:
         """As linhas do bilhete pregado na parede.
@@ -335,20 +373,41 @@ class Backend(QObject):
         Primeiro o que ainda está aberto no "Hoje", depois o que foi concluído
         hoje — que fica na folha, riscado, até o dia virar. Riscar é o que dá
         peso ao que foi feito; some da lista amanhã, sozinho.
+
+        Cada linha leva os minutos que a tarefa recebeu hoje. É o que faz o
+        tempo aparecer sem precisar abrir nada: até aqui ele só existia dentro
+        da retrospectiva, no fim do dia, que é tarde demais para servir de
+        informação.
         """
         fuso = self._fuso()
         hoje = self._hoje()
+        minutos = self._minutos_por_tarefa_hoje()
         abertas = [
-            {"id": task.id, "label": task.label, "done": False}
+            {
+                "id": task.id,
+                "label": task.label,
+                "done": False,
+                "minutes": int(round(minutos.get(task.id, 0.0))),
+            }
             for task in self._backlog[: proj.TODAY_LIMIT]
         ]
         feitas = [
-            {"id": task.id, "label": task.label, "done": True}
+            {
+                "id": task.id,
+                "label": task.label,
+                "done": True,
+                "minutes": int(round(minutos.get(task.id, 0.0))),
+            }
             for task in reversed(self._concluidas)
             if task.completed_at is not None
             and task.completed_at.astimezone(fuso).date() == hoje
         ]
         return (abertas + feitas)[:BOARD_LIMIT]
+
+    @Property(int, notify=stateChanged)
+    def todayMinutes(self) -> int:
+        """Tudo que foi registrado hoje, inclusive sessão sem tarefa."""
+        return int(round(sum(self._minutos_por_tarefa_hoje().values())))
 
     @Property("QVariantList", notify=stateChanged)
     def todayCompleted(self) -> list[str]:
@@ -442,27 +501,46 @@ class Backend(QObject):
 
     # ------------------------------------------------------------------ som
 
-    @Property(bool, notify=soundChanged)
-    def soundOn(self) -> bool:
-        return self._sound_on
+    @Property(str, notify=soundChanged)
+    def soundMode(self) -> str:
+        return self._sound_mode
 
-    @Slot(bool)
-    def setSoundOn(self, ligado: bool) -> None:
-        if bool(ligado) != self._sound_on:
-            self._sound_on = bool(ligado)
+    @Property(bool, notify=soundChanged)
+    def ambienceOn(self) -> bool:
+        return self._sound_mode == "tudo"
+
+    @Property(bool, notify=soundChanged)
+    def touchesOn(self) -> bool:
+        return self._sound_mode != "mudo"
+
+    @Slot(str)
+    def setSoundMode(self, modo: str) -> None:
+        if modo in SOUND_MODES and modo != self._sound_mode:
+            self._sound_mode = modo
             self.soundChanged.emit()
 
     @Slot()
-    def toggleSound(self) -> None:
-        self.setSoundOn(not self._sound_on)
+    def cycleSoundMode(self) -> None:
+        atual = SOUND_MODES.index(self._sound_mode)
+        self.setSoundMode(SOUND_MODES[(atual + 1) % len(SOUND_MODES)])
 
     @Slot(str)
     def sfx(self, nome: str) -> None:
-        """Pede uma reação curta. Silencioso quando o som está desligado."""
-        if self._sound_on and nome:
+        """Pede uma reação curta. Muda só no modo `mudo`."""
+        if self.touchesOn and nome:
             self.sfxRequested.emit(nome)
 
     # -------------------------------------------------------------- janelas
+
+    # As duas janelas são a mesma coisa em dois tamanhos, e nunca ficam na tela
+    # ao mesmo tempo. Mostrar uma esconde a outra.
+    #
+    # Ter as duas juntas era o pior dos dois mundos: dois relógios contando o
+    # mesmo tempo, um por cima do outro, e a mini — que existe para ocupar um
+    # canto enquanto você trabalha em outra coisa — competindo com a janela que
+    # ela deveria substituir.
+    #
+    # As duas escondidas é um estado legítimo: é o app na bandeja.
 
     @Property(bool, notify=miniVisibleChanged)
     def miniVisible(self) -> bool:
@@ -470,13 +548,29 @@ class Backend(QObject):
 
     @Slot(bool)
     def setMiniVisible(self, visivel: bool) -> None:
+        visivel = bool(visivel)
         if visivel != self._mini_visible:
-            self._mini_visible = bool(visivel)
+            self._mini_visible = visivel
             self.miniVisibleChanged.emit()
+        if visivel:
+            self.setMainVisible(False)
+
+    @Slot()
+    def showMini(self) -> None:
+        self.setMiniVisible(True)
 
     @Slot()
     def toggleMini(self) -> None:
-        self.setMiniVisible(not self._mini_visible)
+        """Alterna entre as duas formas.
+
+        Fechar a mini traz a principal de volta em vez de deixar a tela vazia:
+        quem apertou "mini" estava com o app aberto e não pediu para escondê-lo.
+        Para sumir com tudo existe o × da mini.
+        """
+        if self._mini_visible:
+            self.showMain()
+        else:
+            self.showMini()
 
     @Property(bool, notify=mainVisibleChanged)
     def mainVisible(self) -> bool:
@@ -484,16 +578,30 @@ class Backend(QObject):
 
     @Slot(bool)
     def setMainVisible(self, visivel: bool) -> None:
+        visivel = bool(visivel)
         if visivel != self._main_visible:
-            self._main_visible = bool(visivel)
+            self._main_visible = visivel
             self.mainVisibleChanged.emit()
+        if visivel:
+            self.setMiniVisible(False)
 
     @Slot()
     def showMain(self) -> None:
         self.setMainVisible(True)
 
     @Slot()
+    def hideAll(self) -> None:
+        """Tudo para a bandeja."""
+        self.setMainVisible(False)
+        self.setMiniVisible(False)
+
+    @Slot()
     def requestCapture(self) -> None:
         """Chamado pelo atalho global: abre o app já no campo de ideia."""
         self.setMainVisible(True)
         self.captureRequested.emit()
+
+    @Slot()
+    def requestQuit(self) -> None:
+        """Encerrar de verdade. Quem confirma é a tela; aqui já é decisão."""
+        self.quitRequested.emit()

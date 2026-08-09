@@ -203,6 +203,14 @@ def na_barra(texto):
     return achar(texto, perto_de_y=principal.height() - 60)
 
 
+def achar_escala(rotulo):
+    """Uma EscalaPontos pelo rótulo. Os pontos não têm texto para procurar."""
+    for item in visiveis():
+        if item.property("rotulo") == rotulo:
+            return item
+    raise LookupError(f"não achei a escala {rotulo!r}")
+
+
 def na_gaveta(texto, **kwargs):
     """Procura só dentro do painel lateral.
 
@@ -314,12 +322,81 @@ def aproveitar_ideia():
 
 
 @passo
-def alternar_som():
-    print("-- desliga e liga o som pela barra")
-    clicar(na_barra("som"))
-    checar(not backend.soundOn, "o som foi desligado")
-    clicar(na_barra("mudo"))
-    checar(backend.soundOn, "o som voltou")
+def terminar_pela_barra():
+    """O gesto que faltava: encerrar a sessão já concluindo a tarefa.
+
+    Antes, "encerrar" parava o relógio e deixava a tarefa aberta, então o
+    objeto só ia para a estante se o usuário lembrasse de voltar à lista e
+    marcar o círculo.
+    """
+    print("-- começa e termina uma tarefa pela barra")
+    alvo = backend.backlog[-1]["label"]
+    antes = len(backend.shelf)
+    clicar(na_barra("hoje"))
+    linha = na_gaveta(alvo)
+    clicar(na_gaveta("começar", perto_de_y=centro(linha).y(), max_y=560))
+    checar(backend.timerRunning, "a sessão começou")
+
+    clicar(na_barra("terminei"))
+    checar(not backend.timerRunning, "a sessão foi encerrada")
+    checar(len(backend.shelf) == antes + 1, "e a tarefa foi para a estante")
+    checar(
+        alvo not in [t["label"] for t in backend.backlog],
+        "saiu do backlog no mesmo gesto",
+    )
+    clicar(na_barra("hoje"))
+
+
+@passo
+def som_pelo_menu():
+    print("-- gira os três estados de som pelo menu do quarto")
+    clicar(na_barra("o quarto"))
+    for rotulo, esperado in (
+        ("ambiente e toques", "sussurro"),
+        ("só os toques", "mudo"),
+        ("nenhum", "tudo"),
+    ):
+        clicar(achar(rotulo))
+        checar(backend.soundMode == esperado, f"passou para {esperado}")
+    foto("07_menu")
+    clicar(na_barra("o quarto"))
+
+
+@passo
+def humor_pelo_menu():
+    """Humor e energia sem passar pelo painel do dia."""
+    print("-- marca humor e energia pelo menu")
+    clicar(na_barra("o quarto"))
+    escala = achar_escala("humor")
+    # Os pontos ficam depois do rótulo de 60px, com 14 de lado e 10 de espaço.
+    ponto = escala.mapToItem(None, QPointF(60 + 4 * 24 + 7, escala.height() / 2))
+    QTest.mouseClick(
+        principal, Qt.LeftButton, Qt.NoModifier,
+        QPoint(round(ponto.x()), round(ponto.y())),
+    )
+    QTest.qWait(350)
+    checar(backend.todayReview is not None, "a revisão do dia foi criada")
+    checar(
+        backend.todayReview and backend.todayReview["mood"] == 5,
+        "o humor foi para o quinto ponto",
+    )
+    clicar(na_barra("o quarto"))
+
+
+@passo
+def confirmar_saida():
+    """A confirmação abre e dá para desistir. Sair de verdade mataria a suíte."""
+    print("-- abre a confirmação de saída e desiste")
+    clicar(na_barra("o quarto"))
+    clicar(achar("fechar o cantinho"))
+    checar(
+        achar("fechar o cantinho?") is not None,
+        "a confirmação apareceu",
+    )
+    clicar(achar("ficar"))
+    QTest.qWait(300)
+    achados = [it for it in visiveis() if it.property("text") == "fechar o cantinho?"]
+    checar(not achados, "e some ao desistir")
 
 
 @passo
@@ -363,11 +440,13 @@ def redimensionar():
 @passo
 def fechar_o_dia():
     print("-- fecha o dia com humor e energia")
-    clicar(na_barra("fechar o dia"))
+    clicar(na_barra("o dia"))
     escalas = [it for it in visiveis() if it.property("rotulo") in ("humor", "energia")]
     checar(len(escalas) == 2, "as duas escalas apareceram")
     foto("04_retrospectiva")
-    clicar(achar("guardar o dia"))
+    # O menu do quarto já gravou humor e energia neste roteiro, então o painel
+    # do dia oferece regravar em vez de guardar pela primeira vez.
+    clicar(achar("guardar de novo"))
     checar(backend.todayReview is not None, "a retrospectiva foi guardada")
 
 
@@ -385,12 +464,37 @@ def trocar_tema():
 
 @passo
 def mini_janela():
-    print("-- abre a mini janela")
+    print("-- alterna entre a janela grande e a mini")
     clicar(na_barra("mini"))
-    checar(backend.miniVisible, "a mini está visível")
+    checar(backend.miniVisible, "a mini apareceu")
+    checar(not backend.mainVisible, "e a principal saiu da tela")
     QTest.qWait(400)
     if SAIDA:
         mini.grabWindow().save(str(SAIDA / "06_mini.png"))
+
+    backend.showMain()
+    QTest.qWait(400)
+    checar(backend.mainVisible, "voltar para a grande funciona")
+    checar(not backend.miniVisible, "e a mini sai junto")
+    checar(
+        principal.visibility != 3,  # Window.Minimized
+        "a principal volta em tamanho normal",
+    )
+
+
+@passo
+def minimizar():
+    """Minimizar troca a janela pela mini em vez de largá-la na barra."""
+    print("-- minimiza a janela principal")
+    principal.showMinimized()
+    QTest.qWait(700)
+    checar(backend.miniVisible, "a mini tomou o lugar")
+    checar(not backend.mainVisible, "a principal saiu")
+
+    backend.showMain()
+    QTest.qWait(700)
+    checar(backend.mainVisible, "e volta ao normal ao reabrir")
+    checar(principal.visibility != 3, "sem reaparecer minimizada")
 
 
 @passo
@@ -406,17 +510,19 @@ def conferir_o_log():
 
     esperado = {
         "task.created": 4,
-        "session.started": 1,
-        "session.ended": 1,
-        "task.completed": 1,
+        "session.started": 2,
+        "session.ended": 2,
+        # Uma pelo círculo da lista, outra pelo "terminei" da barra.
+        "task.completed": 2,
         "idea.captured": 1,
         "idea.promoted": 1,
         "backlog.reordered": 1,
-        "day.review": 1,
+        # Uma pelo menu do quarto, outra pelo painel do dia.
+        "day.review": 2,
     }
     checar(contagem == esperado, f"o log é exatamente {esperado}")
     checar(
-        [t.label for t in open_tasks(eventos)] == [TAREFAS[2], TAREFAS[1], IDEIA],
+        [t.label for t in open_tasks(eventos)] == [TAREFAS[2], TAREFAS[1]],
         "o backlog reconstruído mantém a ordem arrastada",
     )
     reidratadas = ideas(eventos)
@@ -424,7 +530,10 @@ def conferir_o_log():
         len(reidratadas) == 1 and reidratadas[0].used,
         "a ideia reconstruída continua no mural, aproveitada",
     )
-    checar(len(shelf_objects(eventos)) == 1, "a estante reconstruída tem o objeto")
+    checar(
+        len(shelf_objects(eventos)) == 2,
+        "a estante reconstruída tem os dois objetos",
+    )
     relido.close()
 
 

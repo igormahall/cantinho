@@ -20,14 +20,15 @@ Rectangle {
     // do papel sem mudar nada de lugar.
     property real destaque: 0.0
 
-    // Inclinação de papel pregado por um prego só. Um grau e pouco: o
-    // suficiente para não parecer alinhado por régua.
-    property real inclinacao: -1.1
-
     property bool prego: true
 
-    rotation: inclinacao
-    transformOrigin: Item.Top
+    // Sem inclinação, de propósito.
+    //
+    // A primeira versão pendurava tudo torto, um grau e pouco cada, pela ideia
+    // de papel preso por um prego só. Na tela não leu como espontâneo: leu como
+    // desalinhado — três retângulos de texto fora de esquadro num quarto onde
+    // todo o resto é reto. O prego continua, a inclinação não: o cantinho é
+    // organizado, não bagunçado.
 
     color: Qt.rgba(Theme.superficie.r, Theme.superficie.g, Theme.superficie.b,
                    Theme.opacidadeParede + 0.20 * destaque)

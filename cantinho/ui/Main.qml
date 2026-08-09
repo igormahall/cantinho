@@ -22,7 +22,35 @@ Window {
         Theme.noite = Qt.binding(function () { return backend.isNight })
     }
 
-    onVisibleChanged: if (!visible) backend.setMainVisible(false)
+    // A janela e o backend precisam concordar nos dois sentidos: o usuário
+    // fecha pelo X do sistema, e o app esconde por conta própria quando a mini
+    // entra em cena.
+    onVisibleChanged: {
+        if (visible) {
+            // Reaparecer minimizada é o que acontece se alguém minimizou a
+            // janela antes de ela ser escondida: o estado fica guardado e
+            // volta junto. Aqui ela é devolvida ao tamanho normal e trazida
+            // para a frente, senão "abrir" pela mini ou pela bandeja parece
+            // não ter feito nada.
+            if (visibility === Window.Minimized)
+                visibility = Window.Windowed
+            raise()
+            requestActivate()
+        } else {
+            janela.menuAberto = false
+            saida.aberta = false
+            backend.setMainVisible(false)
+        }
+    }
+
+    // Minimizar troca a janela pela mini em vez de deixar o app na barra de
+    // tarefas. É o mesmo gesto de sempre — tirar o quarto da frente — e o
+    // resultado é o timer continuar visível num canto, que é justamente para
+    // isso que a mini existe.
+    onVisibilityChanged: function (estado) {
+        if (estado === Window.Minimized && backend.mainVisible)
+            backend.showMini()
+    }
 
     // "aba" vazia significa só o quarto à mostra.
     property string aba: ""
@@ -79,7 +107,7 @@ Window {
             Text {
                 text: janela.aba === "backlog" ? "hoje"
                       : janela.aba === "ideias" ? "mural de ideias"
-                      : janela.aba === "dia" ? "fechar o dia" : ""
+                      : janela.aba === "dia" ? "o dia" : ""
                 color: Theme.texto
                 font.pixelSize: Theme.titulo
             }
@@ -242,6 +270,7 @@ Window {
                 sessoes: backend.todaySessions
                 concluidas: backend.todayCompleted
                 revisao: backend.todayReview
+                minutosDoDia: backend.todayMinutes
                 onSalvar: function (humor, energia, nota) {
                     backend.saveReview(humor, energia, nota)
                     janela.aba = ""
@@ -305,12 +334,33 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 4
 
+            // "terminei" encerra a sessão e conclui a tarefa de uma vez.
+            //
+            // Antes eram dois movimentos em lugares diferentes: encerrar aqui e
+            // depois abrir a lista para marcar o círculo. Só o segundo põe o
+            // objeto na estante — ou seja, o retorno do app dependia de lembrar
+            // de fazer a metade que não estava na frente do usuário.
+            //
+            // Só aparece com uma tarefa presa ao timer: numa sessão livre não
+            // há o que concluir.
+            BotaoSuave {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "terminei"
+                visible: backend.timerRunning && backend.currentTaskId !== ""
+                destacado: true
+                corAtiva: Theme.musgo
+                tamanho: Theme.corpo
+                onClicked: backend.endSessionAndComplete()
+            }
+
             BotaoSuave {
                 anchors.verticalCenter: parent.verticalCenter
                 text: backend.timerRunning ? "encerrar" : "começar"
-                destacado: true
+                // Deixa de ser o botão principal quando "terminei" está do lado:
+                // dois destaques lado a lado não destacam nada.
+                destacado: !backend.timerRunning || backend.currentTaskId === ""
                 corAtiva: backend.timerRunning ? Theme.musgo : Theme.ambar
-                tamanho: Theme.corpo
+                tamanho: backend.timerRunning ? Theme.miudo : Theme.corpo
                 onClicked: backend.timerRunning
                            ? backend.endSession(false, "")
                            : backend.startSession("")
@@ -343,9 +393,13 @@ Window {
                 onClicked: janela.alternar("ideias")
             }
 
+            // "o dia" e não "fechar o dia": o painel sempre pôde ser aberto a
+            // qualquer hora, mas o nome dizia que era coisa de fim de
+            // expediente, e por isso ninguém entrava nele antes das dez da
+            // noite. É onde estão as sessões, o humor e a nota.
             BotaoSuave {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "fechar o dia"
+                text: "o dia"
                 destacado: janela.aba === "dia"
                 onClicked: janela.alternar("dia")
             }
@@ -357,26 +411,219 @@ Window {
 
             BotaoSuave {
                 anchors.verticalCenter: parent.verticalCenter
-                text: backend.themeMode === "auto" ? "relógio"
-                      : backend.themeMode === "noite" ? "noite" : "tarde"
-                onClicked: backend.cycleThemeMode()
-            }
-
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
-                text: backend.soundOn ? "som" : "mudo"
-                destacado: backend.soundOn
-                corAtiva: Theme.musgo
-                onClicked: backend.toggleSound()
-            }
-
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
                 text: "mini"
-                destacado: backend.miniVisible
-                onClicked: backend.toggleMini()
+                onClicked: backend.showMini()
+            }
+
+            // Tema, som, humor e a saída moram aqui.
+            //
+            // Não é gosto por menu: com "terminei" a mais, a fileira de botões
+            // passava da largura da janela. E são todos ajustes do ambiente, não
+            // ações do dia — separá-los deixa na barra só o que se usa o tempo
+            // todo.
+            BotaoSuave {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "o quarto"
+                destacado: janela.menuAberto
+                onClicked: janela.menuAberto = !janela.menuAberto
             }
         }
+    }
+
+    // ------------------------------------------------------- menu do quarto
+
+    property bool menuAberto: false
+
+    MouseArea {
+        anchors.fill: parent
+        enabled: janela.menuAberto
+        onClicked: janela.menuAberto = false
+    }
+
+    Painel {
+        id: menu
+        width: 268
+        height: colunaMenu.height + 2 * Theme.espacoGrande
+        anchors.right: parent.right
+        anchors.rightMargin: 24
+        anchors.bottom: barra.top
+        anchors.bottomMargin: janela.menuAberto ? 10 : -6
+
+        opacity: janela.menuAberto ? 1 : 0
+        visible: opacity > 0.01
+
+        Behavior on anchors.bottomMargin {
+            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+        }
+        Behavior on opacity { NumberAnimation { duration: 180 } }
+
+        Column {
+            id: colunaMenu
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.espacoGrande
+            spacing: Theme.espaco
+
+            // O humor e a energia saíram de dentro da retrospectiva para cá.
+            //
+            // Lá eles só apareciam depois de rolar a lista de sessões, no
+            // painel chamado "fechar o dia" — ou seja, na prática só existiam
+            // no fim da noite. Aqui dá para dizer como se está às três da
+            // tarde, que é quando a resposta é verdadeira.
+            //
+            // Grava na hora, sem botão de confirmar, e preserva a nota que já
+            // estiver guardada: é o mesmo `day.review` do painel do dia, e a
+            // última do dia vence.
+            Text {
+                text: "como está o dia"
+                color: Theme.textoSuave
+                font.pixelSize: Theme.miudo
+            }
+
+            EscalaPontos {
+                width: parent.width
+                rotulo: "humor"
+                valor: backend.todayReview ? backend.todayReview.mood : 3
+                onEscolhido: function (v) {
+                    backend.saveReview(
+                        v,
+                        backend.todayReview ? backend.todayReview.energy : 3,
+                        backend.todayReview ? backend.todayReview.note : "")
+                }
+            }
+
+            EscalaPontos {
+                width: parent.width
+                rotulo: "energia"
+                valor: backend.todayReview ? backend.todayReview.energy : 3
+                onEscolhido: function (v) {
+                    backend.saveReview(
+                        backend.todayReview ? backend.todayReview.mood : 3,
+                        v,
+                        backend.todayReview ? backend.todayReview.note : "")
+                }
+            }
+
+            Rectangle {
+                width: parent.width; height: 1; color: Theme.borda
+            }
+
+            LinhaMenu {
+                width: parent.width
+                rotulo: "luz"
+                valor: backend.themeMode === "auto" ? "pelo relógio"
+                       : backend.themeMode === "noite" ? "noite" : "fim de tarde"
+                onClicado: backend.cycleThemeMode()
+            }
+
+            // Três estados, um botão. "Sussurro" é o do meio: o quarto cala a
+            // chuva e o acorde, mas o clique continua respondendo — para quem
+            // está numa chamada e não quer perder o retorno da interface.
+            LinhaMenu {
+                width: parent.width
+                rotulo: "som"
+                valor: backend.soundMode === "tudo" ? "ambiente e toques"
+                       : backend.soundMode === "sussurro" ? "só os toques"
+                       : "nenhum"
+                onClicado: backend.cycleSoundMode()
+            }
+
+            Rectangle {
+                width: parent.width; height: 1; color: Theme.borda
+            }
+
+            LinhaMenu {
+                width: parent.width
+                rotulo: "sair"
+                valor: "fechar o cantinho"
+                cor: Theme.terracota
+                onClicado: {
+                    janela.menuAberto = false
+                    saida.aberta = true
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------ sair do app
+
+    // Fechar a janela deixa o app na bandeja, o que é o comportamento certo mas
+    // não dá jeito de encerrar de verdade sem ir até o ícone. A confirmação
+    // existe porque a diferença entre "esconder" e "encerrar" não é óbvia: quem
+    // clica em sair esperando o primeiro perde a sessão que estiver correndo.
+    Rectangle {
+        anchors.fill: parent
+        color: Qt.rgba(0, 0, 0, 0.45)
+        opacity: saida.aberta ? 1 : 0
+        visible: opacity > 0.01
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: saida.aberta = false
+        }
+    }
+
+    Painel {
+        id: saida
+        property bool aberta: false
+
+        width: 380
+        height: colunaSaida.height + 2 * Theme.espacoGrande
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: saida.aberta ? parent.height / 3 : parent.height / 3 - 16
+        opacity: saida.aberta ? 1 : 0
+        visible: opacity > 0.01
+
+        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 180 } }
+
+        Column {
+            id: colunaSaida
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.espacoGrande
+            spacing: Theme.espaco
+
+            Text {
+                text: "fechar o cantinho?"
+                color: Theme.texto
+                font.pixelSize: Theme.titulo
+            }
+
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                lineHeight: 1.3
+                color: Theme.textoSuave
+                font.pixelSize: Theme.miudo
+                text: backend.timerRunning
+                      ? "Tem uma sessão correndo. Sair agora não a guarda no diário."
+                      : "Nada se perde. Fechar a janela sozinha deixa o app na bandeja."
+            }
+
+            Row {
+                spacing: 4
+                anchors.right: parent.right
+
+                BotaoSuave {
+                    text: "ficar"
+                    onClicked: saida.aberta = false
+                }
+
+                BotaoSuave {
+                    text: "sair"
+                    destacado: true
+                    corAtiva: Theme.terracota
+                    tamanho: Theme.corpo
+                    onClicked: backend.requestQuit()
+                }
+            }
+        }
+
+        Keys.onEscapePressed: saida.aberta = false
     }
 
     // ------------------------------------------------- captura de ideia

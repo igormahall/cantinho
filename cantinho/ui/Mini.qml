@@ -10,7 +10,7 @@ import "panels"
 Window {
     id: mini
 
-    width: 320
+    width: 340
     height: 120
     visible: backend.miniVisible
     color: "transparent"
@@ -82,8 +82,21 @@ Window {
             anchors.margins: 8
             spacing: 2
 
+            // Mesma dupla da barra grande: concluir a tarefa tem que caber no
+            // mesmo lugar onde se encerra a sessão, senão a mini vira só um
+            // relógio e obriga a abrir a janela para fechar o que se acabou de
+            // fazer.
+            BotaoSuave {
+                text: "terminei"
+                visible: backend.timerRunning && backend.currentTaskId !== ""
+                destacado: true
+                corAtiva: Theme.musgo
+                onClicked: backend.endSessionAndComplete()
+            }
+
             BotaoSuave {
                 text: backend.timerRunning ? "encerrar" : "começar"
+                destacado: !backend.timerRunning
                 corAtiva: backend.timerRunning ? Theme.musgo : Theme.ambar
                 onClicked: backend.timerRunning
                            ? backend.endSession(false, "")
@@ -91,24 +104,27 @@ Window {
             }
 
             BotaoSuave {
-                text: backend.soundOn ? "som" : "mudo"
-                destacado: backend.soundOn
+                text: backend.soundMode === "tudo" ? "som"
+                      : backend.soundMode === "sussurro" ? "sussurro" : "mudo"
+                destacado: backend.soundMode !== "mudo"
                 corAtiva: Theme.musgo
-                onClicked: backend.toggleSound()
+                onClicked: backend.cycleSoundMode()
             }
 
+            // Mostrar a principal já esconde a mini: as duas nunca ficam na
+            // tela juntas. Ver os comentários em backend.py.
             BotaoSuave {
                 text: "abrir"
-                onClicked: {
-                    backend.showMain()
-                    backend.setMiniVisible(false)
-                }
+                onClicked: backend.showMain()
             }
 
+            // O × some com tudo, não só com a mini — daqui não dá para voltar
+            // para a janela grande sem passar pela bandeja, então "fechar" tem
+            // que significar fechar.
             BotaoSuave {
                 text: "×"
                 corAtiva: Theme.terracota
-                onClicked: backend.setMiniVisible(false)
+                onClicked: backend.hideAll()
             }
         }
     }

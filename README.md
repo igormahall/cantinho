@@ -70,14 +70,24 @@ que já existe, em vez de subir uma segunda cópia. Bancos diferentes convivem �
 |---|---|
 | **hoje** | escreva no campo de baixo e aperte Enter. Arraste para reordenar. |
 | **começar** | prende o timer a uma tarefa. Ou clique em "começar" na barra para uma sessão solta. |
-| **o círculo** | conclui a tarefa. É o que põe um objeto na estante. |
+| **terminei** | encerra a sessão e conclui a tarefa de uma vez. É o que põe um objeto na estante. |
+| **o círculo** | conclui a tarefa sem passar pelo timer. |
 | **Ctrl+Shift+C** | guarda uma ideia de qualquer lugar, mesmo com o app escondido. |
 | **ideias** | o mural. A ideia que virar tarefa continua lá, riscada. |
-| **fechar o dia** | a retrospectiva já vem montada das suas sessões. Você só diz como estava. |
-| **som** | liga e desliga o ambiente e os cliques, de uma vez. |
-| **mini** | uma janelinha só com o timer, sempre por cima. Arrasta pelo corpo. |
+| **o dia** | as sessões de hoje, o total, o humor e a nota. Aberto a qualquer hora. |
+| **mini** | troca a janela por uma janelinha só com o timer, sempre por cima. Arrasta pelo corpo. |
+| **o quarto** | luz, som, como está o dia e a saída do app. |
+
+As duas janelas nunca ficam na tela juntas: a mini substitui a grande e vice-versa.
+Minimizar a janela grande também traz a mini — o timer continua num canto em vez de
+sumir na barra de tarefas.
 
 Fechar a janela não encerra o app: ele continua na bandeja, ao lado do relógio.
+Para encerrar de verdade, **o quarto → sair**, que pergunta antes.
+
+O som tem três estados, girando no mesmo lugar: **ambiente e toques**,
+**só os toques** — o quarto cala a chuva mas o clique continua respondendo, para
+quando alguém está numa chamada — e **nenhum**.
 
 ### Um quarto para olhar
 

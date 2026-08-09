@@ -140,24 +140,33 @@ Item {
     // As três posições vêm das áreas de parede que a arte deixou livres: acima
     // da estante à esquerda, e a coluna à direita entre o teto e a folhagem do
     // vaso. Nenhuma delas cobre estante, vaso ou janela.
+    //
+    // Os números não são soltos: o calendário e o relógio começam na mesma
+    // altura (`topoParede`), e o relógio e o bilhete dividem o mesmo eixo
+    // vertical (`eixoDireito`). É o que faz a parede ler como arrumada em vez
+    // de decorada aos poucos.
+
+    readonly property real topoParede: 46
+    readonly property real eixoDireito: 912
 
     Calendario {
         unidade: quarto.escala
         x: quarto.cx(46)
-        y: quarto.cy(46)
+        y: quarto.cy(quarto.topoParede)
     }
 
     RelogioParede {
         unidade: quarto.escala
-        x: quarto.cx(842)
-        y: quarto.cy(40)
+        x: quarto.cx(quarto.eixoDireito) - width / 2
+        y: quarto.cy(quarto.topoParede)
     }
 
     BilheteDoDia {
         unidade: quarto.escala
-        x: quarto.cx(768)
+        x: quarto.cx(quarto.eixoDireito) - width / 2
         y: quarto.cy(184)
         linhas: backend.todayBoard
+        minutosDoDia: backend.todayMinutes
         tarefaAtual: backend.currentTaskId
         onAberto: quarto.abrirHoje()
     }

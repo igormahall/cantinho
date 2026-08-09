@@ -9,6 +9,7 @@ Item {
     property var sessoes: []
     property var concluidas: []
     property var revisao: null
+    property int minutosDoDia: 0
 
     signal salvar(int humor, int energia, string nota)
 
@@ -80,6 +81,27 @@ Item {
                             font.pixelSize: Theme.miudo
                         }
                     }
+                }
+            }
+
+            // O total do dia, logo abaixo das sessões. Sem meta e sem
+            // comparação com ontem: é a soma do que está listado acima, no
+            // mesmo lugar onde ela pode ser conferida.
+            Row {
+                width: parent.width
+                visible: raiz.minutosDoDia > 0
+
+                Text {
+                    text: "no dia"
+                    color: Theme.textoSuave
+                    font.pixelSize: Theme.miudo
+                    width: parent.width - 90
+                    leftPadding: 50
+                }
+                Text {
+                    text: raiz.duracao(raiz.minutosDoDia)
+                    color: Theme.musgo
+                    font.pixelSize: Theme.miudo
                 }
             }
 

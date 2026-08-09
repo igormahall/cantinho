@@ -130,18 +130,20 @@ def main(argv: list[str] | None = None) -> int:
     ambiente.set_theme(backend.themeName)
     backend.themeChanged.connect(lambda: ambiente.set_theme(backend.themeName))
 
-    # Um interruptor só para o ambiente e para as reações de clique: dois
-    # controles de som numa tela que quer ser um quarto já seria um painel.
     efeitos = Sfx(app)
     backend.sfxRequested.connect(efeitos.play)
 
+    # Um botão só, três estados: o ambiente e as reações de clique se desligam
+    # em ordem, nunca em controles separados. Ver SOUND_MODES no backend.
     def _aplicar_som() -> None:
-        mudo = not backend.soundOn
-        ambiente.set_muted(mudo)
-        efeitos.set_muted(mudo)
+        ambiente.set_muted(not backend.ambienceOn)
+        efeitos.set_muted(not backend.touchesOn)
 
     backend.soundChanged.connect(_aplicar_som)
     _aplicar_som()
+
+    # Sair pela tela: a confirmação acontece no QML, aqui já é decisão tomada.
+    backend.quitRequested.connect(app.quit)
 
     bandeja = Tray(app)
     if bandeja.install(backend.plantStage):
