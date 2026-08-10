@@ -452,6 +452,66 @@ def som_pelo_menu():
 
 
 @passo
+def movimento_pelo_menu():
+    """O quarto pode ficar quieto.
+
+    Cinco coisas se mexem sozinhas para sempre — luz, folhas, chuva, poeira e o
+    grão, que repinta a janela a cada 900 ms a tarde inteira. O que se confere
+    aqui é que o ajuste chega de fato ao cenário, e não só ao backend: a chuva
+    sai da tela junto.
+    """
+    print("-- deixa o quarto quieto pelo menu")
+    antes = backend.themeMode
+    backend.setThemeMode("noite")
+    QTest.qWait(400)
+    chuva = achar_por_nome("chuva")
+    checar(chuva.isVisible(), "com o quarto respirando, chove na janela")
+
+    clicar(na_barra("o quarto"))
+    clicar(achar("o quarto respira"))
+    checar(not backend.motionOn, "o quarto ficou quieto")
+    QTest.qWait(300)
+    checar(not chuva.isVisible(), "e a chuva parou em vez de congelar")
+
+    clicar(achar("o quarto quieto"))
+    checar(backend.motionOn, "e volta a respirar")
+    QTest.qWait(300)
+    checar(chuva.isVisible(), "com a chuva de volta")
+    clicar(na_barra("o quarto"))
+    backend.setThemeMode(antes)
+    QTest.qWait(400)
+
+
+@passo
+def botoes_da_barra_entram():
+    """Motion gap: os botões da sessão apareciam de estalo.
+
+    `visible:` no controle mais usado do app — a cada sessão que começa, dois
+    botões surgiam do nada e empurravam os vizinhos. A fileira do backlog já
+    fazia por opacidade; a barra não fazia.
+    """
+    print("-- os botões da sessão entram e saem por largura")
+    alvo = backend.backlog[0]["label"]
+    clicar(na_barra("hoje"))
+    linha = na_gaveta(alvo)
+    clicar(na_gaveta("começar", perto_de_y=centro(linha).y(), max_y=560))
+    clicar(na_barra("hoje"))
+
+    entreguei = na_barra("entreguei")
+    checar(entreguei.width() > 1, "com sessão correndo, 'entreguei' tem largura")
+
+    backend.endSession(False, "")
+    QTest.qWait(60)
+    parcial = entreguei.width()
+    QTest.qWait(400)
+    checar(
+        0 < parcial < entreguei.parentItem().width(),
+        f"ao parar, ele encolhe em vez de sumir ({parcial:.0f} px no meio)",
+    )
+    checar(entreguei.width() < 1, "e chega a zero no fim")
+
+
+@passo
 def humor_pelo_menu():
     """Humor e energia sem passar pelo painel do dia."""
     print("-- marca humor e energia pelo menu")
@@ -653,8 +713,8 @@ def conferir_o_log():
     esperado = {
         "task.created": 4,
         "task.renamed": 1,
-        "session.started": 3,
-        "session.ended": 3,
+        "session.started": 4,
+        "session.ended": 4,
         # Uma pelo círculo da lista, outra pelo "entreguei" da barra.
         "task.completed": 2,
         "idea.captured": 1,

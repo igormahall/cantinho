@@ -66,6 +66,7 @@ class Backend(QObject):
     miniVisibleChanged = Signal()
     mainVisibleChanged = Signal()
     soundChanged = Signal()
+    motionChanged = Signal()
     routineChanged = Signal()
     focusChanged = Signal()
     weekChanged = Signal()
@@ -99,6 +100,9 @@ class Backend(QObject):
         # tudo e devolve exatamente o estado anterior, sem passar pelo ciclo
         # de três do menu.
         self._sound_before_mute = DEFAULT_SOUND_MODE
+        # O quarto respira. Mesma natureza do som: preferência da sessão, não
+        # fato do histórico, então não vai para o log.
+        self._motion = True
 
         # Qual tarefa o botão "começar" vai pegar. Vazio significa "a primeira
         # do hoje" — ver `focusedTaskId`.
@@ -833,6 +837,35 @@ class Backend(QObject):
         do quarto, na janela grande.
         """
         self.setSoundMode("mudo" if not self.muted else self._sound_before_mute)
+
+    # ------------------------------------------------------------ movimento
+
+    @Property(bool, notify=motionChanged)
+    def motionOn(self) -> bool:
+        """Se o cenário se mexe sozinho.
+
+        Cinco laços rodam para sempre no quarto: a luz do abajur respirando, as
+        folhas balançando, a chuva, a poeira no feixe e o grão. São o ambiente
+        — a razão de o app existir —, e ao mesmo tempo a única coisa aqui que
+        gasta máquina sem ninguém ter pedido nada. O grão sozinho repinta a
+        janela inteira a cada 900 ms, a tarde toda, mesmo com o app parado.
+
+        Desligar é um ajuste do quarto, como a luz e o som, e vive só na
+        sessão. O que continua é a reação ao mouse: botão que não responde ao
+        toque não é quarto quieto, é app quebrado.
+        """
+        return self._motion
+
+    @Slot(bool)
+    def setMotion(self, ligado: bool) -> None:
+        ligado = bool(ligado)
+        if ligado != self._motion:
+            self._motion = ligado
+            self.motionChanged.emit()
+
+    @Slot()
+    def toggleMotion(self) -> None:
+        self.setMotion(not self._motion)
 
     @Slot(str)
     def sfx(self, nome: str) -> None:

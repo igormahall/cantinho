@@ -287,9 +287,9 @@ hash do id, nunca do rótulo.
    clique, cada um abrindo a sua leitura literal: o bilhete abre o "hoje", o
    calendário abre a semana. O relógio não abre nada. O bilhete leva o tempo de
    cada tarefa e o total do dia.
-7. **Menu do quarto** — luz, som, humor/energia e a saída do app. Não é gosto
-   por menu: com "entreguei" na barra, a fileira de botões passava da largura
-   da janela, e esses são ajustes do ambiente, não ações do dia.
+7. **Menu do quarto** — luz, som, movimento, humor/energia e a saída do app.
+   Não é gosto por menu: com "entreguei" na barra, a fileira de botões passava
+   da largura da janela, e esses são ajustes do ambiente, não ações do dia.
 
 ## Janelas
 
@@ -387,6 +387,14 @@ como a chuva e a poeira já saíram da cena uma vez.
 - Folhas: `RotationAnimator` ±1,5°, fases dessincronizadas
 - Grão: `ShaderEffect` de ruído, ~4% de opacidade, sobre tudo
 
+Os cinco obedecem a `Theme.movimento` — ver o ajuste **o quarto → movimento**
+nas divergências. Chuva e poeira **saem de cena** em vez de congelar: gota
+parada no ar não é chuva discreta, é desenho com defeito. O grão continua na
+tela, porque ele é textura de filme; o que para é o sorteio da semente.
+
+A chuva pintada dentro de `cena_noite.svg` não é essas partículas e não some:
+a janela continua sendo uma noite de chuva, ela só para de se mexer.
+
 ## Estrutura
 
 ```
@@ -477,6 +485,42 @@ Todas deliberadas, todas com motivo:
   a leitura literal do objeto: um calendário de parede é onde se olha para saber
   onde a semana está. A folha inteira responde; nenhuma célula é clicável
   sozinha, porque escolher um dia seria seleção de data.
+- **`o quarto → movimento` para os cinco laços contínuos.** A luz respirando,
+  as folhas, a chuva, a poeira e o grão rodam para sempre — são o ambiente, e
+  são também a única coisa do app que gasta máquina sem ninguém ter pedido
+  nada. O grão sozinho repinta a janela inteira a cada 900 ms, a tarde toda,
+  com o app parado. Desligar serve a dois casos que não se resolvem sozinhos:
+  bateria na máquina do trabalho, e sossego para quem não quer movimento na
+  visão periférica enquanto lê outra coisa. O ajuste **não** desliga a reação
+  ao mouse (`Theme.reacao` continua valendo): botão que não responde ao toque
+  não é quarto quieto, é app quebrado. Ele desliga, sim, o crossfade de tema —
+  `Theme.transicao` vira 0 —, porque três segundos de gradiente atravessando a
+  tela é exatamente o que quem pediu sossego não quer ver.
+  É **o mais perto que dá de `prefers-reduced-motion`**: o Qt não expõe a
+  preferência do sistema (`QStyleHints` só tem `useHoverEffects`), e ler o
+  registro do Windows ou o gsetting do GNOME seria código de plataforma novo em
+  `services/` para um app de um usuário só, que sabe se quer movimento.
+- **O quarto acende em vez de aparecer** (`Room.aceso`). As cinco camadas são
+  SVG rasterizado fora da thread da UI e levavam uns 300 ms entrando de estalo,
+  uma a uma, sobre o fundo vazio — a única coisa do app que aparecia sem
+  transição, e logo a tela inteira. A trava é de uma vez só: ligar a opacidade
+  direto em `status` faria o quarto apagar e reacender a cada mudança de
+  `larguraFonte`, ou seja, sempre que a janela muda de tamanho — e ali não há o
+  que esconder, porque o Qt continua mostrando a imagem antiga enquanto
+  rasteriza a nova.
+- **`BotaoSuave.mostrando`, e não `visible`.** Botão de barra que some por
+  `visible` é troca seca no controle mais usado do app: a cada sessão que
+  começava, dois botões surgiam do nada e empurravam os vizinhos. A largura
+  anda junto com a opacidade — sem ela o buraco continua lá quando o botão sai,
+  e é a largura que faz o gesto ler como "o botão chegou" em vez de "algo
+  apareceu por cima". A fileira de ações do backlog já fazia certo desde
+  sempre; era a barra que destoava.
+- **Os quatro painéis da gaveta se cruzam por opacidade.** Eram irmãos de uma
+  `Column` alternando por `visible`, o que passava despercebido enquanto a
+  gaveta só abria e fechava — e ficou evidente quando "o dia" e "a semana"
+  viraram abas do mesmo painel: clicar de uma para a outra trocava a tela num
+  quadro. Empilhados dentro de um `Item`, a `Column` deixa de decidir a altura
+  deles, e é por isso que a conta dos 90 px mudou de lugar em vez de sumir.
 - **A semana lista entregas, não minutos por dia.** Sete números em coluna são
   um gráfico de barras disfarçado, e comparar ontem com hoje é exatamente o que
   o projeto recusa. O único número é a soma no rodapé — a mesma conta que o

@@ -64,7 +64,7 @@ python -m cantinho.main --db ./teste.db --log DEBUG
 | **ideias** | o mural. A ideia que virar tarefa continua lá, riscada. |
 | **Ctrl+Shift+I** | guarda uma ideia de qualquer lugar, mesmo com o app escondido. |
 | **mini** | troca a janela por uma janelinha só com o timer, sempre por cima. Arrasta pelo corpo. |
-| **o quarto** | luz, som, como está o dia e a saída do app. |
+| **o quarto** | luz, som, movimento, como está o dia e a saída do app. |
 
 As duas janelas nunca ficam na tela juntas: a mini substitui a grande e
 vice-versa. Fechar a janela não encerra o app — ele continua na bandeja. Para
@@ -73,6 +73,13 @@ encerrar de verdade, **o quarto → sair**.
 O som abre em **só os toques**: o quarto calado, a interface respondendo ao
 clique. O ambiente — chuva à noite, acorde de tarde — é uma escolha em **o
 quarto → som**, que gira entre os três estados.
+
+Cinco coisas se mexem sozinhas no cenário: a luz do abajur respirando, as
+folhas, a chuva, a poeira no feixe e o grão. Em **o quarto → movimento** elas
+param todas. Serve para bateria — o grão repinta a janela a cada 900 ms, o dia
+inteiro — e para quem não quer movimento no canto do olho enquanto lê outra
+coisa. Os botões continuam respondendo ao toque: o quarto fica quieto, não
+morto.
 
 ![O cantinho de tarde, com o backlog aberto](docs/quarto-tarde.png)
 
@@ -116,7 +123,7 @@ Com o venv ativado:
 ```bash
 pip install -r requirements-dev.txt
 
-python -m pytest                # 330 testes, sem abrir janela
+python -m pytest                # 333 testes, sem abrir janela
 python tools/simular_uso.py     # percorre a interface clicando de verdade
 python tools/check_svg.py       # rasteriza os SVGs em build/svg_check/
 python tools/semear.py          # banco descartável com duas semanas de uso

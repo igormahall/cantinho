@@ -8,11 +8,28 @@ import QtQuick
 QtObject {
     id: tema
 
-    // Quem manda aqui é o backend. Main.qml amarra isto no startup.
+    // Quem manda aqui é o backend. Main.qml amarra os dois no startup.
     property bool noite: true
 
-    // Crossfade de cenário e de painel andam juntos, no mesmo tempo.
-    readonly property int transicao: 3000
+    // O quarto respira ou fica quieto.
+    //
+    // Cinco coisas se mexem sozinhas para sempre: a luz do abajur, as folhas,
+    // a chuva, a poeira e o grão. São o ambiente, e é por isso que existem —
+    // mas ambiente que nunca para custa duas coisas que só aparecem depois de
+    // horas: bateria, porque o grão repinta a janela a cada 900 ms mesmo com
+    // ninguém olhando; e sossego, para quem não quer movimento na visão
+    // periférica enquanto lê outra coisa.
+    //
+    // Isto **não** desliga a reação ao mouse: `reacao` continua valendo. Um
+    // botão que não responde ao toque não é um quarto quieto, é um app
+    // quebrado. O que para é o que se mexe sem ninguém pedir.
+    property bool movimento: true
+
+    // Crossfade de cenário e de painel andam juntos, no mesmo tempo. Com o
+    // quarto quieto a troca de tema é imediata: são três segundos de gradiente
+    // atravessando a tela inteira, exatamente o que alguém que pediu sossego
+    // não quer ver.
+    readonly property int transicao: movimento ? 3000 : 0
 
     property color fundo:      noite ? "#221D1A" : "#F2E8DA"
     property color superficie: noite ? "#2E2723" : "#FBF4E9"

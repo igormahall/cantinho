@@ -93,6 +93,29 @@ def test_o_menu_do_quarto_gira_os_tres(backend: Backend) -> None:
         assert backend.soundMode == esperado
 
 
+# ----------------------------------------------------------------- movimento
+
+
+def test_o_quarto_abre_respirando(backend: Backend) -> None:
+    assert backend.motionOn
+
+
+def test_o_quarto_pode_ficar_quieto(backend: Backend) -> None:
+    """Cinco laços rodam para sempre; o grão repinta a janela a cada 900 ms."""
+    backend.toggleMotion()
+    assert not backend.motionOn
+    backend.toggleMotion()
+    assert backend.motionOn
+
+
+def test_movimento_nao_vai_para_o_log(backend: Backend) -> None:
+    """Ajuste de ambiente é da sessão, como o som. Não é fato do histórico."""
+    antes = len(backend._events)
+    backend.setMotion(False)
+    backend.setMotion(True)
+    assert len(backend._events) == antes
+
+
 # ------------------------------------------------------------ tarefa em foco
 
 

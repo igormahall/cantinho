@@ -20,6 +20,7 @@ Window {
     // singleton QML não deve depender de context property para existir.
     Component.onCompleted: {
         Theme.noite = Qt.binding(function () { return backend.isNight })
+        Theme.movimento = Qt.binding(function () { return backend.motionOn })
     }
 
     // A janela e o backend precisam concordar nos dois sentidos: o usuário
@@ -735,6 +736,21 @@ Window {
                        : backend.soundMode === "sussurro" ? "só os toques"
                        : "nenhum"
                 onClicado: backend.cycleSoundMode()
+            }
+
+            // O irmão do som, e pelo mesmo motivo.
+            //
+            // Cinco coisas se mexem sozinhas aqui dentro para sempre. São o
+            // ambiente, e ao mesmo tempo a única coisa do app que gasta
+            // máquina sem ninguém pedir — o grão repinta a janela a cada
+            // 900 ms a tarde inteira. Quem precisa de sossego na visão
+            // periférica, ou de bateria, desliga aqui. A reação ao mouse
+            // continua: o quarto fica quieto, não morto.
+            LinhaMenu {
+                width: parent.width
+                rotulo: "movimento"
+                valor: backend.motionOn ? "o quarto respira" : "o quarto quieto"
+                onClicado: backend.toggleMotion()
             }
 
             Rectangle {
