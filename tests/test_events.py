@@ -85,6 +85,7 @@ def test_occurred_at_normalizado_para_utc() -> None:
 def _um_de_cada(clock: FakeClock) -> list[Event]:
     return [
         ev.task_created(clock, DEVICE, label="tese", project="doutorado"),
+        ev.task_renamed(clock, DEVICE, id="task-1", label="a tese"),
         ev.task_completed(clock, DEVICE, id="task-1"),
         ev.task_archived(clock, DEVICE, id="task-1"),
         ev.session_started(clock, DEVICE, task_id="task-1"),
@@ -102,7 +103,7 @@ def test_todos_os_kinds_tem_construtor(clock: FakeClock) -> None:
     assert {evento.kind for evento in _um_de_cada(clock)} == set(ev.KINDS)
 
 
-@pytest.mark.parametrize("indice", range(11))
+@pytest.mark.parametrize("indice", range(12))
 def test_round_trip_por_kind(clock: FakeClock, indice: int) -> None:
     original = _um_de_cada(clock)[indice]
     assert Event.from_row(original.to_row()) == original

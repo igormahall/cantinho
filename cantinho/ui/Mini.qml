@@ -7,11 +7,21 @@ import "panels"
 // Frameless não tem barra de título, então o arrasto é manual. `Qt.Tool` a
 // mantém fora da barra de tarefas — ela é um objeto na mesa, não uma janela
 // que se gerencia.
+//
+// O conceito é "o app reduzido ao gesto": ver o relógio, trocar de tarefa,
+// encerrar. Tudo o que é ajuste — o ciclo de três estados do som, o tema, o
+// humor — mora na janela grande, porque configurar não é coisa que se faça num
+// retângulo de 300 pixels enquanto se trabalha em outra tela.
+//
+// A largura caiu de 340 para 300 e o conteúdo virou três faixas empilhadas. Na
+// versão anterior o nome da tarefa ocupava a largura inteira e os botões
+// ficavam ancorados por cima dele — com uma tarefa de nome comprido, o texto
+// passava por baixo de "terminei" e os dois viravam um borrão.
 Window {
     id: mini
 
-    width: 340
-    height: 120
+    width: 300
+    height: 112
     visible: backend.miniVisible
     color: "transparent"
     title: "Cantinho"
@@ -48,67 +58,145 @@ Window {
             onActiveChanged: if (active) mini.startSystemMove()
         }
 
-        Column {
+        // ------------------------------------------- relógio e ação principal
+
+        Item {
+            id: topo
+            anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.topMargin: 10
             anchors.leftMargin: Theme.espaco
-            anchors.rightMargin: Theme.espaco
-            spacing: 2
+            anchors.rightMargin: 8
+            height: 34
 
             Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
                 text: backend.elapsedText
                 color: backend.timerRunning ? Theme.ambar : Theme.textoSuave
-                font.pixelSize: 32
+                font.pixelSize: 30
                 font.letterSpacing: 1
                 Behavior on color { ColorAnimation { duration: 300 } }
             }
 
+            // Um botão principal por vez, e ele diz o que vai acontecer com a
+            // tarefa. "Entreguei" fecha a tarefa e põe o objeto na estante;
+            // parar sem entregar é o botão discreto do rodapé.
+            BotaoSuave {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: !backend.timerRunning ? "começar"
+                      : backend.currentTaskId !== "" ? "entreguei" : "parar"
+                destacado: true
+                corAtiva: backend.timerRunning ? Theme.musgo : Theme.ambar
+                tamanho: Theme.corpo
+                onClicked: {
+                    if (!backend.timerRunning)
+                        backend.startFocused()
+                    else if (backend.currentTaskId !== "")
+                        backend.endSessionAndComplete()
+                    else
+                        backend.endSession(false, "")
+                }
+            }
+        }
+
+        // ---------------------------------------------------------- a tarefa
+
+        Item {
+            id: linha
+            anchors.top: topo.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.topMargin: 2
+            anchors.leftMargin: Theme.espaco
+            anchors.rightMargin: Theme.espaco
+            height: 20
+
+            // Trocar de tarefa aqui é avançar de uma em uma, e não abrir uma
+            // lista: numa janela deste tamanho a lista cobriria o relógio, que
+            // é a razão de a mini existir. Avançar resolve o caso real — pular
+            // do item de cima para o de baixo sem chamar a janela grande.
+            readonly property bool trocavel: !backend.timerRunning
+                                             && backend.today.length > 1
+
             Text {
-                width: parent.width
+                id: nome
+                anchors.left: parent.left
+                anchors.right: dica.left
+                anchors.rightMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
                 text: backend.timerRunning
                       ? (backend.currentTaskLabel !== ""
                          ? backend.currentTaskLabel : "sessão livre")
-                      : "parado"
-                color: Theme.textoSuave
+                      : backend.freeSessionChosen
+                        ? "sessão livre"
+                        : backend.focusedTaskLabel !== ""
+                          ? backend.focusedTaskLabel
+                          : "nada no hoje"
+                color: backend.timerRunning ? Theme.ambar
+                       : (trocar.containsMouse ? Theme.ambar : Theme.textoSuave)
                 font.pixelSize: Theme.miudo
                 elide: Text.ElideRight
+                Behavior on color { ColorAnimation { duration: Theme.reacao } }
+            }
+
+            Text {
+                id: dica
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: "trocar"
+                font.pixelSize: 10
+                color: Theme.textoSuave
+                opacity: linha.trocavel && trocar.containsMouse ? 0.9 : 0
+                Behavior on opacity { NumberAnimation { duration: 160 } }
+            }
+
+            MouseArea {
+                id: trocar
+                anchors.fill: parent
+                anchors.margins: -3
+                hoverEnabled: true
+                enabled: linha.trocavel
+                cursorShape: Qt.PointingHandCursor
+                onEntered: backend.sfx("toque")
+                onClicked: {
+                    backend.sfx("clique")
+                    backend.focusNext()
+                }
             }
         }
+
+        // ---------------------------------------------------------- o rodapé
 
         Row {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            anchors.margins: 8
-            spacing: 2
+            anchors.rightMargin: 8
+            anchors.bottomMargin: 6
+            spacing: 0
 
-            // Mesma dupla da barra grande: concluir a tarefa tem que caber no
-            // mesmo lugar onde se encerra a sessão, senão a mini vira só um
-            // relógio e obriga a abrir a janela para fechar o que se acabou de
-            // fazer.
+            // Parar sem entregar. Fica aqui, pequeno, porque é o fim menos
+            // comum: quase toda sessão que acaba, acaba porque a tarefa acabou.
             BotaoSuave {
-                text: "terminei"
+                text: "parar"
                 visible: backend.timerRunning && backend.currentTaskId !== ""
-                destacado: true
-                corAtiva: Theme.musgo
-                onClicked: backend.endSessionAndComplete()
+                corAtiva: Theme.texto
+                onClicked: backend.endSession(false, "")
             }
 
+            // Interruptor de duas posições, e não o ciclo de três do menu.
+            //
+            // Aqui não se configura o ambiente: cala-se o som porque alguém
+            // entrou na sala, e devolve-se ele exatamente como estava. Escolher
+            // entre "ambiente e toques" e "só os toques" é decisão de quem está
+            // sentado no quarto, e o quarto é a janela grande.
             BotaoSuave {
-                text: backend.timerRunning ? "encerrar" : "começar"
-                destacado: !backend.timerRunning
-                corAtiva: backend.timerRunning ? Theme.musgo : Theme.ambar
-                onClicked: backend.timerRunning
-                           ? backend.endSession(false, "")
-                           : backend.startSession("")
-            }
-
-            BotaoSuave {
-                text: backend.soundMode === "tudo" ? "som"
-                      : backend.soundMode === "sussurro" ? "sussurro" : "mudo"
-                destacado: backend.soundMode !== "mudo"
+                text: backend.muted ? "mudo" : "som"
+                destacado: !backend.muted
                 corAtiva: Theme.musgo
-                onClicked: backend.cycleSoundMode()
+                onClicked: backend.toggleMute()
             }
 
             // Mostrar a principal já esconde a mini: as duas nunca ficam na

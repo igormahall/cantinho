@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -11,11 +11,14 @@ from cantinho.core.clock import FakeClock
 from cantinho.core.events import Event
 from cantinho.core.projections import (
     TODAY_LIMIT,
+    completed_on,
     day_reviews,
     ideas,
+    minutes_on,
     open_tasks,
     review_for,
     sessions_on,
+    shelf_objects,
     today_tasks,
 )
 
@@ -226,3 +229,87 @@ def test_revisoes_de_dias_diferentes_nao_se_misturam(clock: FakeClock) -> None:
     revisoes = day_reviews(log)
     assert revisoes["2026-03-02"].mood == 2
     assert revisoes["2026-03-03"].mood == 5
+
+
+# ------------------------------------------------------------------ renomear
+#
+# Corrigir o texto de uma tarefa é um fato novo, e não uma edição: o
+# `task.created` continua no log exatamente como foi escrito.
+
+
+def test_renomear_troca_o_rotulo(clock: FakeClock) -> None:
+    criacao = ev.task_created(clock, DEVICE, label="revisar o capitulo 3")
+    task_id = criacao.payload["id"]
+    clock.advance(timedelta(minutes=1))
+    log = [criacao, ev.task_renamed(clock, DEVICE, id=task_id, label="revisar o capítulo 3")]
+
+    assert [t.label for t in open_tasks(log)] == ["revisar o capítulo 3"]
+    assert log[0].payload["label"] == "revisar o capitulo 3"
+
+
+def test_o_ultimo_renome_vence(clock: FakeClock) -> None:
+    """Ao contrário do resto da projeção: corrigir duas vezes vale a segunda."""
+    criacao = ev.task_created(clock, DEVICE, label="a")
+    task_id = criacao.payload["id"]
+    log = [criacao]
+    for texto in ("b", "c"):
+        clock.advance(timedelta(minutes=1))
+        log.append(ev.task_renamed(clock, DEVICE, id=task_id, label=texto))
+
+    assert [t.label for t in open_tasks(log)] == ["c"]
+
+
+def test_renomear_nao_muda_o_objeto_da_estante(clock: FakeClock) -> None:
+    """O desenho vem do hash do id. O texto não entra na conta."""
+    criacao = ev.task_created(clock, DEVICE, label="a")
+    task_id = criacao.payload["id"]
+    clock.advance(timedelta(minutes=1))
+    conclusao = ev.task_completed(clock, DEVICE, id=task_id)
+
+    sem_renome = shelf_objects([criacao, conclusao])[0].object_type
+    com_renome = shelf_objects(
+        [criacao, ev.task_renamed(clock, DEVICE, id=task_id, label="outro"), conclusao]
+    )[0].object_type
+    assert sem_renome == com_renome
+
+
+def test_renome_de_tarefa_inexistente_e_ignorado(clock: FakeClock) -> None:
+    log = [ev.task_renamed(clock, DEVICE, id="fantasma", label="x")]
+    assert open_tasks(log) == []
+
+
+# --------------------------------------------------------------- dia a dia
+
+
+def test_entregas_do_dia_saem_pelo_calendario_local(clock: FakeClock) -> None:
+    """O banco guarda UTC; o dia é o de quem está olhando."""
+    saopaulo = timezone(timedelta(hours=-3))
+    criacao = ev.task_created(clock, DEVICE, label="a")
+    # 2026-03-02 09:00 UTC é ainda 06:00 em São Paulo, mesmo dia.
+    log = [criacao, ev.task_completed(clock, DEVICE, id=criacao.payload["id"])]
+
+    assert [t.label for t in completed_on(log, date(2026, 3, 2), saopaulo)] == ["a"]
+    assert completed_on(log, date(2026, 3, 1), saopaulo) == []
+
+
+def test_entrega_de_madrugada_conta_no_dia_de_ca(clock: FakeClock) -> None:
+    saopaulo = timezone(timedelta(hours=-3))
+    criacao = ev.task_created(clock, DEVICE, label="a")
+    # 02:00 UTC do dia 3 é 23:00 do dia 2 em São Paulo.
+    clock.set(datetime(2026, 3, 3, 2, 0, tzinfo=timezone.utc))
+    log = [criacao, ev.task_completed(clock, DEVICE, id=criacao.payload["id"])]
+
+    assert len(completed_on(log, date(2026, 3, 2), saopaulo)) == 1
+    assert completed_on(log, date(2026, 3, 3), saopaulo) == []
+
+
+def test_minutos_do_dia_somam_as_sessoes(clock: FakeClock) -> None:
+    log = []
+    for minutos in (25, 35):
+        inicio = ev.session_started(clock, DEVICE)
+        clock.advance(timedelta(minutes=minutos))
+        log += [inicio, ev.session_ended(clock, DEVICE, id=inicio.payload["id"])]
+        clock.advance(timedelta(minutes=5))
+
+    assert minutes_on(log, date(2026, 3, 2), timezone.utc) == pytest.approx(60)
+    assert minutes_on(log, date(2026, 3, 3), timezone.utc) == 0

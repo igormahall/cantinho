@@ -38,6 +38,15 @@ BOARD_LIMIT = 6
 # "Sussurro" é o quarto calado com as mãos ainda fazendo barulho.
 SOUND_MODES: tuple[str, ...] = ("tudo", "sussurro", "mudo")
 
+# E é o do meio que abre o app.
+#
+# Som ambiente é a única coisa aqui que ocupa a sala sem ninguém ter pedido:
+# quem abre o app às nove da manhã numa mesa compartilhada leva chuva tocando
+# até achar onde desligar. O retorno do clique não tem esse problema — ele só
+# soa em resposta a um gesto. Então o padrão é o quarto calado com a interface
+# respondendo, e a música é uma escolha de quem quer companhia.
+DEFAULT_SOUND_MODE = "sussurro"
+
 
 def _format_elapsed(delta: timedelta) -> str:
     total = int(delta.total_seconds())
@@ -58,6 +67,8 @@ class Backend(QObject):
     mainVisibleChanged = Signal()
     soundChanged = Signal()
     routineChanged = Signal()
+    focusChanged = Signal()
+    weekChanged = Signal()
     # Reação curta de interface (passar o mouse, clicar, concluir). Quem toca é
     # `services/audio.py`; o backend só avisa, para o QML não precisar conhecer
     # o serviço de áudio.
@@ -83,7 +94,19 @@ class Backend(QObject):
         self._main_visible = True
         # Só nesta sessão. Preferência de som não vai a disco: `events` é a
         # única tabela persistida, e "liguei o som" não é fato do histórico.
-        self._sound_mode = "tudo"
+        self._sound_mode = DEFAULT_SOUND_MODE
+        # Para o interruptor da mini, que só tem duas posições: ele desliga
+        # tudo e devolve exatamente o estado anterior, sem passar pelo ciclo
+        # de três do menu.
+        self._sound_before_mute = DEFAULT_SOUND_MODE
+
+        # Qual tarefa o botão "começar" vai pegar. Vazio significa "a primeira
+        # do hoje" — ver `focusedTaskId`.
+        self._focused_task = ""
+        self._free_session = False
+
+        # Quantas semanas atrás o painel da semana está olhando. 0 é esta.
+        self._week_offset = 0
 
         # Reavalia o tema de tempos em tempos. Um minuto é folgado de sobra
         # para uma transição que leva três segundos.
@@ -120,6 +143,10 @@ class Backend(QObject):
         self._ideias = proj.ideas(eventos)
         self._estagio = proj.plant_stage(eventos, self._clock.now())
         self.stateChanged.emit()
+        # A tarefa em foco é derivada do backlog: concluir a que estava
+        # escolhida faz a próxima assumir sozinha.
+        self.focusChanged.emit()
+        self.weekChanged.emit()
 
     @property
     def device_id(self) -> str:
@@ -171,6 +198,27 @@ class Backend(QObject):
             )
         )
 
+    @Slot(str, str)
+    def renameTask(self, task_id: str, label: str) -> None:
+        """Corrige o texto de uma tarefa.
+
+        Não é edição: `task.created` continua no log como foi escrito, e o
+        rótulo novo é um evento posterior. O id não muda, então o objeto que a
+        tarefa vai deixar na estante continua sendo o mesmo desenho.
+
+        Rótulo vazio ou igual ao atual não gera evento — um log cheio de
+        renomeações que não mudaram nada é ruído.
+        """
+        label = label.strip()
+        if not task_id or not label:
+            return
+        atual = next((task for task in self._backlog if task.id == task_id), None)
+        if atual is None or atual.label == label:
+            return
+        self._registrar(
+            ev.task_renamed(self._clock, self.device_id, id=task_id, label=label)
+        )
+
     @Slot(str)
     def completeTask(self, task_id: str) -> None:
         if not task_id:
@@ -192,6 +240,75 @@ class Backend(QObject):
         self._registrar(
             ev.backlog_reordered(self._clock, self.device_id, order=ids)
         )
+
+    # ------------------------------------------------------- tarefa em foco
+    #
+    # "Começar" precisava saber o que começar.
+    #
+    # Antes o botão da barra abria sempre uma sessão livre, e a única forma de
+    # prender o timer a uma tarefa era abrir o "hoje" e mirar a palavra
+    # "começar" na linha certa. Quem apertasse o botão grande — que é o gesto
+    # óbvio — gravava tempo que não ia para tarefa nenhuma e não podia ser
+    # concluído: o "entreguei" nem aparecia.
+    #
+    # A tarefa em foco resolve isso sem inventar estado persistido: ela é
+    # derivada do backlog. Vazia significa "a primeira do hoje", e escolher
+    # outra é preferência da sessão, não fato do histórico — se o app fechar,
+    # o foco volta a ser o topo da lista, que é o que a lista já diz.
+
+    @Property(str, notify=focusChanged)
+    def focusedTaskId(self) -> str:
+        """A tarefa que o "começar" vai pegar. Vazio = sessão livre."""
+        if self._timer.running:
+            return self._timer.task_id or ""
+        if self._free_session:
+            return ""
+        abertas = {task.id for task in self._backlog}
+        if self._focused_task in abertas:
+            return self._focused_task
+        # A escolhida saiu do backlog (foi concluída ou arquivada). Em vez de
+        # apontar para o vazio, o foco cai no topo do "hoje".
+        return self._backlog[0].id if self._backlog else ""
+
+    @Property(str, notify=focusChanged)
+    def focusedTaskLabel(self) -> str:
+        alvo = self.focusedTaskId
+        if not alvo:
+            return ""
+        for task in self._backlog:
+            if task.id == alvo:
+                return task.label
+        return self.currentTaskLabel
+
+    @Property(bool, notify=focusChanged)
+    def freeSessionChosen(self) -> bool:
+        """Sessão livre pedida de propósito, e não por falta de tarefa."""
+        return self._free_session and not self._timer.running
+
+    @Slot(str)
+    def setFocusedTask(self, task_id: str) -> None:
+        """Escolhe o que vem agora. String vazia pede uma sessão livre."""
+        task_id = task_id.strip()
+        if task_id and task_id not in {task.id for task in self._backlog}:
+            return
+        self._focused_task = task_id
+        self._free_session = not task_id
+        self.focusChanged.emit()
+
+    @Slot()
+    def focusNext(self) -> None:
+        """Passa para a próxima tarefa do "hoje", e da última volta à primeira.
+
+        É o que a mini usa: numa janela de 300 pixels não cabe uma lista, e
+        avançar de uma em uma resolve o caso real — trocar do item de cima para
+        o de baixo sem abrir a janela grande.
+        """
+        if not self._backlog:
+            return
+        ids = [task.id for task in self._backlog[: proj.TODAY_LIMIT]]
+        atual = self.focusedTaskId
+        proximo = ids[(ids.index(atual) + 1) % len(ids)] if atual in ids else ids[0]
+        self.setFocusedTask(proximo)
 
     # --------------------------------------------------------------- timer
 
@@ -225,14 +342,32 @@ class Backend(QObject):
     def startSession(self, task_id: str = "") -> None:
         if self._timer.running:
             return
+        task_id = task_id.strip()
         evento = ev.session_started(
-            self._clock, self.device_id, task_id=task_id.strip() or None
+            self._clock, self.device_id, task_id=task_id or None
         )
         self._registrar(evento)
         self._timer.start(
             evento.payload["id"], evento.payload.get("task_id"), evento.occurred_at
         )
+        # Começar por uma tarefa é escolhê-la: sem isto, encerrar a sessão
+        # devolveria o foco ao topo da lista e o botão passaria a apontar para
+        # outra coisa que não a que se acabou de trabalhar.
+        if task_id:
+            self._focused_task = task_id
+            self._free_session = False
         self.timerChanged.emit()
+        self.focusChanged.emit()
+
+    @Slot()
+    def startFocused(self) -> None:
+        """O que o botão grande faz: começa pela tarefa em foco.
+
+        Sem tarefa nenhuma em foco — backlog vazio, ou sessão livre escolhida
+        de propósito — vira uma sessão solta, que continua sendo um uso
+        legítimo: às vezes o trabalho não estava na lista.
+        """
+        self.startSession(self.focusedTaskId)
 
     @Slot()
     @Slot(bool)
@@ -252,6 +387,7 @@ class Backend(QObject):
         )
         self._timer.stop()
         self.timerChanged.emit()
+        self.focusChanged.emit()
 
     @Slot()
     def endSessionAndComplete(self) -> None:
@@ -263,7 +399,9 @@ class Backend(QObject):
         o retorno — então a metade que importa dependia de lembrar de fazê-la.
 
         Dois eventos, não um: `session.ended` e `task.completed` são fatos
-        distintos e continuam separados no log. O que mudou é o gesto.
+        distintos e continuam separados no log. O que mudou é o gesto — hoje
+        ele se chama "entreguei", que é o verbo da estante: quem lê a palavra
+        já sabe onde a tarefa vai parar.
         """
         task_id = self._timer.task_id
         self.endSession(False, "")
@@ -444,6 +582,26 @@ class Backend(QObject):
             )
         )
 
+    @Property(bool, notify=stateChanged)
+    def dayClosed(self) -> bool:
+        """O dia já foi guardado no diário."""
+        return proj.review_for(self._events, self._hoje()) is not None
+
+    @Slot(int, int)
+    @Slot(int, int, str)
+    def endDay(self, mood: int, energy: int, note: str = "") -> None:
+        """Encerra o dia: para o relógio, se estiver correndo, e guarda a nota.
+
+        O botão que faltava. "Guardar o dia" escrevia a revisão e deixava a
+        sessão rodando — quem fechava o app em seguida perdia o tempo aberto, e
+        quem esquecia o timer ligado voltava no dia seguinte com uma sessão de
+        catorze horas. Encerrar o dia é um gesto só: o que estava correndo é
+        guardado, e o diário fecha.
+        """
+        if self._timer.running:
+            self.endSession(False, "")
+        self.saveReview(mood, energy, note)
+
     @Slot("QVariantList")
     def saveCheckin(self, intents: list) -> None:
         textos = [str(item).strip() for item in intents if str(item).strip()]
@@ -455,6 +613,115 @@ class Backend(QObject):
                 intents=textos,
             )
         )
+
+    # -------------------------------------------------------------- a semana
+    #
+    # O que a semana mostra é o que foi entregue, dia a dia — os mesmos objetos
+    # que estão na estante, com a data em que chegaram lá. É o oposto de um
+    # painel de métricas: não tem barra, não tem percentual, não compara um dia
+    # com o outro e não diz nada sobre os dias em branco além de que estão em
+    # branco.
+    #
+    # O único número é a soma de horas no rodapé, que é o mesmo tipo de conta
+    # que o bilhete da parede já faz para um dia. Somar não é cobrar; comparar
+    # é, e é por isso que os minutos não aparecem linha a linha.
+
+    _MESES = (
+        "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+        "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+    )
+    _DIAS = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
+
+    def _inicio_da_semana(self) -> date:
+        """Segunda-feira da semana que o painel está olhando."""
+        hoje = self._hoje()
+        segunda = hoje - timedelta(days=hoje.weekday())
+        return segunda - timedelta(weeks=self._week_offset)
+
+    @Property("QVariantList", notify=weekChanged)
+    def weekDays(self) -> list[dict]:
+        fuso = self._fuso()
+        hoje = self._hoje()
+        inicio = self._inicio_da_semana()
+        revisoes = proj.day_reviews(self._events)
+
+        dias: list[dict] = []
+        for passo in range(7):
+            dia = inicio + timedelta(days=passo)
+            revisao = revisoes.get(dia.isoformat())
+            dias.append(
+                {
+                    "date": dia.isoformat(),
+                    "weekday": self._DIAS[passo],
+                    "day": dia.day,
+                    "today": dia == hoje,
+                    # Dia que ainda não chegou não é dia vazio: ele não tem
+                    # nada a dizer, e escrever "em branco" nele soaria como
+                    # cobrança antecipada.
+                    "ahead": dia > hoje,
+                    "delivered": [
+                        task.label for task in proj.completed_on(self._events, dia, fuso)
+                    ],
+                    "mood": revisao.mood if revisao else 0,
+                    "note": (revisao.note or "") if revisao else "",
+                }
+            )
+        return dias
+
+    @Property(str, notify=weekChanged)
+    def weekTitle(self) -> str:
+        if self._week_offset == 0:
+            return "esta semana"
+        if self._week_offset == 1:
+            return "a semana passada"
+        return f"{self._week_offset} semanas atrás"
+
+    @Property(str, notify=weekChanged)
+    def weekRange(self) -> str:
+        inicio = self._inicio_da_semana()
+        fim = inicio + timedelta(days=6)
+        if inicio.month == fim.month:
+            return f"{inicio.day} a {fim.day} de {self._MESES[fim.month - 1]}"
+        return (
+            f"{inicio.day} de {self._MESES[inicio.month - 1]}"
+            f" a {fim.day} de {self._MESES[fim.month - 1]}"
+        )
+
+    @Property(int, notify=weekChanged)
+    def weekDelivered(self) -> int:
+        return sum(len(dia["delivered"]) for dia in self.weekDays)
+
+    @Property(int, notify=weekChanged)
+    def weekMinutes(self) -> int:
+        fuso = self._fuso()
+        inicio = self._inicio_da_semana()
+        total = sum(
+            proj.minutes_on(self._events, inicio + timedelta(days=passo), fuso)
+            for passo in range(7)
+        )
+        return int(round(total))
+
+    @Property(int, notify=weekChanged)
+    def weekOffset(self) -> int:
+        return self._week_offset
+
+    @Slot()
+    def previousWeek(self) -> None:
+        self._week_offset += 1
+        self.weekChanged.emit()
+
+    @Slot()
+    def nextWeek(self) -> None:
+        """Não passa desta semana: o cantinho não tem nada a dizer do futuro."""
+        if self._week_offset > 0:
+            self._week_offset -= 1
+            self.weekChanged.emit()
+
+    @Slot()
+    def thisWeek(self) -> None:
+        if self._week_offset != 0:
+            self._week_offset = 0
+            self.weekChanged.emit()
 
     # ----------------------------------------------------------------- tema
 
@@ -539,9 +806,15 @@ class Backend(QObject):
     def touchesOn(self) -> bool:
         return self._sound_mode != "mudo"
 
+    @Property(bool, notify=soundChanged)
+    def muted(self) -> bool:
+        return self._sound_mode == "mudo"
+
     @Slot(str)
     def setSoundMode(self, modo: str) -> None:
         if modo in SOUND_MODES and modo != self._sound_mode:
+            if modo != "mudo":
+                self._sound_before_mute = modo
             self._sound_mode = modo
             self.soundChanged.emit()
 
@@ -549,6 +822,17 @@ class Backend(QObject):
     def cycleSoundMode(self) -> None:
         atual = SOUND_MODES.index(self._sound_mode)
         self.setSoundMode(SOUND_MODES[(atual + 1) % len(SOUND_MODES)])
+
+    @Slot()
+    def toggleMute(self) -> None:
+        """Interruptor de duas posições, para a mini.
+
+        Lá não cabe — nem faz sentido — o ciclo de três estados: a mini é o app
+        reduzido ao relógio, e quem a está usando quer calar o som ou devolvê-lo
+        como estava, não configurar o ambiente. O ajuste fino continua no menu
+        do quarto, na janela grande.
+        """
+        self.setSoundMode("mudo" if not self.muted else self._sound_before_mute)
 
     @Slot(str)
     def sfx(self, nome: str) -> None:

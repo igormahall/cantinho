@@ -43,18 +43,24 @@ Window {
         }
     }
 
-    // Minimizar troca a janela pela mini em vez de deixar o app na barra de
-    // tarefas. É o mesmo gesto de sempre — tirar o quarto da frente — e o
-    // resultado é o timer continuar visível num canto, que é justamente para
-    // isso que a mini existe.
-    onVisibilityChanged: function (estado) {
-        if (estado === Window.Minimized && backend.mainVisible)
-            backend.showMini()
-    }
+    // Minimizar minimiza, e só.
+    //
+    // Antes trocava a janela pela mini, com o argumento de que o timer
+    // continuava visível num canto. Na prática o gesto de minimizar quer dizer
+    // "sai da frente agora", e o app respondia colocando outra janela na
+    // frente — sempre por cima de tudo, ainda por cima. Para chamar a mini
+    // existe o botão "mini", que é onde alguém que a queira vai procurá-la.
 
     // "aba" vazia significa só o quarto à mostra.
     property string aba: ""
     function alternar(nome) { aba = (aba === nome) ? "" : nome }
+
+    // Fechar o que estiver aberto por cima do quarto, em um lugar só.
+    function recolher() {
+        aba = ""
+        menuAberto = false
+        seletor.aberto = false
+    }
 
     Room {
         id: quarto
@@ -62,15 +68,18 @@ Window {
         plantStage: backend.plantStage
         shelf: backend.shelf
 
-        // O bilhete da parede é a única parte do cenário que responde a clique.
+        // Os dois papéis da parede que respondem a clique: o bilhete abre o
+        // "hoje", o calendário abre a semana. É a leitura literal de cada um —
+        // a lista do dia e o mês passando.
         onAbrirHoje: janela.aba = "backlog"
+        onAbrirSemana: janela.aba = "semana"
     }
 
     // Clicar no vazio do quarto fecha o painel aberto.
     MouseArea {
         anchors.fill: parent
         enabled: janela.aba !== ""
-        onClicked: janela.aba = ""
+        onClicked: janela.recolher()
     }
 
     // ----------------------------------------------------- painel lateral
@@ -104,12 +113,44 @@ Window {
             anchors.margins: Theme.espacoGrande
             spacing: Theme.espaco
 
-            Text {
-                text: janela.aba === "backlog" ? "hoje"
-                      : janela.aba === "ideias" ? "mural de ideias"
-                      : janela.aba === "dia" ? "o dia" : ""
-                color: Theme.texto
-                font.pixelSize: Theme.titulo
+            // O título e, no diário, as duas abas.
+            //
+            // "O dia" e "a semana" são a mesma coisa em duas distâncias, então
+            // dividem o painel em vez de disputarem espaço na barra de baixo —
+            // que já estava cheia. Quem abre um chega no outro em um clique.
+            Item {
+                width: parent.width
+                height: 28
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: janela.aba === "backlog" ? "hoje"
+                          : janela.aba === "ideias" ? "mural de ideias"
+                          : janela.aba === "dia" ? "o dia"
+                          : janela.aba === "semana" ? "a semana" : ""
+                    color: Theme.texto
+                    font.pixelSize: Theme.titulo
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 0
+                    visible: janela.aba === "dia" || janela.aba === "semana"
+
+                    BotaoSuave {
+                        text: "o dia"
+                        destacado: janela.aba === "dia"
+                        onClicked: janela.aba = "dia"
+                    }
+
+                    BotaoSuave {
+                        text: "a semana"
+                        destacado: janela.aba === "semana"
+                        onClicked: janela.aba = "semana"
+                    }
+                }
             }
 
             // ------------------------------------------------- backlog
@@ -126,11 +167,16 @@ Window {
                     tarefas: backend.backlog
                     limiteHoje: backend.todayLimit
                     tarefaAtual: backend.currentTaskId
+                    tarefaFoco: backend.timerRunning ? "" : backend.focusedTaskId
 
                     onIniciar: function (taskId) { backend.startSession(taskId) }
                     onConcluir: function (taskId) { backend.completeTask(taskId) }
                     onArquivar: function (taskId) { backend.archiveTask(taskId) }
                     onReordenar: function (ids) { backend.reorderBacklog(ids) }
+                    onFocar: function (taskId) { backend.setFocusedTask(taskId) }
+                    onRenomear: function (taskId, texto) {
+                        backend.renameTask(taskId, texto)
+                    }
                 }
 
                 CampoTexto {
@@ -159,7 +205,7 @@ Window {
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.WordWrap
                     visible: backend.ideas.length === 0
-                    text: "O mural está vazio.\nCtrl+Shift+C funciona de qualquer lugar."
+                    text: "O mural está vazio.\nCtrl+Shift+I funciona de qualquer lugar."
                     color: Theme.textoSuave
                     font.pixelSize: Theme.corpo
                     lineHeight: 1.4
@@ -271,10 +317,27 @@ Window {
                 concluidas: backend.todayCompleted
                 revisao: backend.todayReview
                 minutosDoDia: backend.todayMinutes
-                onSalvar: function (humor, energia, nota) {
-                    backend.saveReview(humor, energia, nota)
+                sessaoCorrendo: backend.timerRunning
+                onEncerrar: function (humor, energia, nota) {
+                    backend.endDay(humor, energia, nota)
                     janela.aba = ""
                 }
+            }
+
+            // ------------------------------------------------- a semana
+
+            Semana {
+                width: parent.width
+                height: parent.height - 90
+                visible: janela.aba === "semana"
+                dias: backend.weekDays
+                titulo: backend.weekTitle
+                periodo: backend.weekRange
+                entregas: backend.weekDelivered
+                minutos: backend.weekMinutes
+                recuo: backend.weekOffset
+                onAnterior: backend.previousWeek()
+                onSeguinte: backend.nextWeek()
             }
         }
     }
@@ -297,33 +360,80 @@ Window {
 
         HoverHandler { id: sobreBarra }
 
-        Row {
+        // O relógio e, debaixo dele, o que o "começar" vai pegar.
+        //
+        // A segunda linha não é legenda: é um controle. Enquanto o timer está
+        // parado ela mostra a tarefa escolhida e abre a lista de escolha; com o
+        // timer correndo ela vira o nome do que está sendo feito e para de
+        // responder, porque trocar de tarefa no meio da sessão seria trocar o
+        // que o log já está gravando.
+        Column {
+            id: relogio
             anchors.left: parent.left
             anchors.leftMargin: Theme.espacoGrande
             anchors.verticalCenter: parent.verticalCenter
-            spacing: Theme.espacoGrande
+            width: 330
+            spacing: 2
 
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
+            Text {
+                text: backend.elapsedText
+                color: backend.timerRunning ? Theme.ambar : Theme.textoSuave
+                font.pixelSize: 30
+                font.letterSpacing: 1
+                Behavior on color { ColorAnimation { duration: 300 } }
+            }
+
+            Item {
+                width: parent.width
+                height: 20
+
+                readonly property bool escolhivel: !backend.timerRunning
 
                 Text {
-                    text: backend.elapsedText
-                    color: backend.timerRunning ? Theme.ambar : Theme.textoSuave
-                    font.pixelSize: 30
-                    font.letterSpacing: 1
-                    Behavior on color { ColorAnimation { duration: 300 } }
-                }
-
-                Text {
+                    id: aoLado
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, parent.width - 20)
+                    elide: Text.ElideRight
+                    font.pixelSize: Theme.miudo
                     text: backend.timerRunning
                           ? (backend.currentTaskLabel !== ""
                              ? backend.currentTaskLabel : "sessão livre")
-                          : "o tempo começa quando você quiser"
-                    color: Theme.textoSuave
-                    font.pixelSize: Theme.miudo
-                    width: 320
-                    elide: Text.ElideRight
+                          : backend.freeSessionChosen
+                            ? "sessão livre"
+                            : backend.focusedTaskLabel !== ""
+                              ? backend.focusedTaskLabel
+                              : "escreva no hoje o que fazer"
+                    color: backend.timerRunning ? Theme.ambar
+                           : (escolher.containsMouse ? Theme.ambar : Theme.textoSuave)
+                    Behavior on color { ColorAnimation { duration: Theme.reacao } }
+                }
+
+                // Marca de "isto abre": some junto com a possibilidade de
+                // escolher, para não prometer um clique que não acontece.
+                Text {
+                    anchors.left: aoLado.right
+                    anchors.leftMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "▾"
+                    font.pixelSize: 9
+                    color: escolher.containsMouse ? Theme.ambar : Theme.textoSuave
+                    opacity: parent.escolhivel ? 0.8 : 0
+                    Behavior on opacity { NumberAnimation { duration: 160 } }
+                }
+
+                MouseArea {
+                    id: escolher
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    hoverEnabled: true
+                    enabled: parent.escolhivel
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: backend.sfx("toque")
+                    onClicked: {
+                        backend.sfx("clique")
+                        seletor.aberto = !seletor.aberto
+                    }
                 }
             }
         }
@@ -334,18 +444,25 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 4
 
-            // "terminei" encerra a sessão e conclui a tarefa de uma vez.
+            // Os três fins possíveis de uma sessão, e eles precisavam de nomes
+            // que não se confundissem.
             //
-            // Antes eram dois movimentos em lugares diferentes: encerrar aqui e
-            // depois abrir a lista para marcar o círculo. Só o segundo põe o
-            // objeto na estante — ou seja, o retorno do app dependia de lembrar
-            // de fazer a metade que não estava na frente do usuário.
+            // "Terminei" e "encerrar" eram a mesma palavra dita de dois jeitos,
+            // e ficavam lado a lado: ninguém sabia qual dos dois fechava a
+            // tarefa. Agora cada botão diz o que acontece com a tarefa, que é a
+            // única diferença entre eles:
             //
-            // Só aparece com uma tarefa presa ao timer: numa sessão livre não
-            // há o que concluir.
+            //   entreguei        — a tarefa acabou e vira objeto na estante
+            //   parar            — o relógio para, a tarefa continua na lista
+            //   fui interrompido — igual, mas fica marcado assim no diário
+            //
+            // "Entreguei" é o mesmo verbo da estante, que é a vitrine de
+            // entregas: quem lê a palavra já sabe onde a tarefa vai parar. Só
+            // aparece com tarefa presa ao timer — numa sessão livre não há o
+            // que concluir.
             BotaoSuave {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "terminei"
+                text: "entreguei"
                 visible: backend.timerRunning && backend.currentTaskId !== ""
                 destacado: true
                 corAtiva: Theme.musgo
@@ -355,15 +472,15 @@ Window {
 
             BotaoSuave {
                 anchors.verticalCenter: parent.verticalCenter
-                text: backend.timerRunning ? "encerrar" : "começar"
-                // Deixa de ser o botão principal quando "terminei" está do lado:
-                // dois destaques lado a lado não destacam nada.
-                destacado: !backend.timerRunning || backend.currentTaskId === ""
-                corAtiva: backend.timerRunning ? Theme.musgo : Theme.ambar
+                text: backend.timerRunning ? "parar" : "começar"
+                // Deixa de ser o botão principal quando "entreguei" está do
+                // lado: dois destaques lado a lado não destacam nada.
+                destacado: !backend.timerRunning
+                corAtiva: backend.timerRunning ? Theme.texto : Theme.ambar
                 tamanho: backend.timerRunning ? Theme.miudo : Theme.corpo
                 onClicked: backend.timerRunning
                            ? backend.endSession(false, "")
-                           : backend.startSession("")
+                           : backend.startFocused()
             }
 
             BotaoSuave {
@@ -400,7 +517,12 @@ Window {
             BotaoSuave {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "o dia"
-                destacado: janela.aba === "dia"
+                destacado: janela.aba === "dia" || janela.aba === "semana"
+                // Dia já encerrado esverdeia o rótulo. É o mesmo verde da
+                // estante, e é tudo o que se pode dizer sobre isso sem virar
+                // marca de tarefa cumprida: não conta dias seguidos, não some
+                // amanhã como conquista perdida.
+                cor: backend.dayClosed ? Theme.musgo : Theme.textoSuave
                 onClicked: janela.alternar("dia")
             }
 
@@ -417,7 +539,7 @@ Window {
 
             // Tema, som, humor e a saída moram aqui.
             //
-            // Não é gosto por menu: com "terminei" a mais, a fileira de botões
+            // Não é gosto por menu: com "entreguei" a mais, a fileira de botões
             // passava da largura da janela. E são todos ajustes do ambiente, não
             // ações do dia — separá-los deixa na barra só o que se usa o tempo
             // todo.
@@ -425,8 +547,52 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "o quarto"
                 destacado: janela.menuAberto
-                onClicked: janela.menuAberto = !janela.menuAberto
+                onClicked: {
+                    seletor.aberto = false
+                    janela.menuAberto = !janela.menuAberto
+                }
             }
+        }
+    }
+
+    // --------------------------------------------- o que vem agora (seletor)
+
+    // Fecha ao clicar fora, como o menu do quarto.
+    MouseArea {
+        anchors.fill: parent
+        enabled: seletor.aberto
+        onClicked: seletor.aberto = false
+    }
+
+    SeletorTarefa {
+        id: seletor
+        // Nomeado para `tools/simular_uso.py` procurar só aqui dentro: os
+        // rótulos das tarefas aparecem em três lugares na tela ao mesmo tempo.
+        objectName: "seletor"
+        anchors.left: parent.left
+        anchors.leftMargin: 24
+        anchors.bottom: barra.top
+        anchors.bottomMargin: aberto ? 10 : -6
+
+        tarefas: backend.today
+        escolhida: backend.focusedTaskId
+        livre: backend.freeSessionChosen
+
+        Behavior on anchors.bottomMargin {
+            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+        }
+
+        onEscolher: function (taskId) {
+            backend.setFocusedTask(taskId)
+            aberto = false
+        }
+    }
+
+    // Uma sessão que começa fecha a escolha: ela já foi feita.
+    Connections {
+        target: backend
+        function onTimerChanged() {
+            if (backend.timerRunning) seletor.aberto = false
         }
     }
 
@@ -704,17 +870,34 @@ Window {
         }
     }
 
-    // Ctrl+Shift+C também funciona com a janela em foco, sem depender do
-    // atalho global do sistema.
+    // Ctrl+Shift+I também funciona com a janela em foco, sem depender do
+    // atalho global do sistema. "I" de ideia.
     Shortcut {
-        sequences: ["Ctrl+Shift+C"]
+        sequences: ["Ctrl+Shift+I"]
         onActivated: captura.aberta = true
+    }
+
+    // Espaço começa e para a sessão sem tirar a mão do teclado.
+    //
+    // Só com o quarto limpo, e a condição é essa mesma e não "o campo de texto
+    // não está em foco": todo painel deste app tem um campo de escrita dentro,
+    // e um atalho que às vezes come a barra de espaço no meio de uma frase é
+    // pior do que não existir.
+    Shortcut {
+        sequence: "Space"
+        enabled: janela.aba === "" && !captura.aberta && !saida.aberta
+        onActivated: backend.timerRunning
+                     ? backend.endSession(false, "")
+                     : backend.startFocused()
     }
 
     Shortcut {
         sequence: "Escape"
         onActivated: {
             if (captura.aberta) captura.aberta = false
+            else if (saida.aberta) saida.aberta = false
+            else if (seletor.aberto) seletor.aberto = false
+            else if (janela.menuAberto) janela.menuAberto = false
             else janela.aba = ""
         }
     }

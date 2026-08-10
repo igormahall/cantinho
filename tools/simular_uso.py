@@ -79,6 +79,7 @@ from cantinho.services import scene
 
 TAREFAS = ["revisar o capítulo 3", "responder o orientador", "comprar café"]
 IDEIA = "trocar a fonte do editor"
+CORRIGIDA = "responder o orientador amanhã"
 
 SAIDA = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 if SAIDA:
@@ -245,6 +246,11 @@ def achar_escala(rotulo):
     raise LookupError(f"não achei a escala {rotulo!r}")
 
 
+def no_seletor(texto, **kwargs):
+    """Procura só dentro da lista de "o que vem agora"."""
+    return achar(texto, raiz=achar_por_nome("seletor"), **kwargs)
+
+
 def na_gaveta(texto, **kwargs):
     """Procura só dentro do painel lateral.
 
@@ -290,7 +296,7 @@ def comecar_sessao():
 @passo
 def encerrar_sessao():
     print("-- encerra pela barra de baixo")
-    clicar(na_barra("encerrar"))
+    clicar(na_barra("parar"))
     checar(not backend.timerRunning, "o timer parou")
     checar(len(backend.todaySessions) == 1, "a sessão apareceu no dia")
 
@@ -316,8 +322,8 @@ def concluir_tarefa():
 
 @passo
 def capturar_ideia():
-    print("-- Ctrl+Shift+C e escreve uma ideia")
-    QTest.keyClick(principal, Qt.Key_C, Qt.ControlModifier | Qt.ShiftModifier)
+    print("-- Ctrl+Shift+I e escreve uma ideia")
+    QTest.keyClick(principal, Qt.Key_I, Qt.ControlModifier | Qt.ShiftModifier)
     QTest.qWait(500)
     clicar(achar_campo("escreva e aperte Enter"))
     digitar(IDEIA)
@@ -372,7 +378,7 @@ def terminar_pela_barra():
     clicar(na_gaveta("começar", perto_de_y=centro(linha).y(), max_y=560))
     checar(backend.timerRunning, "a sessão começou")
 
-    clicar(na_barra("terminei"))
+    clicar(na_barra("entreguei"))
     checar(not backend.timerRunning, "a sessão foi encerrada")
     checar(len(backend.shelf) == antes + 1, "e a tarefa foi para a estante")
     checar(
@@ -383,13 +389,61 @@ def terminar_pela_barra():
 
 
 @passo
+def escolher_o_que_vem_agora():
+    """O botão grande da barra tem que pegar uma tarefa, não o vazio.
+
+    Antes ele abria sempre uma sessão livre: o tempo era gravado sem dono, o
+    "entreguei" nem aparecia, e prender o timer a uma tarefa só era possível
+    mirando a palavra "começar" dentro da linha certa do painel "hoje".
+    """
+    print("-- escolhe a tarefa pelo seletor e começa pelo botão da barra")
+    alvo = backend.backlog[1]["label"]
+    checar(
+        backend.focusedTaskLabel == backend.backlog[0]["label"],
+        "sem escolher nada, o foco é o topo do hoje",
+    )
+
+    clicar(achar("▾", perto_de_y=principal.height() - 40))
+    clicar(no_seletor(alvo))
+    checar(backend.focusedTaskLabel == alvo, f"o foco passou para {alvo!r}")
+
+    clicar(na_barra("começar"))
+    checar(backend.timerRunning, "a sessão começou pelo botão da barra")
+    checar(backend.currentTaskLabel == alvo, "e ficou presa à tarefa escolhida")
+    clicar(na_barra("parar"))
+    checar(not backend.timerRunning, "e para sem concluir a tarefa")
+    checar(
+        alvo in [t["label"] for t in backend.backlog],
+        "a tarefa continua na lista",
+    )
+
+
+@passo
+def renomear_tarefa():
+    """Corrigir o texto sem arquivar e reescrever."""
+    print("-- corrige o texto de uma tarefa")
+    clicar(na_barra("hoje"))
+    linha = na_gaveta(TAREFAS[1])
+    clicar(na_gaveta("editar", perto_de_y=centro(linha).y(), max_y=560))
+    QTest.qWait(200)
+    digitar(CORRIGIDA)
+    QTest.keyClick(principal, Qt.Key_Return)
+    QTest.qWait(400)
+    rotulos = [t["label"] for t in backend.backlog]
+    checar(CORRIGIDA in rotulos, f"o rótulo virou {CORRIGIDA!r}")
+    checar(TAREFAS[1] not in rotulos, "e o texto antigo saiu da lista")
+    clicar(na_barra("hoje"))
+
+
+@passo
 def som_pelo_menu():
     print("-- gira os três estados de som pelo menu do quarto")
     clicar(na_barra("o quarto"))
+    # O app abre em "sussurro": o quarto calado, a interface respondendo.
     for rotulo, esperado in (
-        ("ambiente e toques", "sussurro"),
         ("só os toques", "mudo"),
         ("nenhum", "tudo"),
+        ("ambiente e toques", "sussurro"),
     ):
         clicar(achar(rotulo))
         checar(backend.soundMode == esperado, f"passou para {esperado}")
@@ -510,8 +564,28 @@ def fechar_o_dia():
     foto("04_retrospectiva")
     # O menu do quarto já gravou humor e energia neste roteiro, então o painel
     # do dia oferece regravar em vez de guardar pela primeira vez.
-    clicar(achar("guardar de novo"))
+    clicar(achar("encerrar de novo"))
     checar(backend.todayReview is not None, "a retrospectiva foi guardada")
+
+
+@passo
+def ver_a_semana():
+    """O calendário da parede abre a semana."""
+    print("-- abre a semana pelo calendário e navega para trás")
+    clicar(achar_por_nome("calendario"))
+    checar(principal.property("aba") == "semana", "a semana abriu")
+    checar(backend.weekDelivered >= 2, "as entregas de hoje estão lá")
+    foto("08_semana")
+
+    clicar(achar("‹"))
+    checar(backend.weekOffset == 1, "voltou uma semana")
+    checar(backend.weekDelivered == 0, "e a semana passada está vazia")
+    clicar(achar("›"))
+    checar(backend.weekOffset == 0, "e volta para esta")
+    # "o dia" e "a semana" são duas abas do mesmo painel: o primeiro clique
+    # troca de aba, o segundo fecha a gaveta.
+    clicar(na_barra("o dia"))
+    clicar(na_barra("o dia"))
 
 
 @passo
@@ -548,17 +622,21 @@ def mini_janela():
 
 @passo
 def minimizar():
-    """Minimizar troca a janela pela mini em vez de largá-la na barra."""
+    """Minimizar minimiza, e só.
+
+    A versão anterior trocava a janela pela mini. O gesto de minimizar quer
+    dizer "sai da frente agora", e o app respondia pondo outra janela na
+    frente — sempre por cima de tudo, ainda por cima.
+    """
     print("-- minimiza a janela principal")
     principal.showMinimized()
     QTest.qWait(700)
-    checar(backend.miniVisible, "a mini tomou o lugar")
-    checar(not backend.mainVisible, "a principal saiu")
+    checar(not backend.miniVisible, "a mini não aparece sozinha")
 
-    backend.showMain()
+    principal.showNormal()
     QTest.qWait(700)
     checar(backend.mainVisible, "e volta ao normal ao reabrir")
-    checar(principal.visibility != 3, "sem reaparecer minimizada")
+    checar(principal.visibility != 3, "sem ficar minimizada")
 
 
 @passo
@@ -574,9 +652,10 @@ def conferir_o_log():
 
     esperado = {
         "task.created": 4,
-        "session.started": 2,
-        "session.ended": 2,
-        # Uma pelo círculo da lista, outra pelo "terminei" da barra.
+        "task.renamed": 1,
+        "session.started": 3,
+        "session.ended": 3,
+        # Uma pelo círculo da lista, outra pelo "entreguei" da barra.
         "task.completed": 2,
         "idea.captured": 1,
         "idea.promoted": 1,
@@ -586,8 +665,8 @@ def conferir_o_log():
     }
     checar(contagem == esperado, f"o log é exatamente {esperado}")
     checar(
-        [t.label for t in open_tasks(eventos)] == [TAREFAS[2], TAREFAS[1]],
-        "o backlog reconstruído mantém a ordem arrastada",
+        [t.label for t in open_tasks(eventos)] == [TAREFAS[2], CORRIGIDA],
+        "o backlog reconstruído mantém a ordem e o texto corrigido",
     )
     reidratadas = ideas(eventos)
     checar(

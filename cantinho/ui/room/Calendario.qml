@@ -3,15 +3,33 @@ import theme
 
 // Calendário do mês, pendurado na parede acima da estante.
 //
-// É calendário de parede, não seletor de data: não dá para clicar, não marca
-// prazo, não sabe de tarefa nenhuma. Ele só situa o dia dentro do mês — que é
-// o que um calendário de papel faz enquanto ninguém olha para ele.
+// Ele não é seletor de data: não marca prazo, não sabe de tarefa nenhuma e
+// **não marca os dias em que se trabalhou**. Isso viraria mapa de assiduidade,
+// que é exatamente o tipo de placar que o projeto recusa. Os números são
+// discretos e só o dia de hoje tem cor.
 //
-// Por isso os números do mês são discretos e só o dia de hoje tem cor. Marcar
-// dias trabalhados aqui viraria mapa de assiduidade, que é exatamente o tipo
-// de placar que o projeto recusa.
+// O que ele ganhou foi um clique, que abre a semana. É a leitura literal do
+// objeto: um calendário de parede é onde se olha para saber onde a semana está.
+// A folha inteira responde, com o mesmo destaque de hover do bilhete — nenhuma
+// célula é clicável sozinha, porque escolher um dia seria a tal seleção de data.
 FolhaDeParede {
     id: calendario
+
+    signal aberto()
+
+    destaque: area.containsMouse ? 1.0 : 0.0
+
+    MouseArea {
+        id: area
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onEntered: backend.sfx("toque")
+        onClicked: {
+            backend.sfx("clique")
+            calendario.aberto()
+        }
+    }
 
     // Medidas em unidades do viewBox da cena.
     readonly property real larguraBase: 212

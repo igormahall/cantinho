@@ -10,8 +10,9 @@ Item {
     property var concluidas: []
     property var revisao: null
     property int minutosDoDia: 0
+    property bool sessaoCorrendo: false
 
-    signal salvar(int humor, int energia, string nota)
+    signal encerrar(int humor, int energia, string nota)
 
     property int humor: revisao ? revisao.mood : 3
     property int energia: revisao ? revisao.energy : 3
@@ -151,11 +152,35 @@ Item {
                 placeholder: "alguma coisa que valha lembrar (opcional)"
             }
 
-            BotaoSuave {
-                text: raiz.revisao ? "guardar de novo" : "guardar o dia"
-                destacado: true
-                corAtiva: Theme.musgo
-                onClicked: raiz.salvar(raiz.humor, raiz.energia, nota.text)
+            // O gesto que faltava: um fim para o dia.
+            //
+            // Antes o botão só gravava a revisão e deixava a sessão correndo.
+            // Quem fechava o app em seguida perdia o tempo aberto, e quem
+            // esquecia o timer ligado voltava no dia seguinte com uma sessão de
+            // catorze horas — o limite conhecido do MVP, que aparecia
+            // justamente aqui. Encerrar o dia guarda o que estava correndo e
+            // fecha o diário, num movimento só.
+            Column {
+                width: parent.width
+                spacing: 4
+
+                BotaoSuave {
+                    text: raiz.revisao ? "encerrar de novo" : "encerrar o dia"
+                    destacado: true
+                    corAtiva: Theme.musgo
+                    tamanho: Theme.corpo
+                    onClicked: raiz.encerrar(raiz.humor, raiz.energia, nota.text)
+                }
+
+                Text {
+                    width: parent.width
+                    visible: raiz.sessaoCorrendo
+                    text: "a sessão em curso é guardada junto"
+                    color: Theme.textoSuave
+                    opacity: 0.8
+                    font.pixelSize: 11
+                    leftPadding: 10
+                }
             }
         }
     }

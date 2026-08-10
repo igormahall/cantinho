@@ -12,11 +12,16 @@ Item {
     property var tarefas: []
     property int limiteHoje: 5
     property string tarefaAtual: ""
+    // A escolhida para o próximo "começar". Vazia enquanto uma sessão corre —
+    // aí quem manda é `tarefaAtual`.
+    property string tarefaFoco: ""
 
     signal iniciar(string taskId)
     signal concluir(string taskId)
     signal arquivar(string taskId)
     signal reordenar(var ids)
+    signal focar(string taskId)
+    signal renomear(string taskId, string texto)
 
     // O modelo é reconstruído a partir do backend, exceto durante um arrasto:
     // reconstruir no meio do gesto faria o item sumir da mão do usuário.
@@ -110,6 +115,40 @@ Item {
                 Behavior on color { ColorAnimation { duration: 150 } }
 
                 HoverHandler { id: hover }
+
+                // Modo de correção do texto. Ver `abrirEdicao` mais abaixo.
+                property bool editando: false
+
+                function abrirEdicao() {
+                    edicao.text = model.label
+                    editando = true
+                    edicao.forceActiveFocus()
+                    edicao.selectAll()
+                }
+
+                function fecharEdicao(guardar) {
+                    if (!editando)
+                        return
+                    editando = false
+                    if (guardar)
+                        raiz.renomear(model.taskId, edicao.text)
+                }
+
+                // Marca da escolhida: um traço na margem, do lado de fora do
+                // texto. É a mesma informação que a barra de baixo mostra por
+                // extenso, e aqui ela precisa caber num item de 42 pixels sem
+                // virar botão nem caixa de seleção.
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 2
+                    height: 22
+                    radius: 1
+                    color: Theme.ambar
+                    opacity: model.taskId === raiz.tarefaAtual ? 1.0
+                             : (model.taskId === raiz.tarefaFoco ? 0.55 : 0)
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                }
 
                 Row {
                     anchors.fill: parent
@@ -209,18 +248,79 @@ Item {
                         }
                     }
 
+                    // A linha abre espaço para os botões só quando eles
+                    // aparecem.
+                    //
+                    // Com largura fixa, o espaço reservado às ações ficava
+                    // roubado o tempo todo e quase toda tarefa aparecia
+                    // cortada em "responder o e-mail do ...". Como as ações só
+                    // existem com o mouse em cima, o texto pode ocupar a linha
+                    // inteira enquanto ninguém está mirando nelas.
                     Column {
-                        width: parent.width - 130
+                        width: parent.width - (hover.hovered
+                                               || model.taskId === raiz.tarefaAtual
+                                               ? 170 : 40)
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 1
 
-                        Text {
+                        Behavior on width {
+                            NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
+                        }
+
+                        // O rótulo e a correção dele ocupam o mesmo lugar.
+                        //
+                        // Uma tarefa mal escrita não tinha conserto: dava para
+                        // arquivá-la e escrever outra, o que enche o log de
+                        // tarefa morta e perde o tempo já gasto nela. Corrigir
+                        // aqui é um evento novo (`task.renamed`), o id continua
+                        // o mesmo e o objeto que ela vai deixar na estante não
+                        // muda de desenho.
+                        Item {
                             width: parent.width
-                            text: model.label
-                            color: model.taskId === raiz.tarefaAtual ? Theme.ambar : Theme.texto
-                            font.pixelSize: Theme.corpo
-                            elide: Text.ElideRight
-                            Behavior on color { ColorAnimation { duration: 200 } }
+                            height: rotulo.implicitHeight + 2
+
+                            Text {
+                                id: rotulo
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: !cartao.editando
+                                text: model.label
+                                color: model.taskId === raiz.tarefaAtual ? Theme.ambar : Theme.texto
+                                font.pixelSize: Theme.corpo
+                                elide: Text.ElideRight
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                            }
+
+                            TextInput {
+                                id: edicao
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: cartao.editando
+                                color: Theme.texto
+                                font.pixelSize: Theme.corpo
+                                selectionColor: Qt.rgba(Theme.ambar.r, Theme.ambar.g,
+                                                        Theme.ambar.b, 0.35)
+                                selectedTextColor: Theme.texto
+                                clip: true
+
+                                onAccepted: cartao.fecharEdicao(true)
+                                // Clicar em qualquer outro lugar guarda o que
+                                // foi escrito. Perder a correção por ter
+                                // clicado fora seria pior que não ter editor.
+                                onActiveFocusChanged: if (!activeFocus) cartao.fecharEdicao(true)
+                                Keys.onEscapePressed: cartao.fecharEdicao(false)
+                            }
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 1
+                                visible: cartao.editando
+                                color: Theme.ambar
+                            }
                         }
 
                         Text {
@@ -241,7 +341,8 @@ Item {
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
-                    opacity: hover.hovered || model.taskId === raiz.tarefaAtual ? 1 : 0
+                    opacity: (hover.hovered || model.taskId === raiz.tarefaAtual)
+                             && !cartao.editando ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 180 } }
 
                     Text {
@@ -257,6 +358,23 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             enabled: model.taskId !== raiz.tarefaAtual
                             onClicked: raiz.iniciar(model.taskId)
+                        }
+                    }
+
+                    Item { width: 10; height: 1 }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "editar"
+                        font.pixelSize: 11
+                        color: corrigir.containsMouse ? Theme.ambar : Theme.textoSuave
+                        MouseArea {
+                            id: corrigir
+                            anchors.fill: parent
+                            anchors.margins: -6
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: cartao.abrirEdicao()
                         }
                     }
 
@@ -282,12 +400,25 @@ Item {
                     id: arraste
                     anchors.fill: parent
                     anchors.leftMargin: 30
-                    anchors.rightMargin: 96
+                    anchors.rightMargin: 140
                     cursorShape: Qt.OpenHandCursor
                     drag.target: cartao
                     drag.axis: Drag.YAxis
+                    // Enquanto o texto está sendo corrigido, o clique é do
+                    // campo: esta área fica por cima dele e engoliria o cursor.
+                    enabled: !cartao.editando
 
                     onPressed: raiz.arrastando = true
+
+                    // Clique sem arrasto escolhe a tarefa para o próximo
+                    // "começar". É o gesto mais barato da lista, e serve ao
+                    // caso mais comum: decidir o que vem agora sem começar
+                    // agora.
+                    onClicked: raiz.focar(model.taskId)
+
+                    // Duplo clique abre a correção do texto — o mesmo gesto de
+                    // renomear arquivo, no lugar onde o texto está.
+                    onDoubleClicked: cartao.abrirEdicao()
 
                     // A posição nova é calculada uma vez, ao soltar.
                     //

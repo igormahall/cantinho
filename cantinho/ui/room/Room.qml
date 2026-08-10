@@ -13,6 +13,7 @@ Item {
     property var shelf: []
 
     signal abrirHoje()
+    signal abrirSemana()
 
     // Coordenadas do viewBox dos SVGs. Serve para posicionar os efeitos por
     // cima do desenho quando a janela não está em 1:1.
@@ -150,9 +151,11 @@ Item {
     readonly property real eixoDireito: 912
 
     Calendario {
+        objectName: "calendario"
         unidade: quarto.escala
         x: quarto.cx(46)
         y: quarto.cy(quarto.topoParede)
+        onAberto: quarto.abrirSemana()
     }
 
     RelogioParede {

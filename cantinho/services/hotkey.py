@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["GlobalHotkey", "create_hotkey"]
 
-# MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, tecla C.
+# MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, tecla I.
 _MOD_CONTROL = 0x0002
 _MOD_SHIFT = 0x0004
 _MOD_NOREPEAT = 0x4000
-_VK_C = 0x43
+_VK_I = 0x49
 _WM_HOTKEY = 0x0312
 _HOTKEY_ID = 0xC0DE
 
@@ -53,7 +53,7 @@ class _NullHotkey(QObject):
 
 
 class _WindowsHotkey(QObject, QAbstractNativeEventFilter):
-    """Ctrl+Shift+C via RegisterHotKey.
+    """Ctrl+Shift+I via RegisterHotKey.
 
     O filtro de evento nativo é instalado na aplicação porque a mensagem
     WM_HOTKEY chega na fila da thread, não em uma janela específica — o atalho
@@ -73,15 +73,15 @@ class _WindowsHotkey(QObject, QAbstractNativeEventFilter):
 
         user32 = ctypes.windll.user32
         modificadores = _MOD_CONTROL | _MOD_SHIFT | _MOD_NOREPEAT
-        if not user32.RegisterHotKey(None, _HOTKEY_ID, modificadores, _VK_C):
+        if not user32.RegisterHotKey(None, _HOTKEY_ID, modificadores, _VK_I):
             # Outro programa já tomou a combinação. Não é motivo para derrubar
             # o app: só não vai existir captura global.
-            logger.warning("não foi possível registrar Ctrl+Shift+C")
+            logger.warning("não foi possível registrar Ctrl+Shift+I")
             return False
 
         QCoreApplication.instance().installNativeEventFilter(self)
         self._registered = True
-        logger.info("atalho global Ctrl+Shift+C registrado")
+        logger.info("atalho global Ctrl+Shift+I registrado")
         return True
 
     def nativeEventFilter(self, eventType, message):  # type: ignore[no-untyped-def]

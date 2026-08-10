@@ -29,6 +29,7 @@ __all__ = [
     "format_timestamp",
     "parse_timestamp",
     "task_created",
+    "task_renamed",
     "task_completed",
     "task_archived",
     "session_started",
@@ -144,6 +145,13 @@ KINDS: Mapping[str, _Spec] = {
     "task.created": _Spec(
         required={"id": _non_empty_str, "label": _non_empty_str},
         optional={"project": _non_empty_str},
+    ),
+    # Corrigir o texto de uma tarefa é um fato novo, não uma edição do
+    # `task.created` — que já está gravado e é imutável. O id é o mesmo, então
+    # o objeto que a tarefa deixa na estante não muda de desenho: ele vem do
+    # hash do id, não do rótulo.
+    "task.renamed": _Spec(
+        required={"id": _non_empty_str, "label": _non_empty_str},
     ),
     "task.completed": _Spec(required={"id": _non_empty_str}),
     "task.archived": _Spec(required={"id": _non_empty_str}),
@@ -308,6 +316,10 @@ def task_created(
         "task.created",
         {"id": id or new_id(), "label": label, "project": project},
     )
+
+
+def task_renamed(clock: Clock, device_id: str, *, id: str, label: str) -> Event:
+    return make_event(clock, device_id, "task.renamed", {"id": id, "label": label})
 
 
 def task_completed(clock: Clock, device_id: str, *, id: str) -> Event:

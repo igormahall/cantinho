@@ -31,8 +31,10 @@ __all__ = [
     "open_tasks",
     "today_tasks",
     "completed_tasks",
+    "completed_on",
     "sessions",
     "sessions_on",
+    "minutes_on",
     "focus_minutes_14d",
     "plant_stage",
     "shelf_objects",
@@ -172,7 +174,7 @@ def _index_tasks(events: Iterable[Event]) -> dict[str, Task]:
                 )
 
     for event in ordenados:
-        if event.kind not in ("task.completed", "task.archived"):
+        if event.kind not in ("task.completed", "task.archived", "task.renamed"):
             continue
         atual = tasks.get(event.payload["id"])
         if atual is None:
@@ -183,6 +185,10 @@ def _index_tasks(events: Iterable[Event]) -> dict[str, Task]:
             tasks[atual.id] = replace(atual, completed_at=event.occurred_at)
         elif event.kind == "task.archived" and atual.archived_at is None:
             tasks[atual.id] = replace(atual, archived_at=event.occurred_at)
+        elif event.kind == "task.renamed":
+            # Aqui o último vence, ao contrário do resto: renomear é correção,
+            # e corrigir duas vezes tem que valer a segunda.
+            tasks[atual.id] = replace(atual, label=event.payload["label"])
 
     return tasks
 
@@ -333,6 +339,25 @@ def sessions_on(events: Iterable[Event], day: date, tz: tzinfo) -> list[Session]
         if session.ended_at is not None
         and session.ended_at.astimezone(tz).date() == day
     ]
+
+
+def completed_on(events: Iterable[Event], day: date, tz: tzinfo) -> list[Task]:
+    """Tarefas concluídas em um dia do calendário local, em ordem de conclusão.
+
+    É a lista de entregas daquele dia — os objetos que entraram na estante. O
+    banco guarda UTC; o dia é o do usuário, então a conversão acontece aqui.
+    """
+    return [
+        task
+        for task in completed_tasks(events)
+        if task.completed_at is not None
+        and task.completed_at.astimezone(tz).date() == day
+    ]
+
+
+def minutes_on(events: Iterable[Event], day: date, tz: tzinfo) -> float:
+    """Minutos de sessão encerrada em um dia do calendário local."""
+    return sum(session.duration_minutes for session in sessions_on(events, day, tz))
 
 
 def ideas(events: Iterable[Event]) -> list[Idea]:
