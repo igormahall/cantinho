@@ -137,7 +137,9 @@ Window {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 0
-                    visible: janela.aba === "dia" || janela.aba === "semana"
+                    opacity: janela.aba === "dia" || janela.aba === "semana" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: 160 } }
 
                     BotaoSuave {
                         text: "o dia"
@@ -153,191 +155,224 @@ Window {
                 }
             }
 
-            // ------------------------------------------------- backlog
-
+            // Os quatro painéis ocupam o mesmo lugar e atravessam um pelo
+            // outro.
+            //
+            // Antes eram irmãos de uma Column, cada um aparecendo por `visible`
+            // — troca seca. Passava despercebido enquanto a gaveta só abria e
+            // fechava, e ficou evidente quando "o dia" e "a semana" viraram
+            // duas abas do mesmo painel: clicar de uma para a outra trocava a
+            // tela inteira num quadro.
+            //
+            // Empilhados e anexados por opacidade, a Column deixa de decidir a
+            // altura deles, que é por isso que a conta dos 90 pixels mudou de
+            // lugar em vez de sumir.
             Item {
+                id: conteudo
                 width: parent.width
                 height: parent.height - 90
-                visible: janela.aba === "backlog"
 
-                Backlog {
-                    id: listaBacklog
+                // ------------------------------------------------- backlog
+
+                Item {
                     anchors.fill: parent
-                    anchors.bottomMargin: 48
-                    tarefas: backend.backlog
-                    limiteHoje: backend.todayLimit
-                    tarefaAtual: backend.currentTaskId
-                    tarefaFoco: backend.timerRunning ? "" : backend.focusedTaskId
+                    opacity: janela.aba === "backlog" ? 1 : 0
+                    visible: opacity > 0.01
+                    // A entrada é a mesma para os quatro de propósito: eles
+                    // são o mesmo lugar da tela mostrando coisas diferentes,
+                    // e uma curva por painel leria como quatro telas soltas.
+                    Behavior on opacity {
+                        NumberAnimation { duration: 160 }
+                    }
 
-                    onIniciar: function (taskId) { backend.startSession(taskId) }
-                    onConcluir: function (taskId) { backend.completeTask(taskId) }
-                    onArquivar: function (taskId) { backend.archiveTask(taskId) }
-                    onReordenar: function (ids) { backend.reorderBacklog(ids) }
-                    onFocar: function (taskId) { backend.setFocusedTask(taskId) }
-                    onRenomear: function (taskId, texto) {
-                        backend.renameTask(taskId, texto)
+                    Backlog {
+                        id: listaBacklog
+                        anchors.fill: parent
+                        anchors.bottomMargin: 48
+                        tarefas: backend.backlog
+                        limiteHoje: backend.todayLimit
+                        tarefaAtual: backend.currentTaskId
+                        tarefaFoco: backend.timerRunning ? "" : backend.focusedTaskId
+
+                        onIniciar: function (taskId) { backend.startSession(taskId) }
+                        onConcluir: function (taskId) { backend.completeTask(taskId) }
+                        onArquivar: function (taskId) { backend.archiveTask(taskId) }
+                        onReordenar: function (ids) { backend.reorderBacklog(ids) }
+                        onFocar: function (taskId) { backend.setFocusedTask(taskId) }
+                        onRenomear: function (taskId, texto) {
+                            backend.renameTask(taskId, texto)
+                        }
+                    }
+
+                    CampoTexto {
+                        id: novaTarefa
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        placeholder: "o que você quer fazer?"
+                        onAceito: function (texto) {
+                            backend.addTask(texto)
+                            limpar()
+                        }
                     }
                 }
 
-                CampoTexto {
-                    id: novaTarefa
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    placeholder: "o que você quer fazer?"
-                    onAceito: function (texto) {
-                        backend.addTask(texto)
-                        limpar()
-                    }
-                }
-            }
+                // -------------------------------------------------- ideias
 
-            // -------------------------------------------------- ideias
-
-            Item {
-                width: parent.width
-                height: parent.height - 90
-                visible: janela.aba === "ideias"
-
-                Text {
-                    anchors.centerIn: parent
-                    width: parent.width - 30
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    visible: backend.ideas.length === 0
-                    text: "O mural está vazio.\nCtrl+Shift+I funciona de qualquer lugar."
-                    color: Theme.textoSuave
-                    font.pixelSize: Theme.corpo
-                    lineHeight: 1.4
-                }
-
-                // O mural.
-                //
-                // Uma ideia aproveitada não sai daqui: ela fica riscada, com a
-                // data em que virou tarefa. É o único lugar do app onde dá para
-                // ver de onde as coisas vieram — e uma ideia riscada é bem mais
-                // barata de manter do que uma lista que se esvazia e não conta
-                // mais nada.
-                //
-                // Some do mural só o que for descartado à mão, e mesmo isso é
-                // um evento novo no log, não um apagamento.
-                ListView {
+                Item {
                     anchors.fill: parent
-                    anchors.bottomMargin: 48
-                    spacing: 10
-                    clip: true
-                    model: backend.ideas
+                    opacity: janela.aba === "ideias" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity {
+                        NumberAnimation { duration: 160 }
+                    }
 
-                    delegate: Item {
-                        id: cartaz
-                        width: ListView.view.width
-                        height: linha.height + 10
+                    Text {
+                        anchors.centerIn: parent
+                        width: parent.width - 30
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        visible: backend.ideas.length === 0
+                        text: "O mural está vazio.\nCtrl+Shift+I funciona de qualquer lugar."
+                        color: Theme.textoSuave
+                        font.pixelSize: Theme.corpo
+                        lineHeight: 1.4
+                    }
 
-                        readonly property bool usada: modelData.used
+                    // O mural.
+                    //
+                    // Uma ideia aproveitada não sai daqui: ela fica riscada, com a
+                    // data em que virou tarefa. É o único lugar do app onde dá para
+                    // ver de onde as coisas vieram — e uma ideia riscada é bem mais
+                    // barata de manter do que uma lista que se esvazia e não conta
+                    // mais nada.
+                    //
+                    // Some do mural só o que for descartado à mão, e mesmo isso é
+                    // um evento novo no log, não um apagamento.
+                    ListView {
+                        anchors.fill: parent
+                        anchors.bottomMargin: 48
+                        spacing: 10
+                        clip: true
+                        model: backend.ideas
 
-                        HoverHandler { id: sobre }
+                        delegate: Item {
+                            id: cartaz
+                            width: ListView.view.width
+                            height: linha.height + 10
 
-                        // Pino: sobra da metáfora do mural, e serve para o olho
-                        // achar o começo de cada ideia.
-                        Rectangle {
-                            width: 5; height: 5; radius: 3
-                            y: 6
-                            color: cartaz.usada ? Theme.musgo : Theme.ambar
-                            opacity: cartaz.usada ? 0.45 : 0.8
+                            readonly property bool usada: modelData.used
+
+                            HoverHandler { id: sobre }
+
+                            // Pino: sobra da metáfora do mural, e serve para o olho
+                            // achar o começo de cada ideia.
+                            Rectangle {
+                                width: 5; height: 5; radius: 3
+                                y: 6
+                                color: cartaz.usada ? Theme.musgo : Theme.ambar
+                                opacity: cartaz.usada ? 0.45 : 0.8
+                            }
+
+                            Column {
+                                id: linha
+                                x: 14
+                                width: parent.width - 84
+                                spacing: 2
+
+                                Text {
+                                    width: parent.width
+                                    text: modelData.text
+                                    color: Theme.texto
+                                    opacity: cartaz.usada ? 0.45 : 1.0
+                                    font.pixelSize: Theme.corpo
+                                    font.strikeout: cartaz.usada
+                                    wrapMode: Text.WordWrap
+                                    Behavior on opacity { NumberAnimation { duration: 300 } }
+                                }
+                                Text {
+                                    text: cartaz.usada
+                                          ? modelData.when + " · virou tarefa"
+                                          : modelData.when
+                                    color: Theme.textoSuave
+                                    opacity: cartaz.usada ? 0.6 : 1.0
+                                    font.pixelSize: 11
+                                }
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                spacing: 0
+                                opacity: sobre.hovered ? 1 : 0
+                                visible: opacity > 0.01
+                                Behavior on opacity { NumberAnimation { duration: 180 } }
+
+                                BotaoSuave {
+                                    text: "virar tarefa"
+                                    visible: !cartaz.usada
+                                    onClicked: backend.ideaToTask(modelData.id)
+                                }
+
+                                BotaoSuave {
+                                    text: "×"
+                                    corAtiva: Theme.terracota
+                                    onClicked: backend.archiveIdea(modelData.id)
+                                }
+                            }
                         }
+                    }
 
-                        Column {
-                            id: linha
-                            x: 14
-                            width: parent.width - 84
-                            spacing: 2
-
-                            Text {
-                                width: parent.width
-                                text: modelData.text
-                                color: Theme.texto
-                                opacity: cartaz.usada ? 0.45 : 1.0
-                                font.pixelSize: Theme.corpo
-                                font.strikeout: cartaz.usada
-                                wrapMode: Text.WordWrap
-                                Behavior on opacity { NumberAnimation { duration: 300 } }
-                            }
-                            Text {
-                                text: cartaz.usada
-                                      ? modelData.when + " · virou tarefa"
-                                      : modelData.when
-                                color: Theme.textoSuave
-                                opacity: cartaz.usada ? 0.6 : 1.0
-                                font.pixelSize: 11
-                            }
-                        }
-
-                        Row {
-                            anchors.right: parent.right
-                            anchors.top: parent.top
-                            spacing: 0
-                            opacity: sobre.hovered ? 1 : 0
-                            visible: opacity > 0.01
-                            Behavior on opacity { NumberAnimation { duration: 180 } }
-
-                            BotaoSuave {
-                                text: "virar tarefa"
-                                visible: !cartaz.usada
-                                onClicked: backend.ideaToTask(modelData.id)
-                            }
-
-                            BotaoSuave {
-                                text: "×"
-                                corAtiva: Theme.terracota
-                                onClicked: backend.archiveIdea(modelData.id)
-                            }
+                    CampoTexto {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        placeholder: "o que passou pela cabeça?"
+                        onAceito: function (texto) {
+                            backend.captureIdea(texto)
+                            limpar()
                         }
                     }
                 }
 
-                CampoTexto {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    placeholder: "o que passou pela cabeça?"
-                    onAceito: function (texto) {
-                        backend.captureIdea(texto)
-                        limpar()
+                // ------------------------------------------- retrospectiva
+
+                Retrospectiva {
+                    anchors.fill: parent
+                    opacity: janela.aba === "dia" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity {
+                        NumberAnimation { duration: 160 }
+                    }
+                    sessoes: backend.todaySessions
+                    concluidas: backend.todayCompleted
+                    revisao: backend.todayReview
+                    minutosDoDia: backend.todayMinutes
+                    sessaoCorrendo: backend.timerRunning
+                    onEncerrar: function (humor, energia, nota) {
+                        backend.endDay(humor, energia, nota)
+                        janela.aba = ""
                     }
                 }
-            }
 
-            // ------------------------------------------- retrospectiva
+                // ------------------------------------------------- a semana
 
-            Retrospectiva {
-                width: parent.width
-                height: parent.height - 90
-                visible: janela.aba === "dia"
-                sessoes: backend.todaySessions
-                concluidas: backend.todayCompleted
-                revisao: backend.todayReview
-                minutosDoDia: backend.todayMinutes
-                sessaoCorrendo: backend.timerRunning
-                onEncerrar: function (humor, energia, nota) {
-                    backend.endDay(humor, energia, nota)
-                    janela.aba = ""
+                Semana {
+                    anchors.fill: parent
+                    opacity: janela.aba === "semana" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity {
+                        NumberAnimation { duration: 160 }
+                    }
+                    dias: backend.weekDays
+                    titulo: backend.weekTitle
+                    periodo: backend.weekRange
+                    entregas: backend.weekDelivered
+                    minutos: backend.weekMinutes
+                    recuo: backend.weekOffset
+                    onAnterior: backend.previousWeek()
+                    onSeguinte: backend.nextWeek()
                 }
-            }
-
-            // ------------------------------------------------- a semana
-
-            Semana {
-                width: parent.width
-                height: parent.height - 90
-                visible: janela.aba === "semana"
-                dias: backend.weekDays
-                titulo: backend.weekTitle
-                periodo: backend.weekRange
-                entregas: backend.weekDelivered
-                minutos: backend.weekMinutes
-                recuo: backend.weekOffset
-                onAnterior: backend.previousWeek()
-                onSeguinte: backend.nextWeek()
             }
         }
     }
