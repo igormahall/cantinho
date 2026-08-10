@@ -15,6 +15,24 @@ Item {
     signal abrirHoje()
     signal abrirSemana()
 
+    // O quarto acende em vez de aparecer.
+    //
+    // As cinco camadas do cenário são SVG rasterizado fora da thread da UI, e
+    // levam uns trezentos milissegundos. Até aqui elas entravam de estalo, uma
+    // a uma, sobre o fundo vazio — a única coisa no app que aparecia sem
+    // transição, e logo o quarto, que é a tela inteira.
+    //
+    // A trava é de uma vez só, de propósito. Ligar a opacidade direto em
+    // `status` faria o quarto apagar e reacender a cada mudança de
+    // `larguraFonte`, ou seja, sempre que a janela muda de tamanho — e ali não
+    // há nada a esconder, porque o Qt continua mostrando a imagem antiga
+    // enquanto rasteriza a nova.
+    property bool aceso: false
+    opacity: aceso ? 1 : 0
+    Behavior on opacity {
+        NumberAnimation { duration: 1100; easing.type: Easing.InOutQuad }
+    }
+
     // Coordenadas do viewBox dos SVGs. Serve para posicionar os efeitos por
     // cima do desenho quando a janela não está em 1:1.
     //
@@ -56,6 +74,10 @@ Item {
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
+
+        // A camada de baixo é a maior e a que sempre existe: quando ela fica
+        // pronta, há quarto o bastante para acender.
+        onStatusChanged: if (status === Image.Ready) quarto.aceso = true
     }
 
     Image {
@@ -113,7 +135,7 @@ Item {
             origin.y: quarto.cy(560)
             angle: 0
             RotationAnimation on angle {
-                running: true
+                running: Theme.movimento
                 loops: Animation.Infinite
                 from: -1.5
                 to: 1.5
@@ -190,7 +212,7 @@ Item {
 
         property real raio: quarto.px(230)
         SequentialAnimation on raio {
-            running: true
+            running: Theme.movimento
             loops: Animation.Infinite
             NumberAnimation { to: quarto.px(237); duration: 3100; easing.type: Easing.InOutSine }
             NumberAnimation { to: quarto.px(223); duration: 3100; easing.type: Easing.InOutSine }
@@ -225,7 +247,10 @@ Item {
         x: quarto.cx(424); y: quarto.cy(94)
         width: quarto.px(252); height: quarto.px(212)
         clip: true
-        opacity: Theme.noite ? 1 : 0
+        // Sai inteira com o quarto quieto, em vez de congelar: gota de chuva
+        // parada no ar não é chuva discreta, é desenho com defeito. Zerar a
+        // opacidade já para o sistema de partículas, que segue `visible`.
+        opacity: Theme.noite && Theme.movimento ? 1 : 0
         visible: opacity > 0.01
         Behavior on opacity { NumberAnimation { duration: Theme.transicao } }
 
@@ -266,7 +291,7 @@ Item {
         x: quarto.cx(400); y: quarto.cy(94)
         width: quarto.px(330); height: quarto.px(400)
         clip: true
-        opacity: Theme.noite ? 0 : 1
+        opacity: !Theme.noite && Theme.movimento ? 1 : 0
         visible: opacity > 0.01
         Behavior on opacity { NumberAnimation { duration: Theme.transicao } }
 
@@ -308,10 +333,14 @@ Item {
         opacity: 0.04
         smooth: false
 
+        // O grão continua na tela com o quarto quieto — ele é textura de
+        // filme, não movimento. O que para é o sorteio da semente, e é ele que
+        // custa: cada troca repinta a janela inteira, três mil vezes por
+        // expediente, com ou sem alguém olhando.
         property int seed: 1
         Timer {
             interval: 900
-            running: true
+            running: Theme.movimento
             repeat: true
             onTriggered: {
                 grao.seed = grao.seed % 6 + 1
