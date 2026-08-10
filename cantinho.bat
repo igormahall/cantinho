@@ -25,7 +25,7 @@ chcp 65001 >nul 2>&1
 
 rem A pasta do proprio script, e nao o diretorio atual. E o que faz funcionar
 rem tanto no duplo clique quanto chamado de outro lugar, e sobrevive a nomes de
-rem pasta com espaco e ponto ("5. Projetos").
+rem pasta com espaco e com ponto no nome.
 cd /d "%~dp0"
 
 set "VENV=.venv"
