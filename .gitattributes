@@ -9,6 +9,14 @@
 # LF nos dois lados. Python, Qt e o git do Windows leem LF sem reclamar.
 * text=auto eol=lf
 
+# A exceção: o cmd.exe é o único leitor deste repositório que não aceita LF.
+# Um .bat com quebra de linha do Unix chega a rodar, mas erra em `goto` para
+# rótulo no fim do arquivo e em bloco entre parênteses — falha de sintaxe em
+# script que parece certo, no sistema onde ele é o caminho de instalação.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
 # Binários gerados: normalizar corromperia o arquivo.
 *.png binary
 *.ico binary
