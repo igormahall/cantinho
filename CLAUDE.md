@@ -40,7 +40,33 @@ por conta própria. Sem isso, `python tools/x.py` falha com
 `ModuleNotFoundError: No module named 'cantinho'` mesmo rodando da raiz — que
 é justamente o que estas instruções mandam fazer.
 
-Windows (PowerShell), venv em `.venv/`:
+No Windows há um atalho para tudo isto, e é o caminho de instalação da máquina
+do trabalho — onde não há git, e o repositório chega como zip baixado à mão:
+
+```bat
+cantinho.bat                 :: menu, que é o que o duplo clique abre
+cantinho.bat instalar        :: cria o venv e instala as dependências
+cantinho.bat rodar           :: abre o app a partir do código
+cantinho.bat empacotar       :: pyinstaller -> dist\Cantinho\
+cantinho.bat atualizar       :: dependências + build com o cache limpo
+cantinho.bat portatil        :: o zip que passa pelo antivírus
+cantinho.bat testar          :: a suíte
+cantinho.bat refazer         :: apaga o venv e começa de novo
+```
+
+Ele é idempotente de propósito: o mesmo comando serve para instalar pela
+primeira vez e para atualizar depois de sobrescrever os arquivos. `atualizar`
+se distingue de `empacotar` por uma coisa só — apaga `build/cantinho` antes,
+porque o cache de análise do PyInstaller é confiável quase sempre, e "quase"
+é pouco quando os fontes foram trocados por baixo dele.
+
+O `.bat` é **ASCII puro e CRLF**, e o `.gitattributes` tem exceção para isso.
+O cmd.exe é o único leitor deste repositório que não aceita LF: com quebra de
+linha do Unix ele erra em `goto` para rótulo no fim do arquivo e em bloco entre
+parênteses, o que dá falha de sintaxe em script que parece certo — no sistema
+onde ele é justamente o caminho de instalação.
+
+Windows (PowerShell), venv em `.venv/`, para quem prefere na mão:
 
 ```powershell
 .venv\Scripts\Activate.ps1        # ou prefixar tudo com .venv\Scripts\python.exe
@@ -85,9 +111,10 @@ em cascata como se a interface estivesse quebrada. A ferramenta já força
 dá foco a um campo de texto continua não funcionando nesse estado.
 
 `tools/simular_uso.py` é o que cobre o QML — o pytest não cobre. Ele cria
-tarefa, roda sessão, conclui, arrasta, captura ideia e fecha o dia clicando de
-verdade; depois reabre o banco e confere o log evento por evento. Rode depois
-de mexer em qualquer `.qml`. Passe uma pasta como argumento para guardar as
+tarefa, escolhe o que vem agora, roda sessão, conclui, arrasta, corrige texto,
+captura ideia, abre a semana e fecha o dia clicando de verdade; depois reabre o
+banco e confere o log evento por evento. Rode depois de mexer em qualquer
+`.qml`. Passe uma pasta como argumento para guardar as
 capturas de cada etapa.
 
 Linux (casa) é o mesmo com `source .venv/bin/activate`.
@@ -140,7 +167,8 @@ git push              # antes de desligar
 
 ## Distribuição
 
-São dois empacotadores, para dois problemas diferentes.
+No Windows os dois saem por `cantinho.bat` (`empacotar` e `portatil`). São dois
+empacotadores, para dois problemas diferentes.
 
 - `cantinho.spec` (PyInstaller) → `dist/Cantinho/`, ~198 MB. É o build de casa.
 - `tools/empacotar_portatil.py` → `Cantinho-portatil-windows.zip`, ~235 MB
@@ -204,6 +232,7 @@ Regras invioláveis:
 
 ```
 task.created      {id, label, project?}
+task.renamed      {id, label}
 task.completed    {id}
 task.archived     {id}
 session.started   {id, task_id?}
@@ -217,6 +246,13 @@ day.review        {date, mood: int, energy: int, note?}
 
 Novos kinds são aditivos. Nunca renomeie ou remova um kind existente.
 
+`task.renamed` é a exceção que confirma a regra 2: corrigir o texto de uma
+tarefa não edita o `task.created`, que continua no log como foi escrito. Na
+projeção ele é o único caso em que **o último evento vence** — renomear é
+correção, e corrigir duas vezes tem que valer a segunda. O id não muda, então o
+objeto que a tarefa deixa na estante continua sendo o mesmo desenho: ele vem do
+hash do id, nunca do rótulo.
+
 ## Regras de gamificação
 
 - `foco_14d` = minutos de sessão concluída na janela móvel de 14 dias.
@@ -229,23 +265,31 @@ Novos kinds são aditivos. Nunca renomeie ou remova um kind existente.
 ## Camadas de UI
 
 1. **Backlog leve** — sem projetos aninhados, sem prazos. Lista arrastável.
-   "Hoje" limitado a 5 itens.
+   "Hoje" limitado a 5 itens. Clique escolhe a tarefa do próximo "começar";
+   duplo clique corrige o texto ali mesmo.
 2. **Vitrine de entregas** — concluir uma tarefa coloca um objeto na estante.
-   Esse é o feedback de progresso. Não existe outro.
+   Esse é o feedback de progresso imediato.
 3. **Mural de ideias** — atalho global, campo de texto, Enter, some. Zero
    categorização no momento da captura. Ideia aproveitada não sai do mural:
    fica riscada, com a data. Sai só o que for descartado à mão.
-4. **Timer** — vinculado a um item do backlog. É o motor de tudo.
+4. **Timer** — vinculado a um item do backlog. É o motor de tudo. A tarefa em
+   foco é derivada do backlog e escolhida na barra; o botão nunca abre sessão
+   sem dono por omissão.
 5. **Retrospectiva noturna** — montada automaticamente das sessões do dia. O
-   usuário só confirma e adiciona humor/energia.
+   usuário só confirma e adiciona humor/energia. "Encerrar o dia" fecha junto a
+   sessão que estiver correndo.
+5b. **A semana** — as entregas dia a dia, com navegação para trás. É o retorno
+   de médio prazo entre a estante (tudo, sem data) e o bilhete (hoje, some à
+   meia-noite). Sem barra, sem percentual, sem comparação entre dias.
 6. **Objetos de parede** — calendário do mês à esquerda, relógio analógico à
    direita, bilhete com a lista do dia embaixo dele. São cenário, não widget:
-   ficam atrás da luz do abajur, em opacidade baixa, retos, e o único que
-   responde a clique é o bilhete (abre a gaveta do "hoje"). O bilhete leva o
-   tempo de cada tarefa e o total do dia.
+   ficam atrás da luz do abajur, em opacidade baixa, retos. Dois respondem a
+   clique, cada um abrindo a sua leitura literal: o bilhete abre o "hoje", o
+   calendário abre a semana. O relógio não abre nada. O bilhete leva o tempo de
+   cada tarefa e o total do dia.
 7. **Menu do quarto** — luz, som, humor/energia e a saída do app. Não é gosto
-   por menu: com "terminei" na barra, a fileira de botões passava da largura da
-   janela, e esses são ajustes do ambiente, não ações do dia.
+   por menu: com "entreguei" na barra, a fileira de botões passava da largura
+   da janela, e esses são ajustes do ambiente, não ações do dia.
 
 ## Janelas
 
@@ -253,7 +297,7 @@ Uma `QQmlApplicationEngine`, dois `Window` QML ligados ao **mesmo** backend
 Python exposto como context property. Sem IPC, sem estado duplicado.
 
 - `Main.qml` — 1100x700, cena completa.
-- `Mini.qml` — ~340x120, `Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
+- `Mini.qml` — 300x112, `Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
   Qt.Tool`. Frameless exige drag manual via `DragHandler`.
 
 As duas são a mesma coisa em dois tamanhos e **nunca ficam visíveis juntas**.
@@ -261,9 +305,19 @@ As duas são a mesma coisa em dois tamanhos e **nunca ficam visíveis juntas**.
 bandeja. Ter as duas na tela era dois relógios contando o mesmo tempo, com a
 mini competindo com a janela que ela existe para substituir.
 
-Minimizar a principal traz a mini no lugar. Ao reaparecer, `Main.qml` desfaz o
-estado minimizado — sem isso a janela volta minimizada e "abrir" parece não ter
-funcionado.
+**Minimizar minimiza, e só.** A versão anterior trocava a janela pela mini, com
+o argumento de que o timer continuava visível num canto. Na prática o gesto
+quer dizer "sai da frente agora", e o app respondia pondo outra janela na
+frente — sempre por cima de tudo. Para chamar a mini existe o botão "mini". Ao
+reaparecer, `Main.qml` desfaz o estado minimizado — sem isso a janela volta
+minimizada e "abrir" pela bandeja parece não ter funcionado.
+
+A mini é o app reduzido ao gesto: ver o relógio, trocar de tarefa, encerrar.
+Três faixas empilhadas, e nenhuma sobrepondo a outra — antes o nome da tarefa
+ocupava a largura inteira com os botões ancorados por cima, e uma tarefa de nome
+comprido passava por baixo do botão. Ajuste não mora ali: o som tem duas
+posições (`toggleMute`, que devolve o estado anterior), e o ciclo de três
+estados, o tema e o humor ficam na janela grande.
 
 ## Temas
 
@@ -337,19 +391,25 @@ como a chuva e a poeira já saíram da cena uma vez.
 
 ```
 cantinho/
-  assets/    scenes/ plant/ audio/ icon/     (gerados ou desenhados, versionados)
-  docs/      quarto-noite.png quarto-tarde.png   (capturas do README)
-  build/     saída de ferramenta e cache, nada versionado
+  assets/       scenes/ plant/ audio/ icon/  (gerados ou desenhados, versionados)
+  docs/         quarto-{noite,tarde}.png     (capturas do README)
+                fabrica.md linux.md
+  build/        saída de ferramenta e cache, nada versionado
+  cantinho.bat  instalação e build no Windows (ASCII, CRLF)
   cantinho/
     main.py
-    core/      events.py store.py projections.py clock.py
+    core/      events.py store.py projections.py clock.py schedule.py
     services/  timer.py audio.py hotkey.py tray.py scene.py single_instance.py
                graphics.py desktop_entry.py
     ui/        Main.qml Mini.qml theme/ room/ panels/
   tests/
   tools/     check_svg.py simular_uso.py semear.py gerar_{audio,icone,capturas}.py
-             instalar_atalho.py
+             instalar_atalho.py empacotar_portatil.py
 ```
+
+Painéis: `Backlog`, `Retrospectiva`, `Semana`, `SeletorTarefa` e os quatro
+elementos de base (`Painel`, `BotaoSuave`, `CampoTexto`, `EscalaPontos`,
+`LinhaMenu`).
 
 `core/clock.py` é injetável. Sem isso, nada que dependa da janela de 14 dias é
 testável.
@@ -389,7 +449,38 @@ Todas deliberadas, todas com motivo:
   existe porque as duas pontas não davam conta: quem está numa chamada não quer
   chuva tocando, mas continua querendo o retorno do clique. A preferência vive
   só na sessão: `events` é a única tabela persistida, e "liguei o som" não é
-  fato do histórico.
+  fato do histórico. **O padrão de abertura é `sussurro`**
+  (`DEFAULT_SOUND_MODE`): o ambiente é a única coisa aqui que ocupa a sala sem
+  ninguém ter pedido, e quem abre o app numa mesa compartilhada levaria chuva
+  tocando até achar onde desligar. A música é escolha de quem quer companhia.
+- **Os três fins de sessão têm nomes que não se confundem.** Eram "terminei" e
+  "encerrar" lado a lado — a mesma palavra dita de dois jeitos, e ninguém sabia
+  qual fechava a tarefa. Cada botão diz agora o que acontece com ela:
+  `entreguei` (vai para a estante), `parar` (continua na lista) e
+  `fui interrompido` (idem, marcado assim no diário). "Entreguei" é o verbo da
+  estante, que é a vitrine de entregas.
+- **A tarefa em foco** (`focusedTaskId`) é o que o botão "começar" pega. Antes
+  ele abria sempre sessão livre: o tempo era gravado sem dono, o "entreguei" nem
+  aparecia, e prender o timer a uma tarefa exigia mirar a palavra "começar"
+  dentro da linha certa do painel "hoje" — um gesto escondido dentro de outro.
+  O foco **não é estado persistido**: é derivado do backlog, vazio significa "a
+  primeira do hoje", e sessão livre continua disponível como escolha explícita
+  na lista do seletor. Se o app fechar, o foco volta a ser o topo da lista, que
+  é o que a lista já diz.
+- **"Encerrar o dia" fecha a sessão aberta junto.** O botão só gravava a
+  revisão e deixava o relógio correndo; quem fechava o app em seguida perdia o
+  tempo aberto, e quem esquecia o timer ligado voltava no dia seguinte com uma
+  sessão de catorze horas — o limite conhecido do MVP aparecendo justamente
+  onde havia um botão para evitá-lo.
+- **O calendário da parede abre a semana.** Ele continua sem marcar os dias
+  trabalhados — isso viraria mapa de assiduidade —, mas ganhou um clique, que é
+  a leitura literal do objeto: um calendário de parede é onde se olha para saber
+  onde a semana está. A folha inteira responde; nenhuma célula é clicável
+  sozinha, porque escolher um dia seria seleção de data.
+- **A semana lista entregas, não minutos por dia.** Sete números em coluna são
+  um gráfico de barras disfarçado, e comparar ontem com hoje é exatamente o que
+  o projeto recusa. O único número é a soma no rodapé — a mesma conta que o
+  bilhete da parede já faz para um dia. Somar não cobra; comparar cobraria.
 - **`endSessionAndComplete` grava dois eventos, não um.** `session.ended` e
   `task.completed` continuam sendo fatos distintos no log; o que o botão
   "terminei" junta é o gesto. Antes eram dois movimentos em telas diferentes, e
@@ -453,8 +544,10 @@ Todas deliberadas, todas com motivo:
 - A estante comporta **12 objetos** (duas prateleiras, seis cada). A projeção
   guarda todos para sempre; é o desenho que lota. Passar disso pede arte nova.
 - Sessão é atribuída inteira ao instante em que terminou, sem teto. Timer
-  esquecido a noite toda vira oito horas de foco.
-- Atalho global só no Windows. No Linux `create_hotkey()` devolve um no-op.
+  esquecido a noite toda vira oito horas de foco. "Encerrar o dia" reduz o caso
+  comum, mas não é teto: quem não encerra continua exposto.
+- Atalho global só no Windows, em `Ctrl+Shift+I` ("I" de ideia). No Linux
+  `create_hotkey()` devolve um no-op.
 - No Linux o PySide6 do PyPI traz o Qt mas não as bibliotecas de sistema que
   ele carrega em runtime. Numa Ubuntu 22.04 limpa falta pelo menos
   `libxcb-cursor0`, e o sintoma é o plugin `xcb` não carregar. A lista está no
@@ -536,6 +629,7 @@ estala — e num som que fica horas tocando isso é insuportável.
 | F5 | Áudio local, ambiente, ciclo dia/noite | feito |
 | F6 | PyInstaller portable | feito, ~198 MB em `dist/Cantinho/` |
 | F7 | Parede viva, mural, reação de mouse | feito |
+| F8 | Foco da sessão, correção de tarefa, a semana | feito |
 
 Não pule fase. Não adiante arte. Se o modelo de eventos estiver errado,
 descobrir na F3 custa caro.
