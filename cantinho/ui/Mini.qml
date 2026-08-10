@@ -181,7 +181,7 @@ Window {
             // comum: quase toda sessão que acaba, acaba porque a tarefa acabou.
             BotaoSuave {
                 text: "parar"
-                visible: backend.timerRunning && backend.currentTaskId !== ""
+                mostrando: backend.timerRunning && backend.currentTaskId !== ""
                 corAtiva: Theme.texto
                 onClicked: backend.endSession(false, "")
             }

@@ -463,7 +463,7 @@ Window {
             BotaoSuave {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "entreguei"
-                visible: backend.timerRunning && backend.currentTaskId !== ""
+                mostrando: backend.timerRunning && backend.currentTaskId !== ""
                 destacado: true
                 corAtiva: Theme.musgo
                 tamanho: Theme.corpo
@@ -486,7 +486,7 @@ Window {
             BotaoSuave {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "fui interrompido"
-                visible: backend.timerRunning
+                mostrando: backend.timerRunning
                 corAtiva: Theme.terracota
                 onClicked: backend.endSession(true, "")
             }

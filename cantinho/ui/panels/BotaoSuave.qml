@@ -19,10 +19,35 @@ Item {
     property bool destacado: false
     property int tamanho: Theme.miudo
 
+    // Entra e sai em vez de piscar.
+    //
+    // `visible: false` num botão de barra é troca seca no controle mais usado
+    // do app: a cada sessão que começa, dois botões apareciam do nada e
+    // empurravam os vizinhos de lado. A fileira de ações do backlog já fazia
+    // certo, com opacidade; a barra não fazia.
+    //
+    // A largura anda junto com a opacidade, senão o buraco continua lá quando
+    // o botão some — e é a largura que faz o gesto ler como "o botão chegou"
+    // em vez de "algo apareceu por cima".
+    property bool mostrando: true
+
     signal clicked()
 
     implicitWidth: rotulo.implicitWidth + 20
     implicitHeight: rotulo.implicitHeight + 12
+
+    width: mostrando ? implicitWidth : 0
+    opacity: mostrando ? 1 : 0
+    // Some da conta do Row quando fecha de vez, senão sobra o espaçamento.
+    visible: width > 0.5
+    clip: width < implicitWidth
+
+    Behavior on width {
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+    }
+    Behavior on opacity {
+        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+    }
 
     // Cresce a partir do meio, senão o botão anda para o lado ao ser apontado.
     transformOrigin: Item.Center
