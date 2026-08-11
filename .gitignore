@@ -23,6 +23,12 @@ Cantinho-*.zip
 *.db-wal
 *.db-shm
 
+# O device_id mora ao lado do banco (core/store.py), então rodar com
+# `--db teste.db` da raiz deixa um aqui. O de verdade fica na pasta de dados do
+# sistema, junto do banco de verdade; este é o do descartável e versioná-lo
+# daria o mesmo device_id a todo clone.
+device_id
+
 # Editores. Configuração de IDE é preferência de máquina, e este repo vive em
 # duas.
 .vscode/
