@@ -7,6 +7,7 @@ chato possível — ele aparece no menu e simplesmente não abre nada.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,15 @@ def data_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.setattr("sys.platform", "linux")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     return tmp_path
+
+
+# A fixture finge o `sys.platform`, mas não dá para fingir o sistema de
+# arquivos: o `pathlib` já escolheu `WindowsPath` na importação, e o `chmod` do
+# Windows não tem bit de execução para ligar. O que estes três checam é
+# semântica POSIX de verdade — separador `/` e permissão —, então no Windows
+# eles falhariam mesmo com o código certo, que é o pior tipo de teste vermelho.
+# Os demais deste arquivo são texto e escrita de arquivo, e rodam nos dois.
+posix = pytest.mark.skipif(os.name != "posix", reason="depende de caminho e permissão POSIX")
 
 
 # ---------------------------------------------------------------- o conteúdo
@@ -45,6 +55,7 @@ def test_nao_carrega_o_db_de_teste_para_dentro_do_atalho(
     assert "descartavel" not in texto
 
 
+@posix
 def test_caminho_com_espaco_sai_citado(
     data_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -56,6 +67,7 @@ def test_caminho_com_espaco_sai_citado(
     assert '"/home/eu/uma pasta/.venv/bin/python"' in linha
 
 
+@posix
 def test_o_venv_sobrevive_ao_atalho(
     data_home: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -93,6 +105,7 @@ def test_instala_atalho_e_icone(data_home: Path) -> None:
     assert desktop_entry.icon_path().is_file()
 
 
+@posix
 def test_o_atalho_e_executavel(data_home: Path) -> None:
     """Sem o bit de execução o GNOME marca o atalho como não confiável."""
     desktop_entry.install()
