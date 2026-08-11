@@ -264,12 +264,29 @@ exit /b 0
 
 
 :avisar_admin
+rem Sao dois motivos, e o segundo custa mais caro que o primeiro.
+rem
 rem O PyInstaller 7 vai bloquear build como administrador, e o 6 ja reclama.
+rem
+rem E, com o token elevado, o Windows poe BUILTIN\Administradores como dono de
+rem todo diretorio criado, no lugar do usuario. Quem endurece a propria pasta
+rem com ACL sem heranca - o pytest faz isso no temp desde a versao 9 - concede
+rem o acesso por "direitos do proprietario", e o proprietario deixou de ser
+rem voce. Sai uma pasta que a sessao normal nao consegue nem ler nem apagar.
+rem
+rem O sintoma chega atrasado, e e isso que o torna caro: a execucao elevada
+rem passa, e a seguinte, normal, e que morre - a suite com WinError 5 na
+rem limpeza do temp, depois de todos os testes terem passado, e o portatil no
+rem shutil.rmtree que refaz a pasta antes de montar o pacote.
 net session >nul 2>&1
 if not errorlevel 1 (
     echo.
     echo  Aviso: este terminal esta como administrador. Nada aqui precisa
-    echo  disso, e o PyInstaller reclama. Prefira um terminal comum.
+    echo  disso. Alem de o PyInstaller reclamar, tudo o que for criado fica
+    echo  com o dono errado, e portatil\ e o temp do pytest passam a resistir
+    echo  a quem tentar apaga-los de uma sessao comum. Prefira um terminal
+    echo  comum. Se ja aconteceu, apague a pasta envenenada; se ela resistir,
+    echo  takeown /f ^<pasta^> /r /d S  e  icacls ^<pasta^> /reset /t
 )
 exit /b 0
 

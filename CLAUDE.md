@@ -40,6 +40,13 @@ por conta própria. Sem isso, `python tools/x.py` falha com
 `ModuleNotFoundError: No module named 'cantinho'` mesmo rodando da raiz — que
 é justamente o que estas instruções mandam fazer.
 
+Há um `pytest.ini`, e ele existe por uma linha só: `testpaths = tests`. Sem ela
+o pytest coleta a partir da raiz e desce em `portatil/`, que carrega um Python
+embeddable inteiro com o PySide6 dentro — a coleta morre lá antes de rodar um
+teste sequer. O `norecursedirs` cobre quem passa caminho na mão. Ele **não** é o
+`pyproject.toml` que não existe: não declara pacote nem mexe no `sys.path`, e
+quem põe a raiz no `sys.path` continua sendo o `python -m` rodado da raiz.
+
 No Windows há um atalho para tudo isto, e é o caminho de instalação da máquina
 do trabalho — onde não há git, e o repositório chega como zip baixado à mão:
 
@@ -131,6 +138,24 @@ que já existe para a frente e sai; bancos diferentes abrem em paralelo.
 Para rodar a suíte sem abrir janela: `$env:QT_QPA_PLATFORM="offscreen"`. Cuidado
 que nesse modo o Qt fica **sem nenhuma família de fonte** — texto vira tofu em
 screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
+
+No Windows a suíte dá **330 passados e 3 pulados**, e esse é o resultado certo,
+não uma suíte incompleta. Os três são de `test_desktop_entry.py` e dependem de
+semântica POSIX: barra `/` no `Exec=` e bit de execução no `.desktop`. A fixture
+finge o `sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação
+e o `chmod` do Windows não tem bit para ligar — eles falhariam com o código
+certo, que é o pior tipo de teste vermelho. No Ubuntu os 333 rodam.
+
+**Não rode nada disto num terminal elevado.** Com token de administrador o
+Windows põe `BUILTIN\Administradores` como dono de todo diretório criado, no
+lugar do usuário; o pytest 9 endurece o próprio temp com ACL sem herança, onde o
+acesso do usuário vem de "direitos do proprietário" — que deixou de ser você. O
+sintoma chega atrasado, e é isso que o torna caro: a execução elevada passa, e a
+**seguinte**, normal, é que morre. A suíte com `PermissionError: [WinError 5]`
+na limpeza do temp, depois de todos os testes terem passado; e o `portatil` no
+`shutil.rmtree` que refaz a pasta antes de montar o pacote. O `cantinho.bat`
+avisa em toda ação. Se já aconteceu, apague a pasta envenenada — e se ela
+resistir, `takeown /f <pasta> /r /d S` e `icacls <pasta> /reset /t`.
 
 `tools/gerar_capturas.py` semeia um banco temporário e fotografa os dois temas
 em `docs/`. As imagens do README são versionadas, e capturar à mão significa

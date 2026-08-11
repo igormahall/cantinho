@@ -3,6 +3,31 @@
 Três coisas que só aparecem aqui: bibliotecas de sistema que o Qt carrega em
 runtime, o Anaconda desligando o OpenGL, e o atalho na grade de aplicativos.
 
+## Trazer o que foi feito no Windows
+
+O código sincroniza pelo GitHub; **os bancos de evento não sincronizam nunca**,
+e nada aqui toca no seu log.
+
+```bash
+cd ~/Projetos/cantinho     # onde quer que o repositório esteja
+git pull --rebase
+pip install -r requirements-dev.txt   # com o venv ativado
+python -m pytest
+```
+
+O `pip install` não é opcional por hábito: o `.venv/` é por máquina e não é
+versionado, então uma dependência que mudou no outro sistema só chega aqui por
+ele. Ele é idempotente — sem mudança em `requirements*.txt`, não faz nada.
+
+Aqui a suíte dá os **333**. No Windows três pulam, porque testam barra `/` no
+`Exec=` e bit de execução no `.desktop`, que aquele sistema não tem como
+satisfazer nem com o código certo.
+
+Se o `git pull` acusar o repositório inteiro como modificado sem diferença real,
+foi a quebra de linha: o conserto é `git add --renormalize .`, não commitar o
+ruído. E se você mudou o repositório de pasta, `python tools/instalar_atalho.py
+--de-novo`, porque o `Exec=` guarda caminho absoluto.
+
 ## Bibliotecas de sistema
 
 O PySide6 do PyPI traz o Qt inteiro, mas não as bibliotecas de que o Qt depende

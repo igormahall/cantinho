@@ -123,7 +123,7 @@ Com o venv ativado:
 ```bash
 pip install -r requirements-dev.txt
 
-python -m pytest                # 333 testes, sem abrir janela
+python -m pytest                # 333 testes; no Windows 3 pulam, são de Linux
 python tools/simular_uso.py     # percorre a interface clicando de verdade
 python tools/check_svg.py       # rasteriza os SVGs em build/svg_check/
 python tools/semear.py          # banco descartável com duas semanas de uso
