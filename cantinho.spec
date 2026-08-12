@@ -1,9 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 """Build portable, onedir.
 
-Roda de pendrive, sem instalação e sem admin — que é a restrição da máquina do
-trabalho. Por isso onedir e não onefile: onefile desempacota em %TEMP% a cada
-abertura, o que é lento e costuma esbarrar em política de execução corporativa.
+Roda de pendrive, sem instalação e sem admin — que é a restrição da máquina
+onde ele precisa abrir. Por isso onedir e não onefile: onefile desempacota em
+%TEMP% a cada abertura, o que é lento e costuma esbarrar em política de
+execução.
 
 O build é feito em cada plataforma separadamente. Este spec serve aos dois, mas
 o artefato de um não serve ao outro.

@@ -11,7 +11,7 @@ rem      cantinho.bat instalar        cria o venv e instala as dependencias
 rem      cantinho.bat rodar           abre o app a partir do codigo
 rem      cantinho.bat empacotar       gera dist\Cantinho\
 rem      cantinho.bat atualizar       dependencias + build limpo, tudo de uma vez
-rem      cantinho.bat portatil        gera o zip que passa pelo antivirus
+rem      cantinho.bat portatil        gera o zip que roda sobre o Python oficial
 rem      cantinho.bat testar          roda a suite
 rem      cantinho.bat refazer         apaga o venv e comeca de novo
 rem
@@ -58,7 +58,7 @@ echo    1  instalar ou atualizar o ambiente ^(venv + dependencias^)
 echo    2  rodar o Cantinho a partir do codigo
 echo    3  gerar o executavel em dist\Cantinho\
 echo    4  atualizar tudo depois de sobrescrever os arquivos
-echo    5  gerar o pacote portatil ^(o que passa pelo antivirus da fabrica^)
+echo    5  gerar o pacote portatil ^(roda sobre o Python oficial^)
 echo    6  rodar os testes
 echo    7  refazer o ambiente do zero
 echo    0  sair
@@ -167,7 +167,7 @@ goto :fim_ok
 
 :portatil
 rem O empacotador que nao gera binario nenhum: monta o app sobre o python.exe
-rem oficial da PSF, que ja vem assinado. Existe porque o antivirus corporativo
+rem oficial da PSF, que ja vem assinado. Existe porque antivirus gerenciado
 rem apaga o executavel do PyInstaller - o bootloader dele e o mesmo binario em
 rem todo programa empacotado com ele, inclusive nos maliciosos.
 call :garantir_ambiente || goto :fim_erro
@@ -212,8 +212,8 @@ echo  conferindo as dependencias ...
 if errorlevel 1 (
     echo.
     echo  Falhou instalar as dependencias.
-    echo  Numa rede corporativa isso costuma ser proxy ou certificado; o
-    echo  arquivo docs\fabrica.md tem o que fazer nesse caso.
+    echo  Numa rede restrita isso costuma ser proxy ou certificado; o
+    echo  arquivo docs\windows.md tem o que fazer nesse caso.
     exit /b 1
 )
 exit /b 0

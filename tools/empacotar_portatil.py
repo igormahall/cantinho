@@ -10,8 +10,8 @@ todos os programas empacotados com PyInstaller no mundo, inclusive nos
 maliciosos — então os antivírus aprenderam a marcá-lo por semelhança, e um
 binário sem assinatura de editor não tem como contestar.
 
-Na prática: o V3 da fábrica apaga o `.exe` antes de ele abrir, e lá não há
-acesso de administrador ao antivírus para criar exceção.
+Na prática: numa máquina restrita, o antivírus gerenciado apaga o `.exe` antes
+de ele abrir, e não há acesso de administrador para criar exceção.
 
 Este empacotador contorna o problema pela raiz, não por exceção: em vez de
 gerar um executável novo e desconhecido, ele **reaproveita o `python.exe`

@@ -56,7 +56,7 @@ cantinho.bat instalar        :: cria o venv e instala as dependências
 cantinho.bat rodar           :: abre o app a partir do código
 cantinho.bat empacotar       :: pyinstaller -> dist\Cantinho\
 cantinho.bat atualizar       :: dependências + build com o cache limpo
-cantinho.bat portatil        :: o zip que passa pelo antivírus
+cantinho.bat portatil        :: o zip que roda sobre o Python oficial
 cantinho.bat testar          :: a suíte
 cantinho.bat refazer         :: apaga o venv e começa de novo
 ```
@@ -195,30 +195,32 @@ git push              # antes de desligar
 No Windows os dois saem por `cantinho.bat` (`empacotar` e `portatil`). São dois
 empacotadores, para dois problemas diferentes.
 
-- `cantinho.spec` (PyInstaller) → `dist/Cantinho/`, ~198 MB. É o build de casa.
+- `cantinho.spec` (PyInstaller) → `dist/Cantinho/`, ~198 MB. É o build para a
+  máquina onde se pode instalar o que quiser.
 - `tools/empacotar_portatil.py` → `Cantinho-portatil-windows.zip`, ~235 MB
-  descompactado. É o build da fábrica.
+  descompactado. É o build para máquina restrita.
 
-O segundo existe porque o antivírus corporativo (AhnLab V3) apaga o executável
-do PyInstaller, e lá não há administrador do antivírus para criar exceção. O
-bootloader do PyInstaller é o mesmo binário em todo programa empacotado com
-ele, inclusive nos maliciosos, e sem assinatura de editor não tem como se
-distinguir. Em vez de tentar contornar o efeito, o empacotador portátil remove
-a causa: monta o app sobre o `python.exe` oficial da PSF, que já vem assinado,
-e não constrói binário nenhum.
+O segundo existe porque antivírus gerenciado por política apaga o executável do
+PyInstaller, e nesse tipo de máquina não há como criar exceção. O bootloader do
+PyInstaller é o mesmo binário em todo programa empacotado com ele, inclusive
+nos maliciosos, e sem assinatura de editor não tem como se distinguir. Em vez
+de tentar contornar o efeito, o empacotador portátil remove a causa: monta o
+app sobre o `python.exe` oficial da PSF, que já vem assinado, e não constrói
+binário nenhum. O pacote fica auditável — que é o argumento para pedir
+liberação a quem administra, se ela for necessária.
 
 A poda do Qt no portátil compara nomes **em minúsculas**. A primeira versão
 comparava sensível a maiúsculas e deixou 83 MB de recurso do WebEngine para
 trás, porque o Qt escreve `Qt6WebEngine` na DLL e `qtwebengine` no `.pak`.
 
-Detalhes, instruções de instalação na máquina do trabalho e o que fazer se
-mesmo assim for bloqueado: `docs/fabrica.md`.
+Detalhes, instruções de instalação e o que fazer se mesmo assim for bloqueado:
+`docs/windows.md`.
 
 ## Contexto de uso (restrições reais)
 
-- **Trabalho**: Windows, rede corporativa restrita, sem internet externa
-  confiável. Roda `.exe` portable, sem instalação e sem admin. Uso diurno.
-- **Casa**: Ubuntu 22.04 (X11), uso noturno para doutorado e projetos paralelos.
+- **Windows**: máquina restrita, sem internet externa confiável. Roda portable,
+  sem instalação e sem admin. Uso diurno.
+- **Linux**: Ubuntu 22.04 (X11), uso noturno para doutorado e projetos paralelos.
 - **Os dois ambientes NUNCA sincronizam dados.** Bancos independentes.
 - Build é feito em cada plataforma separadamente (máquina dual-boot).
 - **Windows é a prioridade atual.** Linux vem depois.
@@ -426,7 +428,7 @@ a janela continua sendo uma noite de chuva, ela só para de se mexer.
 cantinho/
   assets/       scenes/ plant/ audio/ icon/  (gerados ou desenhados, versionados)
   docs/         quarto-{noite,tarde}.png     (capturas do README)
-                fabrica.md linux.md
+                windows.md linux.md desenvolvimento.md
   build/        saída de ferramenta e cache, nada versionado
   cantinho.bat  instalação e build no Windows (ASCII, CRLF)
   cantinho/
