@@ -77,7 +77,7 @@ Window {
                 color: backend.timerRunning ? Theme.ambar : Theme.textoSuave
                 font.pixelSize: 30
                 font.letterSpacing: 1
-                Behavior on color { ColorAnimation { duration: 300 } }
+                Behavior on color { ColorAnimation { duration: Theme.gesto } }
             }
 
             // Um botão principal por vez, e ele diz o que vai acontecer com a
@@ -121,12 +121,51 @@ Window {
             readonly property bool trocavel: !backend.timerRunning
                                              && backend.today.length > 1
 
+            // O toque do quarto, aqui, não é painel: não há onde pôr um.
+            //
+            // Ele toma emprestada a faixa do nome da tarefa por alguns
+            // segundos e devolve. Sem botões — os três fins de sessão estão a
+            // um centímetro dali, na própria mini, e repeti-los num retângulo
+            // de 300 pixels seria empilhar controle sobre controle.
+            property string toque: ""
+
+            Connections {
+                target: backend
+                function onNudged(frase) {
+                    linha.toque = frase
+                    relogioDoToque.restart()
+                }
+            }
+
+            Timer {
+                id: relogioDoToque
+                interval: 12000
+                onTriggered: linha.toque = ""
+            }
+
+            Text {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: linha.toque
+                color: Theme.ambar
+                font.pixelSize: Theme.miudo
+                elide: Text.ElideRight
+                opacity: linha.toque !== "" && backend.timerRunning ? 1 : 0
+                visible: opacity > 0.01
+                Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
+            }
+
             Text {
                 id: nome
                 anchors.left: parent.left
                 anchors.right: dica.left
                 anchors.rightMargin: 6
                 anchors.verticalCenter: parent.verticalCenter
+                // Sai de cena enquanto o quarto fala, e volta depois.
+                opacity: linha.toque !== "" && backend.timerRunning ? 0 : 1
+                visible: opacity > 0.01
+                Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
                 text: backend.timerRunning
                       ? (backend.currentTaskLabel !== ""
                          ? backend.currentTaskLabel : "sessão livre")
@@ -150,7 +189,7 @@ Window {
                 font.pixelSize: 10
                 color: Theme.textoSuave
                 opacity: linha.trocavel && trocar.containsMouse ? 0.9 : 0
-                Behavior on opacity { NumberAnimation { duration: 160 } }
+                Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
             }
 
             MouseArea {

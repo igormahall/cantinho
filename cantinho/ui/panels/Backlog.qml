@@ -112,7 +112,7 @@ Item {
                           : "transparent")
                 // Fora do "Hoje" o item existe, mas não pede atenção.
                 opacity: index < raiz.limiteHoje ? 1.0 : 0.5
-                Behavior on color { ColorAnimation { duration: 150 } }
+                Behavior on color { ColorAnimation { duration: Theme.reacao } }
 
                 HoverHandler { id: hover }
 
@@ -147,7 +147,7 @@ Item {
                     color: Theme.ambar
                     opacity: model.taskId === raiz.tarefaAtual ? 1.0
                              : (model.taskId === raiz.tarefaFoco ? 0.55 : 0)
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
                 }
 
                 Row {
@@ -186,7 +186,7 @@ Item {
                             border.width: 1.5
                             border.color: marcar.containsMouse ? Theme.musgo : Theme.textoSuave
                             scale: marcar.containsMouse ? 1.15 : 1.0
-                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                            Behavior on border.color { ColorAnimation { duration: Theme.reacao } }
                             Behavior on scale {
                                 NumberAnimation {
                                     duration: Theme.reacao
@@ -200,7 +200,7 @@ Item {
                                 width: 7; height: 7; radius: 4
                                 color: Theme.musgo
                                 opacity: marcar.containsMouse ? 1 : 0
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                Behavior on opacity { NumberAnimation { duration: Theme.reacao } }
                             }
 
                             // O anel que se abre ao concluir. Dura menos de meio
@@ -221,12 +221,12 @@ Item {
                                     NumberAnimation {
                                         target: onda; property: "scale"
                                         from: 1; to: 2.6
-                                        duration: 460; easing.type: Easing.OutCubic
+                                        duration: Theme.chegada; easing.type: Easing.OutCubic
                                     }
                                     NumberAnimation {
                                         target: onda; property: "opacity"
                                         from: 0.7; to: 0
-                                        duration: 460; easing.type: Easing.OutCubic
+                                        duration: Theme.chegada; easing.type: Easing.OutCubic
                                     }
                                 }
                             }
@@ -264,7 +264,7 @@ Item {
                         spacing: 1
 
                         Behavior on width {
-                            NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
+                            NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutQuad }
                         }
 
                         // O rótulo e a correção dele ocupam o mesmo lugar.
@@ -289,7 +289,7 @@ Item {
                                 color: model.taskId === raiz.tarefaAtual ? Theme.ambar : Theme.texto
                                 font.pixelSize: Theme.corpo
                                 elide: Text.ElideRight
-                                Behavior on color { ColorAnimation { duration: 200 } }
+                                Behavior on color { ColorAnimation { duration: Theme.gesto } }
                             }
 
                             TextInput {
@@ -343,7 +343,7 @@ Item {
                     spacing: 2
                     opacity: (hover.hovered || model.taskId === raiz.tarefaAtual)
                              && !cartao.editando ? 1 : 0
-                    Behavior on opacity { NumberAnimation { duration: 180 } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.reacao } }
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
@@ -446,7 +446,7 @@ Item {
         }
 
         displaced: Transition {
-            NumberAnimation { properties: "y"; duration: 180; easing.type: Easing.OutQuad }
+            NumberAnimation { properties: "y"; duration: Theme.gesto; easing.type: Easing.OutQuad }
         }
     }
 }

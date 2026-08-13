@@ -92,27 +92,95 @@ Item {
     }
 
     // ------------------------------------------------------------- estante
+    //
+    // O objeto novo **pousa** na prateleira, em vez de aparecer.
+    //
+    // Ele é o retorno central do app — a vitrine de entregas — e era a única
+    // coisa importante da tela que surgia de estalo: a lista mudava, o provedor
+    // rasterizava a camada de novo e a imagem trocava num quadro.
+    //
+    // A entrada é um crossfade entre a estante de antes e a de agora, e não um
+    // fade do objeto sozinho. Parece rodeio e é o contrário: as duas imagens
+    // são idênticas em tudo que já estava lá — é o que `shelf_slots` garante ao
+    // dar ao objeto k um lugar fixo —, então atravessar uma pela outra deixa a
+    // prateleira parada e só o objeto novo tem para onde ir, de ausente a
+    // presente. Nenhuma conta de posição sobe para cá, que é a regra da cena.
+    //
+    // Enquanto os slots eram repartidos pelo número de objetos, isto não
+    // funcionava: cada objeto aparecia nas duas posições ao mesmo tempo e a
+    // estante inteira ficava em exposição dupla por meio segundo.
+    //
+    // Terminada a entrada, a camada de baixo recebe a lista nova por baixo da
+    // de cima, que está opaca e desenha exatamente o mesmo. A troca não
+    // aparece.
 
-    Image {
-        anchors.fill: parent
-        source: "image://cena/estante/tarde/" + quarto.shelf.join(",")
-        sourceSize.width: quarto.larguraFonte
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-        smooth: true
-        visible: quarto.shelf.length > 0
+    // A lista já pousada, e a que está entrando. Iguais em repouso.
+    property string estantePousada: ""
+    property string estanteEntrando: ""
+    property real entradaEstante: 1
+    property bool estanteIniciada: false
+
+    onShelfChanged: {
+        var lista = quarto.shelf.join(",")
+
+        // A primeira lista é a do log recém-lido: o quarto abre como estava,
+        // sem reencenar as entregas todas.
+        if (!estanteIniciada) {
+            estanteIniciada = true
+            estantePousada = lista
+            estanteEntrando = lista
+            entradaEstante = 1
+            return
+        }
+
+        if (lista === estanteEntrando)
+            return
+
+        estanteEntrando = lista
+        entradaEstante = 0
+        chegadaNaEstante.restart()
     }
 
-    Image {
+    SequentialAnimation {
+        id: chegadaNaEstante
+        // `InOutSine` e não `OutCubic`: a curva de saída rápida põe o objeto a
+        // 60% da opacidade nos primeiros 120 ms e depois rasteja, o que lê como
+        // "apareceu e demorou a firmar". Pousar é o contrário — começa devagar.
+        NumberAnimation {
+            target: quarto; property: "entradaEstante"
+            to: 1; duration: Theme.chegada; easing.type: Easing.InOutSine
+        }
+        // Por baixo da camada de cima, que já está opaca: invisível.
+        ScriptAction { script: quarto.estantePousada = quarto.estanteEntrando }
+    }
+
+    // Uma estante inteira num tema. São quatro no total: a lista de antes e a
+    // de agora, em cada um dos dois temas.
+    component CamadaEstante: Image {
+        property string tema: "tarde"
+        property string lista: ""
+
         anchors.fill: parent
-        source: "image://cena/estante/noite/" + quarto.shelf.join(",")
+        source: "image://cena/estante/" + tema + "/" + lista
         sourceSize.width: quarto.larguraFonte
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
-        visible: quarto.shelf.length > 0
+        // Estante vazia não desenha nada: quem nunca entregou não tem camada.
+        visible: lista !== ""
+    }
+
+    CamadaEstante { tema: "tarde"; lista: quarto.estantePousada }
+    CamadaEstante { tema: "tarde"; lista: quarto.estanteEntrando; opacity: quarto.entradaEstante }
+
+    Item {
+        anchors.fill: parent
         opacity: Theme.noite ? 1 : 0
+        visible: opacity > 0.01
         Behavior on opacity { NumberAnimation { duration: Theme.transicao; easing.type: Easing.InOutQuad } }
+
+        CamadaEstante { tema: "noite"; lista: quarto.estantePousada }
+        CamadaEstante { tema: "noite"; lista: quarto.estanteEntrando; opacity: quarto.entradaEstante }
     }
 
     // -------------------------------------------------------------- planta
@@ -129,21 +197,33 @@ Item {
         asynchronous: true
         smooth: true
 
-        // Folhas balançando: ±1,5°, em torno do próprio vaso.
-        transform: Rotation {
-            origin.x: quarto.cx(944)
-            origin.y: quarto.cy(560)
-            angle: 0
-            RotationAnimation on angle {
-                running: Theme.movimento
-                loops: Animation.Infinite
-                from: -1.5
-                to: 1.5
-                duration: 5200
-                easing.type: Easing.InOutSine
-                onStopped: {}
+        // Folhas balançando: ±1,5°, em torno do próprio vaso. E, por cima
+        // disso, um balanço único quando a planta cresce — o mesmo eixo, uma
+        // vez só. A folhagem nova já entra por crossfade; o que faltava era o
+        // quarto registrar que alguma coisa aconteceu ali, sem número, sem
+        // brilho e sem confete.
+        transform: [
+            Rotation {
+                id: crescimento
+                origin.x: quarto.cx(944)
+                origin.y: quarto.cy(560)
+                angle: 0
+            },
+            Rotation {
+                origin.x: quarto.cx(944)
+                origin.y: quarto.cy(560)
+                angle: 0
+                RotationAnimation on angle {
+                    running: Theme.movimento
+                    loops: Animation.Infinite
+                    from: -1.5
+                    to: 1.5
+                    duration: 5200
+                    easing.type: Easing.InOutSine
+                    onStopped: {}
+                }
             }
-        }
+        ]
 
         Behavior on source {
             SequentialAnimation {
@@ -151,6 +231,40 @@ Item {
                 PropertyAction {}
                 NumberAnimation { target: planta; property: "opacity"; to: 1; duration: 1400 }
             }
+        }
+    }
+
+    // O balanço do crescimento. Vai e volta uma vez, devagar, e some.
+    //
+    // Segue `movimento` como o resto do cenário: o estágio pode virar sozinho
+    // — a janela de 14 dias desliza a qualquer hora, inclusive de madrugada com
+    // ninguém olhando —, e um quarto que se pediu quieto não se mexe por conta
+    // própria. Quem desligou o movimento continua vendo a folhagem trocar.
+    property bool plantaIniciada: false
+
+    onPlantStageChanged: {
+        // O primeiro valor é o do log recém-lido: o quarto abre como estava.
+        if (!plantaIniciada) {
+            plantaIniciada = true
+            return
+        }
+        if (Theme.movimento)
+            balancoDoCrescimento.restart()
+    }
+
+    SequentialAnimation {
+        id: balancoDoCrescimento
+        NumberAnimation {
+            target: crescimento; property: "angle"
+            to: -2.2; duration: 520; easing.type: Easing.OutSine
+        }
+        NumberAnimation {
+            target: crescimento; property: "angle"
+            to: 1.4; duration: 620; easing.type: Easing.InOutSine
+        }
+        NumberAnimation {
+            target: crescimento; property: "angle"
+            to: 0; duration: 700; easing.type: Easing.InOutSine
         }
     }
 

@@ -63,8 +63,26 @@ QtObject {
     // decoração do cômodo, não widget por cima dele.
     readonly property real opacidadeParede: 0.16
 
-    // Reação ao mouse. Curta o bastante para parecer resposta e não animação.
+    // Os quatro tempos do app, e a mesma regra das cores vale para eles: número
+    // de duração escrito à mão fora daqui é bug.
+    //
+    // Espalhados pelos arquivos havia 150, 160, 180, 200, 220, 240, 260 e 300 —
+    // oito valores para três intenções, cada um escolhido no dia em que aquela
+    // animação foi escrita. Ninguém percebe a diferença entre 150 e 160 numa
+    // tela; percebe, sim, quando dois painéis irmãos abrem em ritmos que não
+    // combinam.
+    //
+    //   reacao   — o mouse tocou em algo. Resposta, não animação.
+    //   gesto    — o usuário pediu: painel abrindo, foco mudando, escolha feita.
+    //   chegada  — algo entrou no quarto. O objeto na estante, a ideia no mural.
+    //   transicao — o cômodo inteiro mudando de hora.
+    //
+    // Os dois do meio não obedecem a `movimento`, e é de propósito: são
+    // consequência de um gesto, como a reação ao mouse. O que o quarto quieto
+    // desliga é o que se mexe sozinho.
     readonly property int reacao: 140
+    readonly property int gesto: 200
+    readonly property int chegada: 460
 
     Behavior on fundo      { ColorAnimation { duration: tema.transicao; easing.type: Easing.InOutQuad } }
     Behavior on superficie { ColorAnimation { duration: tema.transicao; easing.type: Easing.InOutQuad } }

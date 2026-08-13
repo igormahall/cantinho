@@ -26,7 +26,7 @@ Painel {
 
     opacity: aberto ? 1 : 0
     visible: opacity > 0.01
-    Behavior on opacity { NumberAnimation { duration: 160 } }
+    Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
 
     // Uma linha da escolha. Marca à esquerda, rótulo, nada mais.
     component Escolha: Item {
@@ -60,7 +60,7 @@ Painel {
             border.width: 1.2
             border.color: linha.marcada ? Theme.ambar : Theme.textoSuave
             opacity: linha.marcada ? 1.0 : 0.55
-            Behavior on color { ColorAnimation { duration: 180 } }
+            Behavior on color { ColorAnimation { duration: Theme.gesto } }
         }
 
         Text {

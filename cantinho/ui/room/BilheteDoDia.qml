@@ -107,7 +107,7 @@ FolhaDeParede {
                     border.color: feita ? Theme.musgo
                                   : (emCurso ? Theme.ambar : Theme.textoSuave)
                     opacity: feita ? 0.55 : 0.8
-                    Behavior on color { ColorAnimation { duration: 400 } }
+                    Behavior on color { ColorAnimation { duration: Theme.chegada } }
                 }
 
                 Text {
@@ -122,7 +122,7 @@ FolhaDeParede {
                     font.pixelSize: Math.round(12 * bilhete.unidade)
                     font.strikeout: feita
                     elide: Text.ElideRight
-                    Behavior on opacity { NumberAnimation { duration: 400 } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
                 }
 
                 // Alinhado à direita, para os números formarem uma coluna. Sem

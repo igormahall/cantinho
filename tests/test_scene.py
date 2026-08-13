@@ -55,10 +55,23 @@ def test_primeiros_tres_ficam_na_prateleira_de_cima() -> None:
     assert all(y == scene.SHELF_LEDGES[0] for _, y in scene.shelf_slots(3))
 
 
-def test_a_partir_do_quarto_usa_a_de_baixo() -> None:
-    alturas = [y for _, y in scene.shelf_slots(5)]
-    assert alturas.count(scene.SHELF_LEDGES[0]) == 3
+def test_a_de_cima_enche_antes_da_de_baixo() -> None:
+    alturas = [y for _, y in scene.shelf_slots(scene.SHELF_PER_LEDGE + 2)]
+    assert alturas.count(scene.SHELF_LEDGES[0]) == scene.SHELF_PER_LEDGE
     assert alturas.count(scene.SHELF_LEDGES[1]) == 2
+
+
+def test_objeto_ja_posto_nao_muda_de_lugar() -> None:
+    """A invariante da estante, e a razão de os slots serem fixos.
+
+    A primeira versão repartia a largura pelo número de objetos, então entregar
+    uma tarefa recolocava todas as outras: a prateleira inteira pulava, sem
+    transição, no instante em que a atenção estava nela.
+    """
+    for quantidade in range(1, scene.SHELF_CAPACITY):
+        antes = scene.shelf_slots(quantidade)
+        depois = scene.shelf_slots(quantidade + 1)
+        assert depois[:quantidade] == antes
 
 
 def test_lotacao_nao_e_ultrapassada() -> None:

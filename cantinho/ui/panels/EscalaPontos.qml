@@ -39,7 +39,7 @@ Item {
                 border.width: 1.5
                 border.color: (index + 1) <= escala.valor ? Theme.ambar : Theme.textoSuave
                 opacity: ponto.containsMouse ? 1 : 0.85
-                Behavior on color { ColorAnimation { duration: 160 } }
+                Behavior on color { ColorAnimation { duration: Theme.gesto } }
 
                 MouseArea {
                     id: ponto

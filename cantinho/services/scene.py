@@ -12,7 +12,6 @@ nenhuma conta de posição do lado da UI.
 from __future__ import annotations
 
 import logging
-import math
 import threading
 from pathlib import Path
 
@@ -85,33 +84,42 @@ def plant_path(stage: int) -> Path:
     return assets_dir() / "plant" / f"planta_{stage}.svg"
 
 
+def _todos_os_slots() -> list[tuple[float, float]]:
+    """As doze posições da estante, sempre as mesmas, da esquerda para a direita.
+
+    Seis por prateleira, a de cima primeiro.
+    """
+    passo = (SHELF_X_MAX - SHELF_X_MIN) / SHELF_PER_LEDGE
+    return [
+        (SHELF_X_MIN + (indice + 0.5) * passo, base_y)
+        for base_y in SHELF_LEDGES
+        for indice in range(SHELF_PER_LEDGE)
+    ]
+
+
+SHELF_SLOTS: tuple[tuple[float, float], ...] = tuple(_todos_os_slots())
+
+
 def shelf_slots(quantidade: int) -> list[tuple[float, float]]:
     """Posições `(centro_x, base_y)` para `quantidade` objetos.
 
-    As duas prateleiras se enchem de forma equilibrada: os três primeiros vão
-    para a de cima, os três seguintes para a de baixo, e daí em diante os
-    objetos se dividem entre as duas e vão se aproximando.
+    O objeto k fica no slot k, e é isso que importa aqui: **posição de objeto
+    não se mexe depois de ocupada.**
+
+    A primeira versão repartia a largura da prateleira pelo número de objetos,
+    para que eles ficassem sempre espalhados de ponta a ponta. Ficava bonito
+    parado e errado em movimento: entregar alguma coisa não punha um objeto na
+    estante, punha e **recolocava todos os outros**. De 10 para 11 objetos, os
+    de cima saíam de (99, 132, 165, 198, 231) para (96, 124, 151, 179, 206,
+    234) — a prateleira inteira dava um pulo, sem transição, no momento exato
+    em que a atenção estava nela.
+
+    O preço é que uma estante com poucas coisas fica agrupada à esquerda em vez
+    de espalhada. É o que acontece com uma estante de verdade: as coisas vão
+    entrando e ficam onde foram postas.
     """
     quantidade = max(0, min(quantidade, SHELF_CAPACITY))
-    if quantidade == 0:
-        return []
-
-    if quantidade <= 3:
-        por_prateleira = [quantidade, 0]
-    elif quantidade <= 6:
-        por_prateleira = [3, quantidade - 3]
-    else:
-        por_prateleira = [math.ceil(quantidade / 2), quantidade // 2]
-
-    posicoes: list[tuple[float, float]] = []
-    largura = SHELF_X_MAX - SHELF_X_MIN
-    for base_y, total in zip(SHELF_LEDGES, por_prateleira):
-        if total <= 0:
-            continue
-        passo = largura / total
-        for indice in range(total):
-            posicoes.append((SHELF_X_MIN + (indice + 0.5) * passo, base_y))
-    return posicoes
+    return list(SHELF_SLOTS[:quantidade])
 
 
 class _RendererCache:
@@ -431,6 +439,7 @@ class SceneImageProvider(QQuickImageProvider):
         `estatico/<tema>`
         `planta/<estagio>`
         `estante/<tema>/<obj_a,obj_b,...>`
+        `avatar/<estagio>`
 
     O QML cacheia por URL, então mudar o estágio da planta ou a lista de
     objetos já invalida a imagem sozinho.
@@ -443,6 +452,25 @@ class SceneImageProvider(QQuickImageProvider):
         partes = id.split("/")
         if partes[0] == "grao":
             imagem = render_grain(int(partes[1]) if len(partes) > 1 else 0)
+            if size is not None:
+                size.setWidth(imagem.width())
+                size.setHeight(imagem.height())
+            return imagem
+
+        # A planta como retrato, num quadrado — quem guia o passeio da primeira
+        # abertura. É o mesmo desenho do ícone do app, e de propósito: quem
+        # aprende o app com esta figura reconhece o programa na barra de tarefas
+        # depois. Não passa por `_target_size`, que preserva a proporção da
+        # cena; aqui o quadro é quadrado.
+        if partes[0] == "avatar":
+            lado = requestedSize.width() or requestedSize.height() or ICON_BASE
+            imagem = render_icon(int(partes[1]) if len(partes) > 1 else 0, lado)
+            imagem = imagem.scaled(
+                lado,
+                lado,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
             if size is not None:
                 size.setWidth(imagem.width())
                 size.setHeight(imagem.height())

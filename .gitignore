@@ -29,6 +29,11 @@ Cantinho-*.zip
 # daria o mesmo device_id a todo clone.
 device_id
 
+# Pelo mesmo motivo, a marca de vida (services/heartbeat.py). Ela só existe
+# enquanto uma sessão está correndo, e um arquivo destes sobrando significa que
+# o app morreu de pé — o que é informação da máquina, não do projeto.
+heartbeat
+
 # Editores. Configuração de IDE é preferência de máquina, e este repo vive em
 # duas.
 .vscode/

@@ -80,6 +80,7 @@ from cantinho.services import scene
 TAREFAS = ["revisar o capítulo 3", "responder o orientador", "comprar café"]
 IDEIA = "trocar a fonte do editor"
 CORRIGIDA = "responder o orientador amanhã"
+EXTRA = "resolver o e-mail do financeiro"
 
 SAIDA = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 if SAIDA:
@@ -156,6 +157,24 @@ def achar_campo(placeholder):
 def clicar(item, dx=0, dy=0):
     QTest.mouseClick(principal, Qt.LeftButton, Qt.NoModifier, centro(item) + QPoint(dx, dy))
     # Painel entra com animação. Procurar item antes dela terminar não acha nada.
+    QTest.qWait(350)
+
+
+def comecar_pelo_hoje(rotulo):
+    """Clica em "começar" na linha da tarefa, dentro da gaveta do "hoje".
+
+    Começar por ali manda a janela grande embora e deixa a mini — o gesto de
+    escolher na lista é o último antes de trabalhar, e o quarto inteiro na
+    frente depois disso teria que ser fechado à mão toda vez.
+
+    Como o roteiro continua clicando na janela grande, este helper confere a
+    troca e traz a principal de volta.
+    """
+    linha = na_gaveta(rotulo)
+    clicar(na_gaveta("começar", perto_de_y=centro(linha).y(), max_y=560))
+    checar(backend.miniVisible, "começar pelo hoje passou a bola para a mini")
+    checar(not backend.mainVisible, "e a janela grande saiu da frente")
+    backend.showMain()
     QTest.qWait(350)
 
 
@@ -251,6 +270,21 @@ def no_seletor(texto, **kwargs):
     return achar(texto, raiz=achar_por_nome("seletor"), **kwargs)
 
 
+def open_tasks_do_log():
+    """Os eventos que já estão em memória no backend."""
+    return backend._events
+
+
+def no_extra(texto, **kwargs):
+    """Procura só dentro do painel que pergunta o que mais se fechou junto.
+
+    Mesma razão do `na_gaveta`: o bilhete da parede mostra os mesmos rótulos e
+    vem antes na varredura. Aqui o erro é pior — o clique cai no véu atrás do
+    painel, que fecha a pergunta, e o passo seguinte não acha mais nada.
+    """
+    return achar(texto, raiz=achar_por_nome("extra"), **kwargs)
+
+
 def na_gaveta(texto, **kwargs):
     """Procura só dentro do painel lateral.
 
@@ -259,6 +293,54 @@ def na_gaveta(texto, **kwargs):
     o papel pendurado e a lista nunca recebe o clique.
     """
     return achar(texto, raiz=achar_por_nome("gaveta"), **kwargs)
+
+
+def no_passeio(texto, **kwargs):
+    """Procura só dentro do balão do passeio."""
+    return achar(texto, raiz=achar_por_nome("passeio"), **kwargs)
+
+
+@passo
+def fazer_o_passeio():
+    """A primeira abertura explica o quarto, e é a primeira coisa na tela.
+
+    Ele aparece porque o log está vazio — é esse o sinal de primeira abertura,
+    e não uma flag em disco. Como o banco desta simulação nasce vazio, o
+    passeio é literalmente a primeira coisa que o roteiro encontra, do mesmo
+    jeito que será para quem instalar.
+    """
+    print("\n-- percorre o passeio da primeira abertura")
+    checar(backend.showTour, "o passeio abriu sozinho no log vazio")
+    checar(achar_por_nome("passeio").isVisible(), "e está na tela")
+
+    antes = len(open_tasks_do_log())
+    voltas = 0
+    while not backend.showTour is False and voltas < 12:
+        try:
+            clicar(no_passeio("próximo"))
+        except LookupError:
+            break
+        voltas += 1
+    checar(voltas > 0, f"passou por {voltas} balões")
+
+    clicar(no_passeio("entendi"))
+    checar(not backend.showTour, "e o último botão fechou o passeio")
+    checar(
+        len(open_tasks_do_log()) == antes,
+        "o passeio não escreveu nada no log",
+    )
+
+
+@passo
+def rever_o_passeio():
+    """Ele some assim que a primeira coisa é escrita, mas não some para sempre."""
+    print("-- traz o passeio de volta pelo menu do quarto")
+    clicar(na_barra("o quarto"))
+    clicar(achar("ver de novo"))
+    checar(backend.showTour, "o menu trouxe o passeio de volta")
+
+    clicar(no_passeio("pular"))
+    checar(not backend.showTour, "e 'pular' fecha de qualquer passo")
 
 
 @passo
@@ -287,8 +369,7 @@ def escrever_tarefas():
 @passo
 def comecar_sessao():
     print("-- começa uma sessão pela primeira tarefa")
-    alvo = na_gaveta(TAREFAS[0])
-    clicar(na_gaveta("começar", perto_de_y=centro(alvo).y(), max_y=560))
+    comecar_pelo_hoje(TAREFAS[0])
     checar(backend.timerRunning, "o timer está rodando")
     checar(backend.currentTaskLabel == TAREFAS[0], "ligada à tarefa certa")
 
@@ -374,8 +455,7 @@ def terminar_pela_barra():
     alvo = backend.backlog[-1]["label"]
     antes = len(backend.shelf)
     clicar(na_barra("hoje"))
-    linha = na_gaveta(alvo)
-    clicar(na_gaveta("começar", perto_de_y=centro(linha).y(), max_y=560))
+    comecar_pelo_hoje(alvo)
     checar(backend.timerRunning, "a sessão começou")
 
     clicar(na_barra("entreguei"))
@@ -493,8 +573,7 @@ def botoes_da_barra_entram():
     print("-- os botões da sessão entram e saem por largura")
     alvo = backend.backlog[0]["label"]
     clicar(na_barra("hoje"))
-    linha = na_gaveta(alvo)
-    clicar(na_gaveta("começar", perto_de_y=centro(linha).y(), max_y=560))
+    comecar_pelo_hoje(alvo)
     clicar(na_barra("hoje"))
 
     entreguei = na_barra("entreguei")
@@ -700,6 +779,58 @@ def minimizar():
 
 
 @passo
+def toque_do_quarto():
+    """Duas horas correndo, e o quarto comenta.
+
+    A regra do limiar é do pytest; o que se confere aqui é a tira aparecendo na
+    tela e o botão dela encerrando a sessão de verdade. Esperar duas horas não
+    é opção, então o sinal é disparado à mão — é o backend falando com o QML
+    pelo mesmo caminho de sempre.
+    """
+    print("-- o quarto lembra que o relógio ficou correndo")
+    backend.startSession(backend.backlog[0]["id"])
+    QTest.qWait(200)
+
+    backend.nudged.emit("O relógio ainda está correndo.")
+    QTest.qWait(700)
+    tira = achar("O relógio ainda está correndo.")
+    checar(tira.isVisible(), "a tira do toque apareceu")
+
+    clicar(achar("parar", perto_de_y=centro(tira).y()))
+    checar(not backend.timerRunning, "e o botão dela encerrou a sessão")
+
+
+@passo
+def perguntar_pelo_extra():
+    """Depois de uma sessão longa, o que mais se fechou junto.
+
+    Uma hora raramente é uma coisa só: no meio dela chega o pedido urgente que
+    ninguém teve tempo de anotar antes de atender. O limiar é do pytest; aqui
+    se confere que a lista marca uma tarefa aberta e que o campo registra o que
+    nunca esteve na lista.
+    """
+    print("-- pergunta o que mais se fechou junto")
+    alvo = backend.today[0]["label"]
+    antes = len(backend.shelf)
+
+    backend.extraAsked.emit(75)
+    QTest.qWait(700)
+    checar(no_extra("foi um bom tempo por aqui").isVisible(), "a pergunta apareceu")
+
+    clicar(no_extra(alvo))
+    checar(len(backend.shelf) == antes + 1, "marcar na lista fecha a tarefa")
+
+    clicar(achar_campo("ou escreva o que apareceu no caminho"))
+    digitar(EXTRA)
+    QTest.keyClick(principal, Qt.Key_Return)
+    QTest.qWait(400)
+    checar(len(backend.shelf) == antes + 2, "e o que não estava na lista também")
+    checar(EXTRA in backend.todayCompleted, "com o texto que foi escrito")
+
+    clicar(no_extra("só isso"))
+
+
+@passo
 def conferir_o_log():
     print("\n-- reabre o banco do zero e confere o log")
     store.close()
@@ -711,12 +842,14 @@ def conferir_o_log():
         contagem[evento.kind] = contagem.get(evento.kind, 0) + 1
 
     esperado = {
-        "task.created": 4,
+        # A última nasce já concluída, pela pergunta do fim da sessão longa.
+        "task.created": 5,
         "task.renamed": 1,
-        "session.started": 4,
-        "session.ended": 4,
-        # Uma pelo círculo da lista, outra pelo "entreguei" da barra.
-        "task.completed": 2,
+        # A última é aberta só para o toque do quarto ter o que encerrar.
+        "session.started": 5,
+        "session.ended": 5,
+        # Círculo da lista, "entreguei" da barra, e as duas da pergunta.
+        "task.completed": 4,
         "idea.captured": 1,
         "idea.promoted": 1,
         "backlog.reordered": 1,
@@ -725,8 +858,8 @@ def conferir_o_log():
     }
     checar(contagem == esperado, f"o log é exatamente {esperado}")
     checar(
-        [t.label for t in open_tasks(eventos)] == [TAREFAS[2], CORRIGIDA],
-        "o backlog reconstruído mantém a ordem e o texto corrigido",
+        [t.label for t in open_tasks(eventos)] == [CORRIGIDA],
+        "o backlog reconstruído mantém o texto corrigido",
     )
     reidratadas = ideas(eventos)
     checar(
@@ -734,8 +867,8 @@ def conferir_o_log():
         "a ideia reconstruída continua no mural, aproveitada",
     )
     checar(
-        len(shelf_objects(eventos)) == 2,
-        "a estante reconstruída tem os dois objetos",
+        len(shelf_objects(eventos)) == 4,
+        "a estante reconstruída tem os quatro objetos",
     )
     relido.close()
 

@@ -160,12 +160,38 @@ def main(argv: list[str] | None = None) -> int:
     # Sair pela tela: a confirmação acontece no QML, aqui já é decisão tomada.
     backend.quitRequested.connect(app.quit)
 
+    # A sessão aberta é guardada em qualquer saída, e por isso a ligação é no
+    # `aboutToQuit` e não em cada botão: há três caminhos para fora daqui — o
+    # menu do quarto, o menu da bandeja logo abaixo, e fechar a última janela
+    # quando não há bandeja — e dois deles nunca passaram pelo backend. Sessão
+    # sem `session.ended` não conta em projeção nenhuma: o tempo sumia.
+    app.aboutToQuit.connect(backend.endOpenSession)
+
     bandeja = Tray(app)
     if bandeja.install(backend.plantStage):
         bandeja.openRequested.connect(backend.showMain)
         bandeja.miniToggleRequested.connect(backend.toggleMini)
         bandeja.quitRequested.connect(app.quit)
         backend.stateChanged.connect(lambda: bandeja.set_stage(backend.plantStage))
+
+        # O toque do quarto pela bandeja, e **só** com as duas janelas
+        # escondidas.
+        #
+        # Com janela na tela quem mostra a frase é o QML — a tira acima da barra
+        # ou, na mini, a faixa do nome da tarefa. Notificar junto seria a mesma
+        # frase duas vezes, uma delas fora do quarto.
+        #
+        # E é justamente com tudo escondido que o toque mais importa: app na
+        # bandeja com o relógio correndo é o retrato do timer esquecido, e aí
+        # não existe nenhuma superfície do app onde pôr um aviso. A notificação
+        # é o único caminho de volta que sobra, e clicar nela abre o quarto.
+        def _tocar_pela_bandeja(frase: str) -> None:
+            if not backend.on_tray:
+                return
+            if not bandeja.notify(frase):
+                logger.info("sem balão de notificação neste sistema")
+
+        backend.nudged.connect(_tocar_pela_bandeja)
     else:
         # Sem bandeja não há como reabrir a janela: fechar precisa encerrar.
         logger.info("sem bandeja: fechar a janela encerra o app")

@@ -83,6 +83,261 @@ Window {
         onClicked: janela.recolher()
     }
 
+    // ------------------------------------------------- sessão que ficou aberta
+
+    // O que sobra de uma queda: o app morreu sem gravar o fim de uma sessão.
+    //
+    // Sair pelo menu, pela bandeja ou fechando a janela já guarda o que estava
+    // correndo, então isto só aparece depois de falta de energia, sessão do
+    // sistema derrubada ou processo morto — raro, e por isso discreto: uma tira
+    // no alto, que não cobre nada e não pede resposta para o app funcionar.
+    //
+    // O aviso é informativo, não uma pergunta: a sessão **já foi guardada** na
+    // última marca de vida do app, que é o último instante em que ele estava
+    // comprovadamente rodando. Ver a recuperação em `backend.py`. O que sobra
+    // para decidir é só se você volta a trabalhar naquilo agora.
+    Painel {
+        id: recuperada
+
+        width: Math.min(520, parent.width - 48)
+        height: colunaRecuperada.height + 2 * Theme.espacoGrande
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: backend.hasRecoveredSession ? 24 : -height
+
+        opacity: backend.hasRecoveredSession ? 1 : 0
+        visible: opacity > 0.01
+
+        Behavior on y { NumberAnimation { duration: Theme.chegada; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
+
+        Column {
+            id: colunaRecuperada
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.espacoGrande
+            spacing: 6
+
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                color: Theme.texto
+                font.pixelSize: Theme.corpo
+                text: backend.recoveredLabel !== ""
+                      ? "O cantinho fechou sozinho com “" + backend.recoveredLabel
+                        + "” em andamento."
+                      : "O cantinho fechou sozinho com uma sessão em andamento."
+            }
+
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                lineHeight: 1.3
+                color: Theme.textoSuave
+                font.pixelSize: Theme.miudo
+                text: backend.recoveredMinutes > 0
+                      ? "Guardei até " + backend.recoveredUntil + ", que foi a última "
+                        + "vez que o app deu sinal — " + backend.recoveredMinutes
+                        + " min. Depois disso não dá para saber."
+                      : "Não deu tempo de guardar nada dessa sessão: o app não chegou "
+                        + "a dar sinal nenhum antes de fechar."
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: 4
+
+                BotaoSuave {
+                    text: "ok"
+                    onClicked: backend.dismissRecovered()
+                }
+
+                BotaoSuave {
+                    text: "continuar isso"
+                    mostrando: backend.recoveredTaskId !== ""
+                    destacado: true
+                    corAtiva: Theme.ambar
+                    tamanho: Theme.corpo
+                    onClicked: backend.continueRecovered()
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------ o que mais se fechou junto
+
+    // Depois de uma sessão longa, o app pergunta uma coisa só.
+    //
+    // Uma hora raramente é uma coisa só: no meio dela chega o pedido urgente,
+    // resolve-se o e-mail que travava outra pessoa, termina-se o que já estava
+    // quase pronto. Nada disso vira entrega, porque o gesto de registrar
+    // acontece no fim da sessão e a essa altura já se esqueceu.
+    //
+    // A pergunta oferece crédito por trabalho já feito, e é isso que a separa
+    // de cobrança: "só isso" fecha sem custo nenhum, e é a resposta que o
+    // Escape e o clique fora também dão.
+    //
+    // Aceita mais de uma resposta de propósito — em duas horas cabe mais de uma
+    // coisa —, então o painel fica aberto e a lista vai encurtando.
+    property int extraMinutos: 0
+
+    Connections {
+        target: backend
+        function onExtraAsked(minutos) {
+            janela.extraMinutos = minutos
+            extra.aberta = true
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: Qt.rgba(0, 0, 0, 0.45)
+        opacity: extra.aberta ? 1 : 0
+        visible: opacity > 0.01
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: extra.aberta = false
+        }
+    }
+
+    Painel {
+        id: extra
+        // Nomeado para `tools/simular_uso.py` procurar só aqui dentro: os
+        // rótulos das tarefas aparecem no bilhete da parede ao mesmo tempo, e
+        // um clique que erra o painel acerta o véu e o fecha.
+        objectName: "extra"
+        property bool aberta: false
+
+        width: 460
+        height: colunaExtra.height + 2 * Theme.espacoGrande
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: extra.aberta ? parent.height / 5 : parent.height / 5 - 16
+        opacity: extra.aberta ? 1 : 0
+        visible: opacity > 0.01
+
+        Behavior on y { NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
+
+        Column {
+            id: colunaExtra
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.espacoGrande
+            spacing: Theme.espaco
+
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                color: Theme.texto
+                font.pixelSize: Theme.titulo
+                text: "foi um bom tempo por aqui"
+            }
+
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                lineHeight: 1.3
+                color: Theme.textoSuave
+                font.pixelSize: Theme.miudo
+                text: "Fechou mais alguma coisa nesse meio-tempo? Vale o que não estava "
+                      + "na lista — o que apareceu no caminho conta igual."
+            }
+
+            // As tarefas abertas, para marcar as que também acabaram. Cada uma
+            // que se marca sai da lista, e o painel continua aberto.
+            Column {
+                width: parent.width
+                spacing: 2
+                visible: backend.today.length > 0
+
+                Repeater {
+                    model: backend.today
+
+                    delegate: Item {
+                        width: parent.width
+                        height: 30
+
+                        HoverHandler { id: sobreExtra }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -2
+                            radius: Theme.raio
+                            color: sobreExtra.hovered
+                                   ? Qt.rgba(Theme.borda.r, Theme.borda.g, Theme.borda.b, 0.45)
+                                   : "transparent"
+                            Behavior on color { ColorAnimation { duration: Theme.reacao } }
+                        }
+
+                        Rectangle {
+                            id: circuloExtra
+                            anchors.left: parent.left
+                            anchors.leftMargin: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 14; height: 14; radius: 7
+                            color: "transparent"
+                            border.width: 1.5
+                            border.color: sobreExtra.hovered ? Theme.musgo : Theme.textoSuave
+                            Behavior on border.color { ColorAnimation { duration: Theme.reacao } }
+                        }
+
+                        Text {
+                            anchors.left: circuloExtra.right
+                            anchors.leftMargin: 10
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.label
+                            color: Theme.texto
+                            font.pixelSize: Theme.corpo
+                            elide: Text.ElideRight
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onEntered: backend.sfx("toque")
+                            onClicked: {
+                                backend.sfx("entrega")
+                                backend.completeTask(modelData.id)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // E o que nunca esteve na lista. Nasce e é concluída no mesmo
+            // gesto: criar a tarefa para marcá-la em seguida faria a linha
+            // piscar no "hoje" no meio do caminho.
+            CampoTexto {
+                id: entradaExtra
+                width: parent.width
+                placeholder: "ou escreva o que apareceu no caminho"
+                onAceito: function (texto) {
+                    backend.addAndCompleteTask(texto)
+                    limpar()
+                }
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: 4
+
+                BotaoSuave {
+                    text: "só isso"
+                    destacado: true
+                    tamanho: Theme.corpo
+                    onClicked: extra.aberta = false
+                }
+            }
+        }
+
+        Keys.onEscapePressed: extra.aberta = false
+    }
+
     // ----------------------------------------------------- painel lateral
 
     // O painel fica no meio, por cima da janela do quarto — nunca por cima da
@@ -105,9 +360,9 @@ Window {
         visible: opacity > 0.01
 
         Behavior on anchors.topMargin {
-            NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic }
         }
-        Behavior on opacity { NumberAnimation { duration: 240 } }
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
 
         Column {
             anchors.fill: parent
@@ -140,7 +395,7 @@ Window {
                     spacing: 0
                     opacity: janela.aba === "dia" || janela.aba === "semana" ? 1 : 0
                     visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: 160 } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
 
                     BotaoSuave {
                         text: "o dia"
@@ -183,7 +438,7 @@ Window {
                     // são o mesmo lugar da tela mostrando coisas diferentes,
                     // e uma curva por painel leria como quatro telas soltas.
                     Behavior on opacity {
-                        NumberAnimation { duration: 160 }
+                        NumberAnimation { duration: Theme.gesto }
                     }
 
                     Backlog {
@@ -195,7 +450,21 @@ Window {
                         tarefaAtual: backend.currentTaskId
                         tarefaFoco: backend.timerRunning ? "" : backend.focusedTaskId
 
-                        onIniciar: function (taskId) { backend.startSession(taskId) }
+                        // Começar pelo "hoje" manda a janela grande embora e
+                        // deixa a mini.
+                        //
+                        // O gesto de escolher uma tarefa na lista é o último
+                        // que se faz antes de trabalhar; ficar com o quarto
+                        // inteiro na frente depois disso é ter que fechá-lo à
+                        // mão toda vez. A mini é o app reduzido ao relógio, que
+                        // é exatamente o que sobra de útil a partir daqui.
+                        //
+                        // O botão grande da barra não faz isto: lá o quarto já
+                        // está à vista e a escolha foi feita na própria barra.
+                        onIniciar: function (taskId) {
+                            backend.startSession(taskId)
+                            backend.showMini()
+                        }
                         onConcluir: function (taskId) { backend.completeTask(taskId) }
                         onArquivar: function (taskId) { backend.archiveTask(taskId) }
                         onReordenar: function (ids) { backend.reorderBacklog(ids) }
@@ -225,7 +494,7 @@ Window {
                     opacity: janela.aba === "ideias" ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity {
-                        NumberAnimation { duration: 160 }
+                        NumberAnimation { duration: Theme.gesto }
                     }
 
                     Text {
@@ -289,7 +558,7 @@ Window {
                                     font.pixelSize: Theme.corpo
                                     font.strikeout: cartaz.usada
                                     wrapMode: Text.WordWrap
-                                    Behavior on opacity { NumberAnimation { duration: 300 } }
+                                    Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
                                 }
                                 Text {
                                     text: cartaz.usada
@@ -307,7 +576,7 @@ Window {
                                 spacing: 0
                                 opacity: sobre.hovered ? 1 : 0
                                 visible: opacity > 0.01
-                                Behavior on opacity { NumberAnimation { duration: 180 } }
+                                Behavior on opacity { NumberAnimation { duration: Theme.reacao } }
 
                                 BotaoSuave {
                                     text: "virar tarefa"
@@ -343,7 +612,7 @@ Window {
                     opacity: janela.aba === "dia" ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity {
-                        NumberAnimation { duration: 160 }
+                        NumberAnimation { duration: Theme.gesto }
                     }
                     sessoes: backend.todaySessions
                     concluidas: backend.todayCompleted
@@ -363,7 +632,7 @@ Window {
                     opacity: janela.aba === "semana" ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity {
-                        NumberAnimation { duration: 160 }
+                        NumberAnimation { duration: Theme.gesto }
                     }
                     dias: backend.weekDays
                     titulo: backend.weekTitle
@@ -416,7 +685,7 @@ Window {
                 color: backend.timerRunning ? Theme.ambar : Theme.textoSuave
                 font.pixelSize: 30
                 font.letterSpacing: 1
-                Behavior on color { ColorAnimation { duration: 300 } }
+                Behavior on color { ColorAnimation { duration: Theme.gesto } }
             }
 
             Item {
@@ -455,7 +724,7 @@ Window {
                     font.pixelSize: 9
                     color: escolher.containsMouse ? Theme.ambar : Theme.textoSuave
                     opacity: parent.escolhivel ? 0.8 : 0
-                    Behavior on opacity { NumberAnimation { duration: 160 } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
                 }
 
                 MouseArea {
@@ -591,6 +860,116 @@ Window {
         }
     }
 
+    // ------------------------------------------------------ o toque do quarto
+
+    // Duas horas correndo, e o quarto comenta.
+    //
+    // Daí para cima o caso comum não é foco, é timer esquecido — e quem
+    // esqueceu não vai olhar o relógio por conta própria, que é justamente o
+    // problema. Volta de meia em meia hora, com outra frase, porque quem saiu
+    // da mesa às 19h50 não estava lá para ver o primeiro.
+    //
+    // O tom é o do resto do app: observação do quarto, não aviso de sistema.
+    // Nenhuma frase diz quanto tempo passou nem sugere que se devia estar
+    // trabalhando — o relógio da barra já mostra o número para quem quiser.
+    //
+    // Os três botões são as três saídas que fazem sentido a essa altura, e a
+    // razão de o toque existir: não é para informar, é para dar onde clicar.
+    property string toqueTexto: ""
+
+    Connections {
+        target: backend
+        function onNudged(frase) {
+            janela.toqueTexto = frase
+            toque.aberto = true
+            relogioDoToque.restart()
+        }
+    }
+
+    Timer {
+        id: relogioDoToque
+        interval: 12000
+        onTriggered: toque.aberto = false
+    }
+
+    Painel {
+        id: toque
+        property bool aberto: false
+
+        width: Math.min(430, parent.width - 48)
+        height: colunaToque.height + 2 * Theme.espacoGrande
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: barra.top
+        anchors.bottomMargin: aberto ? 14 : -10
+
+        // Some junto com a sessão: um lembrete sobre um relógio que já parou
+        // é o app falando sozinho.
+        opacity: aberto && backend.timerRunning ? 1 : 0
+        visible: opacity > 0.01
+
+        Behavior on anchors.bottomMargin {
+            NumberAnimation { duration: Theme.chegada; easing.type: Easing.OutCubic }
+        }
+        Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
+
+        Column {
+            id: colunaToque
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.espacoGrande
+            spacing: Theme.espaco
+
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                lineHeight: 1.3
+                text: janela.toqueTexto
+                color: Theme.texto
+                font.pixelSize: Theme.corpo
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: 4
+
+                BotaoSuave {
+                    text: "deixa correr"
+                    onClicked: toque.aberto = false
+                }
+
+                BotaoSuave {
+                    text: "encerrar o dia"
+                    corAtiva: Theme.terracota
+                    onClicked: {
+                        toque.aberto = false
+                        janela.aba = "dia"
+                    }
+                }
+
+                BotaoSuave {
+                    text: "parar"
+                    onClicked: {
+                        toque.aberto = false
+                        backend.endSession(false, "")
+                    }
+                }
+
+                BotaoSuave {
+                    text: "entreguei"
+                    mostrando: backend.currentTaskId !== ""
+                    destacado: true
+                    corAtiva: Theme.musgo
+                    tamanho: Theme.corpo
+                    onClicked: {
+                        toque.aberto = false
+                        backend.endSessionAndComplete()
+                    }
+                }
+            }
+        }
+    }
+
     // --------------------------------------------- o que vem agora (seletor)
 
     // Fecha ao clicar fora, como o menu do quarto.
@@ -615,7 +994,7 @@ Window {
         livre: backend.freeSessionChosen
 
         Behavior on anchors.bottomMargin {
-            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic }
         }
 
         onEscolher: function (taskId) {
@@ -655,9 +1034,9 @@ Window {
         visible: opacity > 0.01
 
         Behavior on anchors.bottomMargin {
-            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic }
         }
-        Behavior on opacity { NumberAnimation { duration: 180 } }
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
 
         Column {
             id: colunaMenu
@@ -757,6 +1136,25 @@ Window {
                 width: parent.width; height: 1; color: Theme.borda
             }
 
+            // O passeio da primeira abertura não some para sempre.
+            //
+            // Ele aparece sozinho enquanto o log está vazio, e some assim que
+            // a primeira coisa é escrita — o que é certo, mas deixaria quem
+            // dispensou cedo demais sem caminho de volta. Aqui está o caminho.
+            LinhaMenu {
+                width: parent.width
+                rotulo: "o passeio"
+                valor: "ver de novo"
+                onClicado: {
+                    janela.menuAberto = false
+                    backend.startTour()
+                }
+            }
+
+            Rectangle {
+                width: parent.width; height: 1; color: Theme.borda
+            }
+
             LinhaMenu {
                 width: parent.width
                 rotulo: "sair"
@@ -775,13 +1173,14 @@ Window {
     // Fechar a janela deixa o app na bandeja, o que é o comportamento certo mas
     // não dá jeito de encerrar de verdade sem ir até o ícone. A confirmação
     // existe porque a diferença entre "esconder" e "encerrar" não é óbvia: quem
-    // clica em sair esperando o primeiro perde a sessão que estiver correndo.
+    // clica em sair esperando o primeiro fecha o app inteiro. A sessão aberta,
+    // essa, é guardada de qualquer jeito — ver `endOpenSession` no backend.
     Rectangle {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.45)
         opacity: saida.aberta ? 1 : 0
         visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
 
         MouseArea {
             anchors.fill: parent
@@ -800,8 +1199,8 @@ Window {
         opacity: saida.aberta ? 1 : 0
         visible: opacity > 0.01
 
-        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 180 } }
+        Behavior on y { NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
 
         Column {
             id: colunaSaida
@@ -824,7 +1223,7 @@ Window {
                 color: Theme.textoSuave
                 font.pixelSize: Theme.miudo
                 text: backend.timerRunning
-                      ? "Tem uma sessão correndo. Sair agora não a guarda no diário."
+                      ? "Tem uma sessão correndo. Ela é guardada no diário antes de sair."
                       : "Nada se perde. Fechar a janela sozinha deixa o app na bandeja."
             }
 
@@ -858,7 +1257,7 @@ Window {
         color: Qt.rgba(0, 0, 0, 0.45)
         opacity: captura.aberta ? 1 : 0
         visible: opacity > 0.01
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
 
         MouseArea {
             anchors.fill: parent
@@ -877,8 +1276,8 @@ Window {
         opacity: captura.aberta ? 1 : 0
         visible: opacity > 0.01
 
-        Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on y { NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
 
         onAbertaChanged: {
             if (aberta) {
@@ -945,11 +1344,33 @@ Window {
     Shortcut {
         sequence: "Escape"
         onActivated: {
-            if (captura.aberta) captura.aberta = false
+            if (passeio.visible) backend.dismissTour()
+            else if (captura.aberta) captura.aberta = false
             else if (saida.aberta) saida.aberta = false
             else if (seletor.aberto) seletor.aberto = false
             else if (janela.menuAberto) janela.menuAberto = false
             else janela.aba = ""
         }
+    }
+
+    // ------------------------------------------------------------- o passeio
+
+    // Por cima de tudo, e por último no arquivo — que é o que garante isso sem
+    // precisar mexer em `z`. Na primeira abertura ele é a única coisa da tela
+    // que pede atenção; nas outras nem existe. Ver `showTour` no backend.
+    Passeio {
+        id: passeio
+        objectName: "passeio"
+        anchors.fill: parent
+
+        opacity: backend.showTour ? 1 : 0
+        visible: opacity > 0.01
+        Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
+
+        // Recomeçar do primeiro passo a cada vez que ele é chamado: quem pede
+        // "ver de novo" no menu quer o passeio, não o passo onde parou.
+        onVisibleChanged: if (visible) recomecar()
+
+        onFechar: backend.dismissTour()
     }
 }

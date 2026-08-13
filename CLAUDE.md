@@ -59,6 +59,7 @@ cantinho.bat atualizar       :: dependências + build com o cache limpo
 cantinho.bat portatil        :: o zip que roda sobre o Python oficial
 cantinho.bat testar          :: a suíte
 cantinho.bat refazer         :: apaga o venv e começa de novo
+cantinho.bat atalho          :: põe o Cantinho na Área de Trabalho
 ```
 
 Ele é idempotente de propósito: o mesmo comando serve para instalar pela
@@ -92,6 +93,7 @@ python tools/gerar_audio.py       # regera assets/audio/*.wav
 python tools/gerar_icone.py       # regera assets/icon/cantinho.{ico,png}
 python tools/gerar_capturas.py    # regera docs/quarto-*.png do README
 python tools/instalar_atalho.py   # atalho .desktop (Linux); --de-novo, --remover
+python tools/atalho_windows.py    # atalho na Área de Trabalho (Windows); --remover
 pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 python tools/empacotar_portatil.py      # pacote sobre o Python oficial
 ```
@@ -139,12 +141,12 @@ Para rodar a suíte sem abrir janela: `$env:QT_QPA_PLATFORM="offscreen"`. Cuidad
 que nesse modo o Qt fica **sem nenhuma família de fonte** — texto vira tofu em
 screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
 
-No Windows a suíte dá **330 passados e 3 pulados**, e esse é o resultado certo,
+No Windows a suíte dá **390 passados e 3 pulados**, e esse é o resultado certo,
 não uma suíte incompleta. Os três são de `test_desktop_entry.py` e dependem de
 semântica POSIX: barra `/` no `Exec=` e bit de execução no `.desktop`. A fixture
 finge o `sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação
 e o `chmod` do Windows não tem bit para ligar — eles falhariam com o código
-certo, que é o pior tipo de teste vermelho. No Ubuntu os 333 rodam.
+certo, que é o pior tipo de teste vermelho. No Ubuntu os 393 rodam.
 
 **Não rode nada disto num terminal elevado.** Com token de administrador o
 Windows põe `BUILTIN\Administradores` como dono de todo diretório criado, no
@@ -244,7 +246,11 @@ CREATE INDEX idx_events_time ON events(occurred_at);
 
 Regras invioláveis:
 
-1. `events` é a **única** tabela persistida. Nada mais vai a disco.
+1. `events` é a **única** tabela persistida. Nada mais vai a disco. Duas
+   exceções, ambas arquivos ao lado do banco e nenhuma delas estado: o
+   `device_id` e a marca de vida (`services/heartbeat.py`). Projeção continua
+   sendo função pura de `events`; a marca só decide *qual evento escrever* na
+   recuperação de queda, e é apagada assim que serve.
 2. Eventos são imutáveis. Só `INSERT`. Nunca `UPDATE`, nunca `DELETE`.
    Correção é um novo evento (ex.: `task.archived`), não uma edição.
 3. Backlog, sessões, estante, planta e histórico são **projeções** calculadas
@@ -288,6 +294,10 @@ hash do id, nunca do rótulo.
   explícita.** Some sozinho e volta rápido.
 - Estante: 1 objeto por `task.completed`. Tipo escolhido por hash determinístico
   do uuid da tarefa, para o quarto ser sempre o mesmo. Objetos são permanentes.
+- A posição também é permanente: o objeto k fica no slot k, seis por prateleira,
+  a de cima primeiro. Ver `shelf_slots`.
+- `mood` e `energy` valem de 1 a 5 (`MOOD_SCALE`), e a faixa é do contrato de
+  evento, não só do controle da tela.
 
 ## Camadas de UI
 
@@ -428,6 +438,7 @@ a janela continua sendo uma noite de chuva, ela só para de se mexer.
 cantinho/
   assets/       scenes/ plant/ audio/ icon/  (gerados ou desenhados, versionados)
   docs/         quarto-{noite,tarde}.png     (capturas do README)
+                instalar-no-windows.md      (o passo a passo para leigos)
                 windows.md linux.md desenvolvimento.md
   build/        saída de ferramenta e cache, nada versionado
   cantinho.bat  instalação e build no Windows (ASCII, CRLF)
@@ -435,14 +446,14 @@ cantinho/
     main.py
     core/      events.py store.py projections.py clock.py schedule.py
     services/  timer.py audio.py hotkey.py tray.py scene.py single_instance.py
-               graphics.py desktop_entry.py
+               graphics.py desktop_entry.py heartbeat.py
     ui/        Main.qml Mini.qml theme/ room/ panels/
   tests/
   tools/     check_svg.py simular_uso.py semear.py gerar_{audio,icone,capturas}.py
-             instalar_atalho.py empacotar_portatil.py
+             instalar_atalho.py atalho_windows.py empacotar_portatil.py
 ```
 
-Painéis: `Backlog`, `Retrospectiva`, `Semana`, `SeletorTarefa` e os quatro
+Painéis: `Backlog`, `Retrospectiva`, `Semana`, `SeletorTarefa`, `Passeio` e os quatro
 elementos de base (`Painel`, `BotaoSuave`, `CampoTexto`, `EscalaPontos`,
 `LinhaMenu`).
 
@@ -605,6 +616,123 @@ Todas deliberadas, todas com motivo:
   duas ferramentas que sobem Qt Quick (`simular_uso.py`, `gerar_capturas.py`);
   `check_svg.py` e `gerar_icone.py` não precisam, porque só usam
   `QPainter`/`QImage`.
+- **Sair guarda a sessão aberta**, e a ligação é no `aboutToQuit` da aplicação
+  (`endOpenSession`), não em cada botão. Há três caminhos para fora — o menu do
+  quarto, o menu da bandeja e fechar a última janela quando não há bandeja — e
+  dois nunca passavam pelo backend: o `session.started` ficava órfão, e sessão
+  sem fim não conta em projeção nenhuma. O tempo sumia inteiro numa saída
+  normal. É a mesma decisão que `endDay` já tomava.
+- **Nenhuma sessão fica aberta, nem depois de uma queda.** Falta de energia e
+  processo morto não avisam ninguém, e o `session.started` órfão não conta em
+  projeção nenhuma. Na abertura seguinte ele é fechado na **última marca de
+  vida** (`services/heartbeat.py`), que é o último instante em que o app
+  comprovadamente estava rodando — a única hora de término que não é chute.
+  Fechar "agora" daria catorze horas de foco a uma máquina que passou a noite
+  desligada; sem marca legível, a sessão fecha no próprio começo, porque zero
+  minuto é uma perda honesta e o contrário não é. Vai como `interrupted`, que é
+  o que aconteceu. O aviso na tela é informativo, não uma pergunta: o que havia
+  para gravar já foi gravado, e o que sobra é decidir se você volta àquilo
+  agora ("continuar isso" abre uma sessão nova, não retoma a velha).
+- **Começar pelo "hoje" troca a janela grande pela mini.** Escolher a tarefa na
+  lista é o último gesto antes de trabalhar; ficar com o quarto inteiro na
+  frente depois disso obriga a fechá-lo à mão toda vez. O botão grande da barra
+  **não** faz isso — lá o quarto já está à vista e a escolha foi feita na
+  própria barra.
+- **Sessão acima de `LONG_SESSION_MINUTES` (60) pergunta o que mais se fechou
+  junto.** Uma hora raramente é uma coisa só: no meio dela chega o pedido
+  urgente, resolve-se o e-mail que travava outra pessoa. Nada disso vira
+  entrega, porque o gesto de registrar acontece no fim e a essa altura já se
+  esqueceu. A pergunta aceita item da lista **e** texto livre
+  (`addAndCompleteTask`, que grava `task.created` + `task.completed` no mesmo
+  lote — criar para marcar em seguida faria a linha piscar no "hoje"). Não é
+  cobrança, e a diferença está na direção: ela oferece crédito por trabalho já
+  feito, e "só isso" fecha sem custo. Traz a janela grande de volta se preciso,
+  porque quem começou pelo "hoje" está na mini.
+- **`NUDGE_AFTER_MINUTES` (120), repetindo a cada 30.** Duas horas é mais do que
+  qualquer sessão conduzida de propósito; daí para cima o caso comum é timer
+  esquecido, e quem esqueceu não vai olhar o relógio sozinho. Insiste porque
+  quem saiu da mesa às 19h50 não estava lá para ver o primeiro aviso. As frases
+  (`NUDGES`) são observações do quarto, não avisos de sistema, e **nenhuma passa
+  de 36 caracteres** — na mini o toque ocupa a faixa do nome da tarefa, em 300
+  px, e elidir come justamente o fim, que é onde a frase diz alguma coisa. Há
+  teste. Os botões do toque são a razão de ele existir: não é para informar, é
+  para dar onde clicar.
+- **Com as duas janelas escondidas, o toque sai pela bandeja** (`Tray.notify`,
+  ligado em `main.py` e só nesse caso — com janela na tela quem mostra a frase é
+  o QML, e notificar junto seria a mesma frase duas vezes). É a exceção ao "não
+  introduzir notificação de cobrança", e ela se justifica pela direção: o aviso
+  pede para **parar**, não para trabalhar, e app na bandeja com o relógio
+  correndo é exatamente o retrato do timer esquecido — o estado onde não existe
+  nenhuma superfície do app para pôr um aviso.
+- **No Linux a notificação não passa pelo Qt.** `QSystemTrayIcon.showMessage`
+  entrega a mensagem ao GNOME — ela entra na lista, o ponto acende ao lado do
+  relógio — mas **não abre banner nenhum**. Medido nas duas pontas com a fila
+  vazia. Como o aviso existe para alcançar quem não está olhando para o app,
+  chegar só na lista é o mesmo que não chegar, então `Tray.notify` fala com
+  `org.freedesktop.Notifications` por `gdbus`, em melhor-esforço, e só cai no
+  caminho do Qt se isso falhar — que é o caminho certo no Windows, onde vira
+  torrada da Central de Ações. Por `QtDBus` não dá: `Notify` pede `replaces_id`
+  como uint32 e o PySide6 converte todo `int` para int32, sem como marcar o
+  tipo. A dica `desktop-entry` põe a planta no balão e faz o clique ativar o
+  atalho, que cai na trava de instância única e traz a janela para a frente.
+- **O que depende da data se atualiza sozinho** (`_reavaliar_relogio`, de minuto
+  em minuto, no mesmo timer que já reavaliava o tema). O app fica aberto a noite
+  toda e a meia-noite não gera evento: o bilhete amanhecia com as tarefas de
+  ontem riscadas e o diário dizia que o dia estava fechado. A planta anda no
+  mesmo tick, porque a janela de 14 dias desliza a qualquer hora, não à
+  meia-noite. Emite só quando algo mudou — um `stateChanged` por minuto
+  reavaliaria a tela inteira a troco de nada. É por isso que `_hoje()` passou a
+  vir do clock injetado: sem isso nada disso é testável.
+- **`_registrar_lote` existe pelo estado final único, não por atomicidade.** O
+  log é append-only justamente para que cada evento seja um fato independente, e
+  um lote pela metade é um estado legítimo. O que ele evita é o quadro
+  intermediário: "entreguei" reprojetava duas vezes, e havia um instante em que
+  a sessão já tinha acabado e a tarefa ainda não estava na estante.
+- **Slots fixos na estante.** A primeira versão repartia a largura da prateleira
+  pelo número de objetos, para eles ficarem sempre espalhados de ponta a ponta.
+  Bonito parado e errado em movimento: entregar não punha um objeto, punha e
+  **recolocava todos** — de 10 para 11 a prateleira inteira dava um pulo, sem
+  transição, no instante em que a atenção estava nela. Com o objeto k no slot k,
+  a chegada pode ser um crossfade entre a estante de antes e a de agora: as duas
+  imagens são idênticas em tudo que já estava lá, então só o objeto novo tem
+  para onde ir. O preço é uma estante agrupada à esquerda quando há poucas
+  coisas, que é o que acontece com uma estante de verdade.
+- **Os quatro tempos vivem no `Theme.qml`**, pela mesma regra das cores:
+  `reacao` (o mouse tocou), `gesto` (o usuário pediu), `chegada` (algo entrou no
+  quarto) e `transicao` (o cômodo mudando de hora). Havia oito valores
+  espalhados — 150, 160, 180, 200, 220, 240, 260, 300 — para três intenções,
+  cada um escolhido no dia em que aquela animação foi escrita. Ninguém percebe
+  a diferença entre 150 e 160; percebe quando dois painéis irmãos abrem em
+  ritmos que não combinam. `gesto` e `chegada` **não** obedecem a `movimento`,
+  como `reacao`: são consequência de um gesto, e o quarto quieto desliga o que
+  se mexe sozinho.
+- **O passeio da primeira abertura, guiado pela planta** (`ui/panels/Passeio.qml`).
+  Nada neste app se anuncia: não há barra de menu, não há rótulo dizendo o que
+  ele é, e a estante — a razão de tudo — parece decoração até alguém contar que
+  não é. Sete balões contam o ciclo (escrever, começar, entregar, o quarto
+  guardar) e param aí; o resto se descobre clicando. **Nenhuma flag de "já
+  viu" vai a disco**: o sinal de primeira abertura já existe e é exato — o log
+  está vazio. Guardar um booleano ao lado seria uma segunda fonte de verdade
+  sobre a mesma pergunta. A consequência é deliberada: quem dispensa e fecha o
+  app sem fazer nada vê o passeio de novo, porque de fato ainda não começou.
+  Uma tarefa, uma ideia ou uma sessão o encerram para sempre, e **o quarto → o
+  passeio** traz de volta. O rosto é `avatar/<estágio>` no provedor de cena —
+  o mesmo desenho do ícone, num estágio fixo (2, como o ícone da janela):
+  numa primeira abertura `plantStage` é 0, e a figura que apresenta o app não
+  pode ser a versão mais murcha dele. Os balões ficam **ao lado** do que
+  explicam e nunca por cima — a primeira versão tapava a estante com a frase
+  que falava dela.
+- **`tools/atalho_windows.py` é o irmão Windows do `.desktop`.** Mora em
+  `tools/` e não em `services/` porque a diferença é *quando* cada um roda: o
+  do Linux é criado pelo app na primeira abertura, e este é passo de
+  instalação — só existe o que apontar depois que o executável saiu. `:construir`
+  no `cantinho.bat` chama ele no fim, **ignorando o código de saída**: atalho
+  que não deu certo é aviso, não build perdido. Vai por `powershell -Command` e
+  não por arquivo `.ps1` porque máquina gerenciada costuma vir com a política
+  de execução em `Restricted`, que bloqueia script em arquivo e deixa passar
+  comando na linha. E pergunta ao Windows onde fica a Área de Trabalho em vez
+  de montar `%USERPROFILE%\Desktop`: em português ela tem outro nome, e com
+  OneDrive corporativo ela está redirecionada.
 - **Todo desenho de SVG passa por uma trava** (`_desenho`, em `services/scene.py`).
   `QQuickImageProvider` do tipo Image roda em thread de trabalho quando o
   `Image` do QML é assíncrono, e as camadas do quarto compartilham um
@@ -626,7 +754,8 @@ Todas deliberadas, todas com motivo:
 - A bandeja no GNOME depende da extensão AppIndicator. Sem ela o ícone não
   aparece — e como fechar a janela não encerra o app, some o caminho de volta.
   Reabrir pelo terminal resolve: a trava de instância única mostra a janela que
-  já existe em vez de subir uma segunda.
+  já existe em vez de subir uma segunda. O toque do quarto continua chegando
+  nesse caso, porque ele vai por `gdbus` e não pelo ícone.
 - O som é sintetizado, não gravado, e é curto: 24 s em loop. Não tem melodia,
   é textura. Trocar por faixa de verdade é só pôr outro arquivo com o mesmo
   nome em `assets/audio/`.

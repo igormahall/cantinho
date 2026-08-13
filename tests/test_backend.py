@@ -5,9 +5,10 @@ que se confere aqui é a regra que a tela apenas mostra: qual tarefa o botão
 "começar" pega, o que o interruptor de som devolve, e o que encerrar o dia
 guarda.
 
-O relógio é falso, mas parte de *agora*: "hoje" e "esta semana" são calculados
-em horário local pelo relógio de parede do sistema, não pelo clock injetado, e
-um evento datado de 2026 não cairia em nenhum dos dois.
+O relógio é falso, mas parte de *agora*. "Hoje" e "esta semana" saem do clock
+injetado, convertido para horário local — é o que permite testar a virada da
+meia-noite sem esperar por ela —, e um relógio parado num 2026 arbitrário faria
+a semana do teste não conter nenhum evento do teste.
 """
 
 from __future__ import annotations
@@ -18,7 +19,15 @@ from typing import Iterator
 
 import pytest
 
-from cantinho.backend import DEFAULT_SOUND_MODE, Backend
+from cantinho.backend import (
+    DEFAULT_SOUND_MODE,
+    LONG_SESSION_MINUTES,
+    NUDGE_AFTER_MINUTES,
+    NUDGE_REPEAT_MINUTES,
+    NUDGES,
+    Backend,
+)
+from cantinho.core import projections as proj
 from cantinho.core.clock import FakeClock
 from cantinho.core.store import EventStore
 
@@ -308,3 +317,490 @@ def test_o_periodo_da_semana_e_o_das_datas(backend: Backend) -> None:
     assert str(inicio.day) in backend.weekRange
     assert str(fim.day) in backend.weekRange
     assert inicio.weekday() == 0
+
+
+# ----------------------------------------------------------- sair com o timer
+
+
+def test_sair_guarda_a_sessao_aberta(backend: Backend) -> None:
+    """O tempo aberto não pode depender de por onde se sai do app.
+
+    Havia três caminhos para fora — o menu do quarto, a bandeja e fechar a
+    última janela sem bandeja — e dois não passavam pelo backend. Sessão sem
+    `session.ended` não conta em projeção nenhuma: o tempo sumia inteiro.
+    """
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend.endOpenSession()
+
+    assert not backend.timerRunning
+    assert len(backend.todaySessions) == 1
+    assert backend.todaySessions[0]["interrupted"] is False
+
+
+def test_sair_sem_sessao_nao_grava_nada(backend: Backend) -> None:
+    antes = len(backend._events)
+    backend.endOpenSession()
+    assert len(backend._events) == antes
+
+
+# --------------------------------------------------------- queda e retomada
+
+
+def reabrir(backend: Backend) -> Backend:
+    """Outro backend sobre o mesmo store, como quem reabre o app."""
+    return Backend(backend._store, backend._clock)
+
+
+def test_sessao_orfa_fecha_na_ultima_marca_de_vida(backend: Backend) -> None:
+    """A queda não pode nem apagar o tempo nem inventá-lo.
+
+    Fechar "agora", na reabertura, daria catorze horas de foco a uma máquina
+    que passou a noite desligada. A marca de vida é o último instante em que o
+    app comprovadamente estava rodando, e é até aí que a sessão vai.
+    """
+    ids = semear(backend, "escrever a introdução")
+    backend.startSession(ids[0])
+    inicio = backend._timer.started_at
+
+    # O app viveu mais quinze minutos, marcou presença, e morreu de pé.
+    backend._clock.advance(timedelta(minutes=20))
+    backend._heartbeat.beat(inicio + timedelta(minutes=15))
+
+    depois = reabrir(backend)
+    assert depois.hasRecoveredSession
+    assert depois.recoveredLabel == "escrever a introdução"
+    assert depois.recoveredMinutes == 15
+    assert depois.recoveredUntil != ""
+    # E não sobrou nada aberto no log.
+    assert not any(s.ended_at is None for s in proj.sessions(depois._events))
+
+
+def test_a_sessao_recuperada_conta_como_interrompida(backend: Backend) -> None:
+    """Queda de energia é a interrupção mais legítima que existe.
+
+    E o tempo continua contando no foco: o projeto não desconta esforço de
+    quem foi interrompido.
+    """
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    inicio = backend._timer.started_at
+    backend._clock.advance(timedelta(minutes=20))
+    backend._heartbeat.beat(inicio + timedelta(minutes=15))
+
+    depois = reabrir(backend)
+    fim = depois._events[-1]
+    assert fim.kind == "session.ended"
+    assert fim.payload["interrupted"] is True
+    assert depois.todaySessions[0]["interrupted"] is True
+
+
+def test_o_fim_recuperado_e_datado_quando_aconteceu(backend: Backend) -> None:
+    """E não na hora em que se descobriu que tinha acontecido.
+
+    Com o timestamp da reabertura, a sessão de ontem à noite apareceria no
+    dia de hoje.
+    """
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    inicio = backend._timer.started_at
+    backend._clock.advance(timedelta(minutes=20))
+    marca = inicio + timedelta(minutes=15)
+    backend._heartbeat.beat(marca)
+
+    depois = reabrir(backend)
+    assert depois._events[-1].occurred_at == marca
+
+
+def test_sem_marca_de_vida_a_sessao_fecha_no_comeco(backend: Backend) -> None:
+    """Zero minuto é uma perda honesta; o contrário não é."""
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend._heartbeat.clear()
+
+    depois = reabrir(backend)
+    assert depois.hasRecoveredSession
+    assert depois.recoveredMinutes == 0
+    assert not any(s.ended_at is None for s in proj.sessions(depois._events))
+
+
+def test_marca_no_futuro_e_ignorada(backend: Backend) -> None:
+    """Relógio do sistema que andou para trás deixa de ser limite confiável."""
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend._heartbeat.beat(backend._clock.now() + timedelta(hours=6))
+
+    depois = reabrir(backend)
+    assert depois.recoveredMinutes == 0
+
+
+def test_a_marca_some_quando_a_sessao_termina(backend: Backend) -> None:
+    """Marca em disco significa, sempre, "o app morreu de pé"."""
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    assert backend._heartbeat.last() is not None
+
+    backend.endSession()
+    assert backend._heartbeat.last() is None
+    assert not reabrir(backend).hasRecoveredSession
+
+
+def test_sem_sessao_aberta_nao_ha_aviso(backend: Backend) -> None:
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend.endSession()
+    assert not reabrir(backend).hasRecoveredSession
+
+
+def test_continuar_abre_sessao_nova(backend: Backend) -> None:
+    """Não é retomar: a de antes já está fechada, com o tempo que dava provar."""
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend._clock.advance(timedelta(minutes=20))
+    backend._heartbeat.beat(backend._timer.started_at + timedelta(minutes=15))
+
+    depois = reabrir(backend)
+    depois.continueRecovered()
+
+    assert depois.timerRunning
+    assert depois.currentTaskId == ids[0]
+    assert not depois.hasRecoveredSession
+    assert depois._events[-1].kind == "session.started"
+
+
+def test_dispensar_o_aviso_nao_grava_nada(backend: Backend) -> None:
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+
+    depois = reabrir(backend)
+    antes = len(depois._events)
+    depois.dismissRecovered()
+
+    assert not depois.hasRecoveredSession
+    assert len(depois._events) == antes
+
+
+def test_comecar_algo_novo_dispensa_o_aviso(backend: Backend) -> None:
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+
+    depois = reabrir(backend)
+    depois.startSession(ids[0])
+    assert not depois.hasRecoveredSession
+
+
+# ------------------------------------------------------------ a virada do dia
+
+
+def test_a_virada_do_dia_esvazia_o_bilhete(backend: Backend) -> None:
+    """O app fica aberto a noite toda, e a meia-noite não gera evento nenhum.
+
+    Sem isto, o bilhete da parede amanhecia com as tarefas de ontem riscadas e
+    o diário continuava dizendo que o dia estava fechado.
+    """
+    ids = semear(backend, "a")
+    backend.completeTask(ids[0])
+    backend.endDay(3, 3)
+    assert backend.todayCompleted == ["a"]
+    assert backend.dayClosed
+
+    backend._clock.advance(timedelta(days=1))
+    backend._reavaliar_relogio()
+
+    assert backend.todayCompleted == []
+    assert not backend.dayClosed
+    assert backend.todaySessions == []
+
+
+def test_a_planta_decai_sem_evento_novo(tmp_path: Path) -> None:
+    """A janela de 14 dias desliza a qualquer hora, não à meia-noite.
+
+    O estágio caía só na próxima escrita no log — ou seja, a planta ficava
+    parada num estágio que o histórico já tinha desfeito até alguém mexer no
+    app. Aqui o dia é o mesmo nas duas leituras, para que o que se está
+    testando seja o decaimento e não a virada.
+    """
+    # Meio-dia local, para que ±4 horas continuem caindo no mesmo dia.
+    agora = datetime.now(timezone.utc)
+    local = agora.astimezone()
+    meio_dia = agora - timedelta(
+        hours=local.hour - 12,
+        minutes=local.minute,
+        seconds=local.second,
+        microseconds=local.microsecond,
+    )
+
+    with EventStore(tmp_path / "cantinho.db", device_id=DEVICE) as store:
+        relogio = FakeClock(meio_dia)
+        backend = Backend(store, relogio)
+        backend.addTask("a")
+        backend.startSession(backend.backlog[0]["id"])
+        relogio.advance(timedelta(hours=3))
+        backend.endSession()
+        assert backend.plantStage == 1
+
+        # Ainda dentro da janela: a sessão terminou em +3h, e a janela começa
+        # em +2h.
+        relogio.set(meio_dia + timedelta(days=14, hours=2))
+        backend._reavaliar_relogio()
+        assert backend.plantStage == 1
+
+        # Mesmo dia local, e agora a sessão ficou para trás da janela.
+        relogio.set(meio_dia + timedelta(days=14, hours=4))
+        backend._reavaliar_relogio()
+        assert backend.plantStage == 0
+
+
+# ------------------------------------------------------------------- entregar
+
+
+def test_entreguei_grava_o_fim_e_a_conclusao(backend: Backend) -> None:
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend.endSessionAndComplete()
+
+    kinds = [evento.kind for evento in backend._events]
+    assert kinds[-2:] == ["session.ended", "task.completed"]
+    assert not backend.timerRunning
+    assert backend.backlog == []
+    assert len(backend.shelf) == 1
+
+
+def test_entreguei_em_sessao_livre_so_encerra(backend: Backend) -> None:
+    backend.startSession("")
+    backend.endSessionAndComplete()
+
+    assert backend._events[-1].kind == "session.ended"
+    assert backend.shelf == []
+
+
+def test_concluir_tarefa_que_nao_esta_aberta_nao_grava(backend: Backend) -> None:
+    """Evento inerte é evento que fica no log para sempre: não há DELETE."""
+    ids = semear(backend, "a")
+    backend.completeTask(ids[0])
+    antes = len(backend._events)
+
+    backend.completeTask(ids[0])
+    backend.completeTask("nao-existe")
+    backend.archiveTask("nao-existe")
+
+    assert len(backend._events) == antes
+
+
+# ------------------------------------------------- a pergunta da sessão longa
+
+
+def espiar(sinal) -> list:
+    """Guarda o que um sinal emitiu, para conferir depois."""
+    recebidos: list = []
+    sinal.connect(lambda *args: recebidos.append(args[0] if args else None))
+    return recebidos
+
+
+def test_sessao_longa_pergunta_pelo_extra(backend: Backend) -> None:
+    """Uma hora raramente é uma coisa só.
+
+    No meio dela chega o pedido urgente e resolve-se o e-mail que travava
+    outra pessoa — e nada disso vira entrega, porque o gesto de registrar
+    acontece no fim, quando já se esqueceu.
+    """
+    perguntas = espiar(backend.extraAsked)
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend._clock.advance(timedelta(minutes=LONG_SESSION_MINUTES + 5))
+    backend.endSession()
+
+    assert len(perguntas) == 1
+    assert perguntas[0] >= LONG_SESSION_MINUTES
+
+
+def test_sessao_curta_nao_pergunta_nada(backend: Backend) -> None:
+    perguntas = espiar(backend.extraAsked)
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend._clock.advance(timedelta(minutes=LONG_SESSION_MINUTES - 10))
+    backend.endSession()
+
+    assert perguntas == []
+
+
+def test_entregar_depois_de_muito_tempo_tambem_pergunta(backend: Backend) -> None:
+    perguntas = espiar(backend.extraAsked)
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend._clock.advance(timedelta(minutes=LONG_SESSION_MINUTES + 5))
+    backend.endSessionAndComplete()
+
+    assert len(perguntas) == 1
+    assert len(backend.shelf) == 1
+
+
+def test_a_pergunta_traz_a_janela_grande_de_volta(backend: Backend) -> None:
+    """Quem começou pelo "hoje" está na mini, e pergunta que ninguém vê não é
+    pergunta."""
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+    backend.showMini()
+    assert not backend.mainVisible
+
+    backend._clock.advance(timedelta(minutes=LONG_SESSION_MINUTES + 1))
+    backend.endSession()
+    assert backend.mainVisible
+
+
+def test_registrar_o_que_nunca_esteve_na_lista(backend: Backend) -> None:
+    """A atividade que surgiu no meio e ninguém teve tempo de anotar antes."""
+    backend.addAndCompleteTask("resolver o e-mail do financeiro")
+
+    kinds = [evento.kind for evento in backend._events]
+    assert kinds[-2:] == ["task.created", "task.completed"]
+    assert backend.backlog == []
+    assert backend.todayCompleted == ["resolver o e-mail do financeiro"]
+    assert len(backend.shelf) == 1
+
+
+def test_registrar_extra_vazio_nao_grava(backend: Backend) -> None:
+    antes = len(backend._events)
+    backend.addAndCompleteTask("   ")
+    assert len(backend._events) == antes
+
+
+# --------------------------------------------------------- o toque do quarto
+
+
+def test_o_quarto_toca_quando_o_relogio_e_esquecido(backend: Backend) -> None:
+    """Duas horas é mais do que qualquer sessão conduzida de propósito."""
+    toques = espiar(backend.nudged)
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+
+    backend._clock.advance(timedelta(minutes=NUDGE_AFTER_MINUTES - 5))
+    backend._reavaliar_relogio()
+    assert toques == []
+
+    backend._clock.advance(timedelta(minutes=10))
+    backend._reavaliar_relogio()
+    assert len(toques) == 1
+    assert toques[0]
+
+
+def test_o_toque_insiste_de_meia_em_meia_hora(backend: Backend) -> None:
+    """Quem saiu da mesa às 19h50 não estava lá para ver o primeiro."""
+    toques = espiar(backend.nudged)
+    ids = semear(backend, "a")
+    backend.startSession(ids[0])
+
+    backend._clock.advance(timedelta(minutes=NUDGE_AFTER_MINUTES))
+    backend._reavaliar_relogio()
+    backend._clock.advance(timedelta(minutes=NUDGE_REPEAT_MINUTES))
+    backend._reavaliar_relogio()
+    backend._clock.advance(timedelta(minutes=NUDGE_REPEAT_MINUTES))
+    backend._reavaliar_relogio()
+
+    assert len(toques) == 3
+    # Frases diferentes: o mesmo aviso repetido vira ruído de sistema.
+    assert len(set(toques)) == 3
+
+
+def test_sem_sessao_o_quarto_nao_toca(backend: Backend) -> None:
+    toques = espiar(backend.nudged)
+    backend._clock.advance(timedelta(hours=6))
+    backend._reavaliar_relogio()
+    assert toques == []
+
+
+def test_o_toque_recomeca_a_cada_sessao(backend: Backend) -> None:
+    toques = espiar(backend.nudged)
+    ids = semear(backend, "a", "b")
+    backend.startSession(ids[0])
+    backend._clock.advance(timedelta(minutes=NUDGE_AFTER_MINUTES))
+    backend._reavaliar_relogio()
+    backend.endSession()
+    assert len(toques) == 1
+
+    backend.startSession(ids[1])
+    backend._clock.advance(timedelta(minutes=NUDGE_AFTER_MINUTES - 5))
+    backend._reavaliar_relogio()
+    assert len(toques) == 1
+
+
+def test_as_frases_do_toque_cabem_na_mini() -> None:
+    """O limite é a janela de 300 px, e ele corta pelo fim.
+
+    Na mini o toque ocupa a faixa do nome da tarefa e o que não couber é
+    elidido — o que come justamente o fim da frase, que é onde ela diz alguma
+    coisa. "Você ainda está por…" não é o texto que se escreveu.
+    """
+    assert NUDGES
+    assert all(len(frase) <= 36 for frase in NUDGES)
+
+
+def test_as_frases_do_toque_nao_se_repetem() -> None:
+    """O mesmo aviso duas vezes vira ruído de sistema."""
+    assert len(set(NUDGES)) == len(NUDGES)
+
+
+def test_as_duas_escondidas_e_o_app_na_bandeja(backend: Backend) -> None:
+    """O único estado em que o quarto não tem onde falar.
+
+    Nem a tira acima da barra nem a faixa da mini existem, e é justamente aí
+    que o toque mais importa: app na bandeja com o relógio correndo é o retrato
+    do timer esquecido. Quem resolve isso é a notificação, em `main.py`.
+    """
+    assert backend.mainVisible and not backend.on_tray
+
+    backend.showMini()
+    assert not backend.on_tray
+
+    backend.hideAll()
+    assert backend.on_tray
+
+    backend.showMain()
+    assert not backend.on_tray
+
+
+# ------------------------------------------------------------------ o passeio
+
+
+def test_o_passeio_abre_no_log_vazio(backend: Backend) -> None:
+    """O sinal de primeira abertura já existe e é exato: não há evento nenhum.
+
+    Guardar um booleano de "já viu" ao lado disso seria uma segunda fonte de
+    verdade sobre a mesma pergunta, com a chance de as duas discordarem.
+    """
+    assert backend._events == []
+    assert backend.showTour
+
+
+def test_o_passeio_nao_abre_com_log_usado(backend: Backend, tmp_path: Path) -> None:
+    semear(backend, "a")
+
+    with EventStore(backend._store.db_path, device_id=DEVICE) as store:
+        assert not Backend(store, backend._clock).showTour
+
+
+def test_dispensar_o_passeio_nao_grava_nada(backend: Backend) -> None:
+    backend.dismissTour()
+    assert not backend.showTour
+    assert backend._events == []
+
+
+def test_o_passeio_volta_pelo_menu(backend: Backend) -> None:
+    """Ele some assim que a primeira coisa é escrita, e isso é certo — mas
+    deixaria quem dispensou cedo demais sem caminho de volta."""
+    semear(backend, "a")
+    backend.dismissTour()
+
+    backend.startTour()
+    assert backend.showTour
+
+
+def test_o_rosto_do_passeio_nao_e_o_da_planta_de_agora(backend: Backend) -> None:
+    """Numa primeira abertura `plantStage` é 0 — um vaso com terra.
+
+    A figura que apresenta o app não pode ser a versão mais murcha dele, e é o
+    mesmo estágio fixo do ícone da janela: quem aprende o cantinho por este
+    rosto reconhece o programa na barra de tarefas depois.
+    """
+    assert backend.plantStage == 0
+    assert backend.tourAvatarStage == 2

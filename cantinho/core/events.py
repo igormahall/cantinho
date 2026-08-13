@@ -23,6 +23,7 @@ __all__ = [
     "UnknownKind",
     "InvalidPayload",
     "KINDS",
+    "MOOD_SCALE",
     "validate_payload",
     "make_event",
     "new_id",
@@ -127,6 +128,23 @@ def _iso_date(kind: str, name: str, value: Any) -> None:
         _fail(kind, name, "data AAAA-MM-DD", value)
 
 
+# A escala de humor e energia: cinco pontos, como a `EscalaPontos` desenha.
+#
+# A faixa faz parte do contrato do evento, não só do controle da tela. O log é
+# para sempre e não tem UPDATE: um chamador futuro que gravasse humor 47 — ou
+# zero, que é o valor de "campo não preenchido" em quase toda linguagem —
+# deixaria no histórico um dia impossível, e a projeção não teria como saber se
+# aquilo era leitura errada ou um dia muito bom mesmo.
+MOOD_SCALE: tuple[int, int] = (1, 5)
+
+
+def _mood_scale(kind: str, name: str, value: Any) -> None:
+    _strict_int(kind, name, value)
+    baixo, alto = MOOD_SCALE
+    if not baixo <= value <= alto:
+        _fail(kind, name, f"inteiro de {baixo} a {alto}", value)
+
+
 def _list_of_str(kind: str, name: str, value: Any) -> None:
     # Lista vazia é legítima: dia sem intenção declarada.
     if not isinstance(value, list) or not all(
@@ -180,7 +198,7 @@ KINDS: Mapping[str, _Spec] = {
         required={"date": _iso_date, "intents": _list_of_str},
     ),
     "day.review": _Spec(
-        required={"date": _iso_date, "mood": _strict_int, "energy": _strict_int},
+        required={"date": _iso_date, "mood": _mood_scale, "energy": _mood_scale},
         optional={"note": _any_str},
     ),
     # Aditivo, não estava no desenho original. A lista do backlog é arrastável,

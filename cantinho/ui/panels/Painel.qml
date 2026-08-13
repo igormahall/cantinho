@@ -18,6 +18,6 @@ Rectangle {
     border.width: 1
 
     Behavior on opacidadeFundo {
-        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+        NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic }
     }
 }

@@ -174,6 +174,14 @@ PAYLOADS_INVALIDOS: list[tuple[str, dict[str, Any], str]] = [
     ("day.review", {"date": "2026-03-02", "mood": 4}, "energy ausente"),
     ("day.review", {"date": "2026-03-02", "mood": True, "energy": 2}, "mood é bool"),
     ("day.review", {"date": "2026-03-02", "mood": 4.5, "energy": 2}, "mood é float"),
+    # A faixa é contrato, não só desenho de controle: o log não tem UPDATE, e
+    # um humor 9 gravado hoje fica sendo um dia impossível para sempre. O zero
+    # é o caso que mais assusta — é o valor de "campo não preenchido" em quase
+    # toda linguagem, e entraria no lugar de um dia ruim de verdade.
+    ("day.review", {"date": "2026-03-02", "mood": 0, "energy": 2}, "mood zero"),
+    ("day.review", {"date": "2026-03-02", "mood": 6, "energy": 2}, "mood acima da escala"),
+    ("day.review", {"date": "2026-03-02", "mood": -1, "energy": 2}, "mood negativo"),
+    ("day.review", {"date": "2026-03-02", "mood": 3, "energy": 9}, "energy fora da escala"),
 ]
 
 
@@ -187,6 +195,13 @@ def test_payload_malformado_levanta(
 ) -> None:
     with pytest.raises(InvalidPayload):
         ev.make_event(clock, DEVICE, kind, payload)
+
+
+@pytest.mark.parametrize("nota", [1, 3, 5])
+def test_a_escala_inteira_e_valida(clock: FakeClock, nota: int) -> None:
+    """As duas pontas entram: a faixa recusa o impossível, não o dia ruim."""
+    evento = ev.day_review(clock, DEVICE, date="2026-03-02", mood=nota, energy=nota)
+    assert evento.payload["mood"] == nota
 
 
 def test_lista_de_intencoes_vazia_e_valida(clock: FakeClock) -> None:

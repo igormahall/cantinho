@@ -43,10 +43,10 @@ Item {
     clip: width < implicitWidth
 
     Behavior on width {
-        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+        NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic }
     }
     Behavior on opacity {
-        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+        NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic }
     }
 
     // Cresce a partir do meio, senão o botão anda para o lado ao ser apontado.

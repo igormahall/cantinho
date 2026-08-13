@@ -52,6 +52,6 @@ Item {
         anchors.bottom: parent.bottom
         height: 1
         color: entrada.activeFocus ? Theme.ambar : Theme.borda
-        Behavior on color { ColorAnimation { duration: 200 } }
+        Behavior on color { ColorAnimation { duration: Theme.gesto } }
     }
 }

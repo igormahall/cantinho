@@ -37,8 +37,10 @@ Rectangle {
     border.color: Qt.rgba(Theme.borda.r, Theme.borda.g, Theme.borda.b,
                           0.40 + 0.45 * destaque)
 
+    // Papel de parede responde ao mouse como qualquer controle responde: é a
+    // mesma pergunta ("isto reage?") feita a um objeto do cenário.
     Behavior on destaque {
-        NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+        NumberAnimation { duration: Theme.reacao; easing.type: Easing.OutCubic }
     }
 
     // O prego. Justifica a inclinação e é o que faz o retângulo virar objeto.
