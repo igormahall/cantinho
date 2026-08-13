@@ -74,6 +74,27 @@ Item {
     readonly property var atual: passos[Math.min(passo, passos.length - 1)]
     readonly property bool ultimo: passo >= passos.length - 1
 
+    // O quarto, para converter coordenada da cena em coordenada da janela.
+    //
+    // As camadas da cena usam `PreserveAspectFit`: o desenho é centralizado e
+    // sobra faixa vazia no eixo mais folgado. Fração da largura da *janela* e
+    // fração da largura da *cena* só coincidem em 1100x700, onde a folga é
+    // zero — em qualquer outro formato o balão descola do que aponta, e quanto
+    // mais larga a janela, mais longe. É o mesmo erro de `px` no lugar de `cx`
+    // que já tirou a chuva e a poeira de cena uma vez.
+    property Item cena: null
+
+    function cx(v) { return cena ? cena.cx(v) : v * (width / 1100) }
+    function cy(v) { return cena ? cena.cy(v) : v * (height / 700) }
+
+    // Onde a cena deixa espaço livre, em coordenada do viewBox.
+    //
+    // A estante termina por volta de x=264, e o bilhete da parede começa em
+    // x=762 — `Room.qml` o põe em `cx(eixoDireito) - width/2`. O balão mora no
+    // meio que sobra entre os dois.
+    readonly property real bordaEstante: 300
+    readonly property real bordaPapeis: 750
+
     signal fechar()
 
     function avancar() {
@@ -116,23 +137,25 @@ Item {
         // outro lado.
         //
         // Sem seta apontando, a proximidade é a única pista que sobra — então
-        // ela precisa estar certa. As frações vêm do desenho da cena: a
-        // estante ocupa a faixa esquerda até uns 25% da largura, o vaso e os
-        // papéis a faixa direita a partir de uns 76%, e a barra é a tira de
-        // baixo. O balão mora no meio que sobra.
+        // ela precisa estar certa. Os limites vêm do desenho da cena, e por
+        // isso passam por `cx`/`cy`: a estante ocupa a faixa esquerda, o vaso e
+        // os papéis a faixa direita, e o balão mora no meio que sobra. A barra
+        // é a exceção — ela é ancorada na janela, não na cena, então a conta
+        // dela continua em pixel de janela.
         x: {
             switch (onde) {
-            case "estante": return passeio.width * 0.28
+            case "estante": return passeio.cx(passeio.bordaEstante)
             case "vaso":
-            case "parede":  return Math.max(margem, passeio.width * 0.74 - width)
+            case "parede":  return Math.max(margem,
+                                            passeio.cx(passeio.bordaPapeis) - width)
             default:        return (passeio.width - width) / 2
             }
         }
         y: {
             switch (onde) {
-            case "parede":  return passeio.height * 0.22
+            case "parede":  return passeio.cy(154)
             case "estante":
-            case "vaso":    return passeio.height * 0.40
+            case "vaso":    return passeio.cy(280)
             case "barra":   return passeio.height - height - 104
             default:        return (passeio.height - height) / 2
             }

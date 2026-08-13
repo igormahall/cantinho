@@ -1363,6 +1363,11 @@ Window {
         objectName: "passeio"
         anchors.fill: parent
 
+        // Os balões apontam para coisas desenhadas na cena, e a cena se desloca
+        // dentro da janela. Sem o quarto aqui, eles se guiam pela janela e
+        // acabam por cima do que estão explicando.
+        cena: quarto
+
         opacity: backend.showTour ? 1 : 0
         visible: opacity > 0.01
         Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
