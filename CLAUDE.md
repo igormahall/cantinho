@@ -126,6 +126,24 @@ banco e confere o log evento por evento. Rode depois de mexer em qualquer
 `.qml`. Passe uma pasta como argumento para guardar as
 capturas de cada etapa.
 
+O que ele **não** cobre são os limiares de tempo: ele emite `nudged` e
+`extraAsked` na mão, então o que fica sem exercício é justamente o tique de um
+minuto decidindo sozinho. Para conferir isso é preciso baixar
+`LONG_SESSION_MINUTES`, `NUDGE_AFTER_MINUTES` e `NUDGE_REPEAT_MINUTES` em
+`backend.py` (1, 2 e 1 servem) e deixar o app aberto de verdade uns cinco
+minutos — com o laço de eventos vivo, porque é dele que o tique depende. Testado
+assim: o toque sai sozinho, repete, chega pela bandeja com as duas janelas
+escondidas, e a pergunta do fim de sessão traz a janela grande de volta estando
+só a mini na tela. **Devolva as constantes antes do build final** — `git
+checkout cantinho/backend.py`, e só então `empacotar`, senão o executável sai
+com os números de teste.
+
+A queda também não tem teste automático, e o roteiro é curto: abra uma sessão,
+espere alguns minutos e mate o processo pelo Gerenciador de Tarefas ("Finalizar
+tarefa", que é `TerminateProcess`, o único jeito de o `aboutToQuit` não rodar).
+Na reabertura o aviso traz os minutos até a última marca de vida — medido, 3 min
+para 3,8 reais, que é a perda de até um tique que o desenho aceita.
+
 Linux (casa) é o mesmo com `source .venv/bin/activate`.
 
 `--db` e `--device-id` existem para teste: sem eles o banco vai para a pasta de
@@ -157,7 +175,18 @@ sintoma chega atrasado, e é isso que o torna caro: a execução elevada passa, 
 na limpeza do temp, depois de todos os testes terem passado; e o `portatil` no
 `shutil.rmtree` que refaz a pasta antes de montar o pacote. O `cantinho.bat`
 avisa em toda ação. Se já aconteceu, apague a pasta envenenada — e se ela
-resistir, `takeown /f <pasta> /r /d S` e `icacls <pasta> /reset /t`.
+resistir, devolva o dono e refaça as permissões:
+
+```powershell
+icacls "<pasta>" /setowner "$env:COMPUTERNAME\$env:USERNAME" /t /c /q
+icacls "<pasta>" /reset /t
+```
+
+**Não use `takeown /f <pasta> /r /d S` neste Windows.** A letra de confirmação
+do `/d` é traduzida, e em português ele responde
+`O valor 'S' não é permitido para a opção '/d'` — trocar por `/d N` também não
+serve, porque aí a resposta é "não". O `icacls /setowner` faz a mesma coisa sem
+depender do idioma.
 
 `tools/gerar_capturas.py` semeia um banco temporário e fotografa os dois temas
 em `docs/`. As imagens do README são versionadas, e capturar à mão significa
@@ -210,6 +239,20 @@ de tentar contornar o efeito, o empacotador portátil remove a causa: monta o
 app sobre o `python.exe` oficial da PSF, que já vem assinado, e não constrói
 binário nenhum. O pacote fica auditável — que é o argumento para pedir
 liberação a quem administra, se ela for necessária.
+
+O antivírus gerenciado não é o único a barrar, e a máquina de desenvolvimento
+provou isso: o **Smart App Control** do Windows 11 bloqueou o `Cantinho.exe`
+recém-gerado, com os eventos 3118 ("Smart App Control Block") e 3077 no log de
+integridade de código. É a mesma causa de sempre — binário novo, sem assinatura
+e sem reputação — e o bloqueio é **intermitente**: a segunda tentativa do mesmo
+arquivo passou, que é o comportamento de quem consulta reputação em nuvem. Duas
+consequências práticas. Um exe do PyInstaller que abriu hoje não garante que
+abrirá depois de rebuildar, então o portátil não é só para a máquina do
+trabalho. E o sintoma engana: o arquivo continua em `dist/`, o duplo clique não
+diz nada, e parece defeito do build. Para saber se é isto, o registro em
+`HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy` traz
+`VerifiedAndReputablePolicyState` = 1 quando o SAC está ligado, e o log de
+`Microsoft-Windows-CodeIntegrity/Operational` nomeia o executável barrado.
 
 A poda do Qt no portátil compara nomes **em minúsculas**. A primeira versão
 comparava sensível a maiúsculas e deixou 83 MB de recurso do WebEngine para
@@ -415,6 +458,15 @@ faixa vazia no eixo mais folgado. Qualquer coisa posicionada à mão sobre a cen
 `cx(v)`/`cy(v)` para posição. Usar `px` onde deveria ser `cx` funciona em
 1100x700, onde a folga é zero, e só quebra quando a janela é maximizada — que é
 como a chuva e a poeira já saíram da cena uma vez.
+
+Fração da largura da **janela** é a mesma armadilha com outra cara, e foi assim
+que o balão do passeio acabou por cima do bilhete que explicava: 52 px em
+1100x700, 114 px ao alargar. Quem aponta para algo desenhado na cena recebe o
+`Room` e passa por `cx`/`cy` — é o que o `Passeio.qml` faz com a propriedade
+`cena`. A conta em pixel de janela só vale para o que é ancorado na janela, como
+a barra de baixo. E as frações têm de vir do desenho, não de estimativa: a
+estante termina em x≈264 e o bilhete começa em x=762, não nos 76% que o
+comentário antigo supunha.
 
 ### Efeitos que ficam em QML, não no SVG
 
@@ -656,7 +708,11 @@ Todas deliberadas, todas com motivo:
   de 36 caracteres** — na mini o toque ocupa a faixa do nome da tarefa, em 300
   px, e elidir come justamente o fim, que é onde a frase diz alguma coisa. Há
   teste. Os botões do toque são a razão de ele existir: não é para informar, é
-  para dar onde clicar.
+  para dar onde clicar. O limiar é conferido no **tique de um minuto**, que é
+  ancorado na abertura do app e não no começo da sessão: o toque sai no primeiro
+  tique em ou depois do limiar, com até um minuto de atraso. Com 120 minutos
+  isso não se percebe — mas quem baixar as constantes para testar tem de contar
+  com a folga, ou vai concluir que o aviso não dispara.
 - **Com as duas janelas escondidas, o toque sai pela bandeja** (`Tray.notify`,
   ligado em `main.py` e só nesse caso — com janela na tela quem mostra a frase é
   o QML, e notificar junto seria a mesma frase duas vezes). É a exceção ao "não
@@ -721,7 +777,10 @@ Todas deliberadas, todas com motivo:
   numa primeira abertura `plantStage` é 0, e a figura que apresenta o app não
   pode ser a versão mais murcha dele. Os balões ficam **ao lado** do que
   explicam e nunca por cima — a primeira versão tapava a estante com a frase
-  que falava dela.
+  que falava dela. Ficar ao lado exige receber o `Room` (`cena`) e ler as
+  posições por `cx`/`cy`: por fração da janela o balão só acerta em 1100x700, e
+  foi assim que ele voltou a tapar, agora o bilhete da parede. Ver **coordenadas
+  dentro do quarto**.
 - **`tools/atalho_windows.py` é o irmão Windows do `.desktop`.** Mora em
   `tools/` e não em `services/` porque a diferença é *quando* cada um roda: o
   do Linux é criado pelo app na primeira abertura, e este é passo de
@@ -756,6 +815,14 @@ Todas deliberadas, todas com motivo:
   Reabrir pelo terminal resolve: a trava de instância única mostra a janela que
   já existe em vez de subir uma segunda. O toque do quarto continua chegando
   nesse caso, porque ele vai por `gdbus` e não pelo ícone.
+- **Nada no app comprova que a notificação apareceu.** `Tray.notify` devolvendo
+  `True` quer dizer que a chamada não falhou, não que subiu banner — e as duas
+  coisas se separam de verdade: nesta máquina, com `isSystemTrayAvailable`,
+  `supportsMessages` e `notify()` todos `True`, nenhum banner aparece. Não é do
+  Qt: um balão de `NotifyIcon` do .NET e uma torrada WinRT com AUMID conhecido
+  também não saem, sem "não perturbe" nem política no registro. É condição da
+  máquina, e o único jeito de saber é olhar a tela. Vale para o Linux pelo mesmo
+  motivo — foi para contornar um caso desses que existe o caminho por `gdbus`.
 - O som é sintetizado, não gravado, e é curto: 24 s em loop. Não tem melodia,
   é textura. Trocar por faixa de verdade é só pôr outro arquivo com o mesmo
   nome em `assets/audio/`.
