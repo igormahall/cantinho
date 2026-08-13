@@ -19,30 +19,154 @@ drama e sem cobrança.
 Falhar não destrói nada: só não faz crescer. O banco é um arquivo na sua
 máquina, e nada sai dela.
 
-## Rodando
+## Instalando
 
-Precisa de Python 3.10+. A única dependência de execução é o PySide6.
+Precisa de **Python 3.10 ou mais novo**, e só. A única dependência de execução
+é o PySide6, que os comandos abaixo instalam sozinhos.
+
+Escolha o seu caso:
+
+| | |
+|---|---|
+| **Só quero usar o Cantinho** (Windows) | [instalar](#usar-no-windows) · [atualizar](#atualizar-o-cantinho-instalado) |
+| **Quero mexer no código** (Windows ou Linux) | [ambiente de desenvolvimento](#desenvolver) |
+
+---
+
+### Usar no Windows
+
+Não precisa de git nem de conhecimento técnico: baixar, descompactar e colar
+três linhas.
+
+**1. Baixe e descompacte**
+
+Em **github.com/igormahall/cantinho**, botão verde **`<> Code`** →
+**Download ZIP**. Descompacte dentro de `Documentos`, de forma a ficar assim:
+
+```
+C:\Users\voce\Documents\cantinho-main\
+```
+
+**2. Instale**
+
+Abra o Prompt de Comando (<kbd>Windows</kbd>+<kbd>R</kbd>, escreva `cmd`,
+Enter) e cole os comandos, um de cada vez:
+
+```bat
+cd /d "%USERPROFILE%\Documents\cantinho-main"
+cantinho.bat instalar
+cantinho.bat empacotar
+```
+
+O primeiro leva de 5 a 10 minutos, o segundo uns 2. No fim, o **atalho já está
+na Área de Trabalho** e o executável em `dist\Cantinho\Cantinho.exe`.
+
+> **Nunca fez isso antes?**
+> **[docs/instalar-no-windows.md](docs/instalar-no-windows.md)** é o mesmo
+> roteiro explicado do zero, sem supor nada: desde instalar o Python até o
+> ícone aparecer na Área de Trabalho, com o que fazer em cada erro comum.
+
+Se o antivírus da empresa apagar o `.exe`, troque o segundo comando por
+`cantinho.bat portatil` — ver [docs/windows.md](docs/windows.md).
+
+---
+
+### Atualizar o Cantinho instalado
+
+**As suas anotações não são tocadas.** Elas ficam em `%APPDATA%\Cantinho`, fora
+da pasta do programa; atualizar troca só o código.
+
+Antes de começar, **feche o Cantinho** — inclusive o ícone perto do relógio
+(**o quarto → sair**). O executável não pode ser reescrito enquanto está
+aberto.
+
+Todos os comandos rodam **dentro da pasta do Cantinho**:
+
+```bat
+cd /d "%USERPROFILE%\Documents\cantinho-main"
+```
+
+**Se você instalou pelo ZIP** (o caminho acima), baixe o ZIP novo, descompacte
+por cima da pasta antiga substituindo os arquivos, e depois:
+
+```bat
+cantinho.bat atualizar
+```
+
+**Se você instalou com git** (`git clone`), o comando de puxar as novidades vai
+nessa mesma pasta, antes do `atualizar`:
+
+```bat
+cd /d "%USERPROFILE%\Documents\cantinho"
+git pull
+cantinho.bat atualizar
+```
+
+> `git pull` só funciona em pasta que veio de `git clone`. Numa pasta que veio
+> do ZIP ele responde *"not a git repository"* — ali o caminho é baixar o ZIP
+> de novo. Se você prefere atualizar com um comando só daqui para frente,
+> instale [Git para Windows](https://git-scm.com/download/win) e refaça a
+> instalação com `git clone https://github.com/igormahall/cantinho.git`.
+
+`atualizar` e `empacotar` fazem quase a mesma coisa; a diferença é que
+`atualizar` apaga o cache de build antes. Ele é confiável quase sempre, e
+"quase" é pouco quando os arquivos foram trocados por baixo dele.
+
+---
+
+### Desenvolver
+
+Aqui o git é o caminho, nos dois sistemas:
+
+```bash
+git clone https://github.com/igormahall/cantinho.git
+cd cantinho
+```
 
 **Windows** — `cantinho.bat` faz tudo. Duplo clique abre um menu; da linha de
 comando aceita `instalar`, `rodar`, `empacotar`, `atualizar`, `portatil`,
-`testar` e `refazer`. É o mesmo script para a primeira instalação e para
-atualizar depois.
+`testar`, `refazer` e `atalho`.
 
-**Linux** — o caminho manual:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m cantinho.main
+```bat
+cantinho.bat instalar    :: venv + dependências (runtime, pytest, pyinstaller)
+cantinho.bat rodar       :: abre o app a partir do código
+cantinho.bat testar      :: a suíte
 ```
 
-Rode sempre com o Python do venv; o `python` do PATH não tem PySide6. Numa
-Ubuntu limpa faltam algumas bibliotecas de sistema antes disso.
+**Linux** — o mesmo, na mão:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+
+python -m cantinho.main          # rodar o app
+python -m pytest                 # a suíte
+python tools/simular_uso.py      # percorre a UI clicando de verdade
+```
+
+Numa Ubuntu limpa faltam bibliotecas de sistema que o PySide6 carrega em
+runtime — o sintoma é o plugin `xcb` não carregar. A lista está em
+[docs/linux.md](docs/linux.md).
+
+Três coisas que economizam tempo depois:
+
+- **Rode sempre com o Python do venv.** O `python` do PATH não tem PySide6.
+- **`python tools/semear.py`** cria um banco de demonstração com duas semanas
+  de uso, em `build/demo.db`. Sem ele, avaliar estante, planta ou bilhete exige
+  usar o app por duas semanas de verdade.
+- **`python tools/simular_uso.py` é o que cobre o QML** — o pytest não cobre.
+  Rode depois de mexer em qualquer `.qml`, e **com a tela ligada**.
+
+Mais detalhes em
+**[docs/desenvolvimento.md](docs/desenvolvimento.md)**.
+
+---
 
 O banco fica em `%APPDATA%\Cantinho` no Windows e `~/.local/share/cantinho` no
 Linux. Um banco por vez: abrir o mesmo duas vezes traz para a frente a janela
-que já existe.
+que já existe. **Os bancos das duas máquinas nunca se falam** — não há
+sincronização de nenhum tipo.
 
 ## Como se usa
 
@@ -92,6 +216,8 @@ morto.
 
 ## Documentação
 
+- **[docs/instalar-no-windows.md](docs/instalar-no-windows.md)** — instalar do
+  zero no Windows, escrito para quem nunca abriu um terminal.
 - **[docs/windows.md](docs/windows.md)** — empacotar para Windows, as duas
   formas, e o que fazer quando o antivírus implica com o executável.
 - **[docs/linux.md](docs/linux.md)** — as bibliotecas de sistema que faltam
