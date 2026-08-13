@@ -12,6 +12,7 @@ rem      cantinho.bat rodar           abre o app a partir do codigo
 rem      cantinho.bat empacotar       gera dist\Cantinho\
 rem      cantinho.bat atualizar       dependencias + build limpo, tudo de uma vez
 rem      cantinho.bat portatil        gera o zip que roda sobre o Python oficial
+rem      cantinho.bat atalho          poe o Cantinho na Area de Trabalho
 rem      cantinho.bat testar          roda a suite
 rem      cantinho.bat refazer         apaga o venv e comeca de novo
 rem
@@ -61,6 +62,7 @@ echo    4  atualizar tudo depois de sobrescrever os arquivos
 echo    5  gerar o pacote portatil ^(roda sobre o Python oficial^)
 echo    6  rodar os testes
 echo    7  refazer o ambiente do zero
+echo    8  criar o atalho do Cantinho na Area de Trabalho
 echo    0  sair
 echo.
 set "ESCOLHA="
@@ -73,6 +75,7 @@ if "%ESCOLHA%"=="4" set "ACAO=atualizar"
 if "%ESCOLHA%"=="5" set "ACAO=portatil"
 if "%ESCOLHA%"=="6" set "ACAO=testar"
 if "%ESCOLHA%"=="7" set "ACAO=refazer"
+if "%ESCOLHA%"=="8" set "ACAO=atalho"
 if "%ESCOLHA%"=="0" goto :fim_ok
 
 if not defined ACAO (
@@ -92,10 +95,12 @@ if /i "%ACAO%"=="atualizar"  goto :atualizar
 if /i "%ACAO%"=="portatil"   goto :portatil
 if /i "%ACAO%"=="testar"     goto :testar
 if /i "%ACAO%"=="refazer"    goto :refazer
+if /i "%ACAO%"=="atalho"     goto :atalho
 
 echo.
 echo  Comando desconhecido: %ACAO%
-echo  Use: instalar ^| rodar ^| empacotar ^| atualizar ^| portatil ^| testar ^| refazer
+echo  Use: instalar ^| rodar ^| empacotar ^| atualizar ^| portatil ^| testar
+echo       refazer ^| atalho
 goto :fim_erro
 
 rem ------------------------------------------------------------- o ambiente
@@ -163,6 +168,14 @@ goto :fim_ok
 :empacotar
 call :garantir_ambiente || goto :fim_erro
 call :construir || goto :fim_erro
+goto :fim_ok
+
+:atalho
+rem O irmao Windows do .desktop do Linux. Mora em tools\ e nao dentro do
+rem app porque so existe algo para apontar depois que o executavel saiu.
+call :garantir_ambiente || goto :fim_erro
+echo.
+"%PY%" tools\atalho_windows.py
 goto :fim_ok
 
 :portatil
@@ -260,6 +273,12 @@ if errorlevel 1 (
 )
 echo.
 echo  Pronto: "%CD%\dist\Cantinho\Cantinho.exe"
+
+rem O atalho na Area de Trabalho fecha a instalacao de quem nao tem
+rem experiencia tecnica: sem ele a pessoa termina o roteiro inteiro e nao
+rem acha o programa em lugar nenhum. Falhar aqui nao derruba um build que
+rem ja deu certo, entao o codigo de saida e ignorado de proposito.
+"%PY%" tools\atalho_windows.py
 exit /b 0
 
 
