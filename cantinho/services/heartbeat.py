@@ -30,6 +30,7 @@ Já há precedente de arquivo ao lado do banco: o `device_id`.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -53,13 +54,34 @@ class Heartbeat:
         return self._path
 
     def beat(self, moment: datetime) -> None:
-        """Registra que o app estava vivo em `moment`."""
+        """Registra que o app estava vivo em `moment`. **Escrita atômica.**
+
+        Arquivo temporário e `os.replace`, e não `write_text` direto. A razão é
+        que este arquivo existe justamente para sobreviver a uma queda, e
+        `write_text` trunca antes de escrever: uma queda de energia no intervalo
+        entre o truncar e o escrever deixa a marca vazia ou pela metade.
+
+        A consequência disso não era perder um minuto, era perder tudo. Sem
+        marca legível, `_recuperar_sessoes_orfas` fecha a sessão no **próprio
+        começo** — zero minuto —, então uma queda no instante errado apagava as
+        três horas inteiras, e não o trecho desde a última marca. A janela é de
+        milissegundos, mas queda de energia é o evento que não escolhe hora.
+
+        `os.replace` é rename atômico no POSIX e no Windows: o arquivo é sempre
+        a marca velha ou a nova, nunca um pedaço de nenhuma das duas.
+        """
+        temporario = self._path.with_name(self._path.name + ".novo")
         try:
-            self._path.write_text(format_timestamp(moment), encoding="utf-8")
+            temporario.write_text(format_timestamp(moment), encoding="utf-8")
+            os.replace(temporario, self._path)
         except OSError:
             # Perder a marca degrada a recuperação, não quebra o app: sem ela a
             # sessão órfã é fechada no próprio começo.
             logger.warning("não deu para gravar a marca de vida", exc_info=True)
+            try:
+                temporario.unlink()
+            except OSError:
+                pass
 
     def last(self) -> datetime | None:
         """A última marca, ou None se não há nenhuma legível.
