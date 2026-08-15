@@ -13,18 +13,98 @@ from cantinho.services import scene
 
 pytest.importorskip("PySide6.QtSvg")
 
+# Depois do `importorskip`: sem PySide6 não há o que medir.
+from imagens import medir
+
 
 # ------------------------------------------------------------------- assets
+#
+# O inventário dos arquivos desenhados. Era um teste por pergunta — "os dois
+# temas existem", "os cinco estágios existem", "as camadas existem nos dois",
+# "todo tipo de objeto tem arte" —, cada um reabrindo os mesmos SVGs. Agora é
+# uma leitura por arquivo, e ela responde tudo o que se quer saber daquele
+# arquivo de uma vez, inclusive o que ninguém estava perguntando: o `viewBox`.
 
 
-def test_os_dois_temas_existem() -> None:
-    for tema in scene.THEMES:
-        assert scene.scene_path(tema).is_file(), tema
+def _inventario(caminho, ids: tuple[str, ...]) -> dict:
+    """Abre um SVG uma vez e devolve o que os testes perguntam dele."""
+    from PySide6.QtSvg import QSvgRenderer
+
+    renderer = QSvgRenderer(str(caminho))
+    caixa = renderer.viewBoxF()
+    return {
+        "existe": caminho.is_file(),
+        "valido": renderer.isValid(),
+        "viewbox": (caixa.width(), caixa.height()),
+        "falta": tuple(nome for nome in ids if not renderer.elementExists(nome)),
+        "tamanhos": {
+            nome: (
+                renderer.boundsOnElement(nome).width(),
+                renderer.boundsOnElement(nome).height(),
+            )
+            for nome in ids
+            if renderer.elementExists(nome)
+        },
+    }
 
 
-def test_os_cinco_estagios_de_planta_existem() -> None:
-    for estagio in range(scene.PLANT_STAGES):
-        assert scene.plant_path(estagio).is_file(), estagio
+@pytest.mark.parametrize("tema", scene.THEMES)
+def test_a_cena_do_tema_esta_inteira(app, tema: str) -> None:
+    """As camadas e os objetos, com os mesmos ids nos dois arquivos.
+
+    Ids idênticos é o que permite o crossfade entre os temas: as duas cenas são
+    a mesma geometria em duas paletas, e `services/scene.py` monta a imagem
+    pedindo elemento por elemento. Um id que existe num arquivo e não no outro
+    não aparece como erro — aparece como um pedaço do quarto que some ao
+    escurecer.
+    """
+    esperados = tuple(scene.STATIC_LAYERS) + tuple(SHELF_OBJECT_TYPES)
+    achado = _inventario(scene.scene_path(tema), esperados)
+
+    assert achado["existe"], tema
+    assert achado["valido"], f"{tema}: o Qt não renderiza este SVG"
+    assert achado["falta"] == (), f"{tema}: faltam {achado['falta']}"
+    # O viewBox é o que faz as camadas se sobreporem: duas cenas com caixas
+    # diferentes desalinhariam o quarto inteiro no crossfade, e nenhuma
+    # validação de SVG reclamaria disso.
+    assert achado["viewbox"] == (scene.SCENE_WIDTH, scene.SCENE_HEIGHT)
+
+
+@pytest.mark.parametrize("estagio", range(scene.PLANT_STAGES))
+def test_a_planta_do_estagio_esta_inteira(app, estagio: int) -> None:
+    """Mesma caixa em todos os estágios: é o que mantém o vaso parado.
+
+    `services/scene.py` desenha a planta por cima da cena com um deslocamento
+    fixo (`PLANT_OFFSET_X/Y`). Se um estágio tivesse outro `viewBox`, ele
+    entraria em outra escala e a planta pularia ao crescer.
+    """
+    achado = _inventario(scene.plant_path(estagio), ("planta",))
+
+    assert achado["existe"], estagio
+    assert achado["valido"], f"estágio {estagio}: o Qt não renderiza"
+    assert achado["falta"] == (), f"estágio {estagio}: sem o elemento 'planta'"
+    assert achado["viewbox"] == (200.0, 260.0)
+
+
+def test_a_folhagem_cresce_a_cada_estagio(app) -> None:
+    """Cada estágio tem que desenhar mais folha que o anterior.
+
+    Numa leitura por arquivo, comparando os cinco de uma vez — a versão
+    anterior reabria o estágio anterior a cada caso para comparar dois a dois.
+    """
+    tamanhos = [
+        _inventario(scene.plant_path(estagio), ("planta",))["tamanhos"]["planta"]
+        for estagio in range(scene.PLANT_STAGES)
+    ]
+    larguras = [largura for largura, _ in tamanhos]
+    alturas = [altura for _, altura in tamanhos]
+
+    assert larguras == sorted(larguras) and len(set(larguras)) == len(larguras), (
+        f"a folhagem não alarga a cada estágio: {larguras}"
+    )
+    assert alturas == sorted(alturas) and len(set(alturas)) == len(alturas), (
+        f"a folhagem não sobe a cada estágio: {alturas}"
+    )
 
 
 def test_estagio_fora_da_faixa_e_grampeado() -> None:
@@ -33,58 +113,62 @@ def test_estagio_fora_da_faixa_e_grampeado() -> None:
 
 
 # ---------------------------------------------------------------- prateleira
+#
+# Eram nove testes sobre `shelf_slots`, cada um chamando a função com uma
+# quantidade escolhida a dedo: dentro da prateleira em 12, a de cima cheia em
+# 8, sem repetição em 12. O que eles descreviam eram invariantes — coisas que
+# valem para **toda** quantidade —, e conferi-las num ponto só deixava o resto
+# da faixa sem prova nenhuma. A varredura abaixo passa por todas as
+# quantidades possíveis, da estante vazia à lotada com sobra.
 
 
-def test_estante_vazia_nao_tem_posicao() -> None:
-    assert scene.shelf_slots(0) == []
+def test_as_invariantes_da_prateleira_valem_em_toda_quantidade() -> None:
+    """Uma varredura, cinco invariantes, todas as quantidades.
 
+    Elas andam juntas de propósito: é a mesma passada que mostra que o slot 3
+    não mudou de lugar quando chegou o quarto objeto, e que ele continua dentro
+    da prateleira. Separadas, cada uma escolheria um número diferente e
+    nenhuma cobriria a faixa inteira.
+    """
+    anterior: list[tuple[float, float]] = []
 
-@pytest.mark.parametrize("quantidade", range(1, scene.SHELF_CAPACITY + 1))
-def test_uma_posicao_por_objeto(quantidade: int) -> None:
-    posicoes = scene.shelf_slots(quantidade)
-    assert len(posicoes) == quantidade
+    for quantidade in range(0, scene.SHELF_CAPACITY + 41):
+        posicoes = scene.shelf_slots(quantidade)
+        cabem = min(quantidade, scene.SHELF_CAPACITY)
 
+        # 1. Uma posição por objeto, até a lotação — e a lotação não é
+        #    ultrapassada: é o desenho que lota, não a projeção.
+        assert len(posicoes) == cabem, quantidade
 
-def test_posicoes_ficam_dentro_da_prateleira() -> None:
-    for centro_x, base_y in scene.shelf_slots(scene.SHELF_CAPACITY):
-        assert scene.SHELF_X_MIN <= centro_x <= scene.SHELF_X_MAX
-        assert base_y in scene.SHELF_LEDGES
+        # 2. Determinística: a mesma pergunta, a mesma resposta.
+        assert posicoes == scene.shelf_slots(quantidade)
 
+        # 3. Objeto já posto não muda de lugar. **A invariante da estante**: a
+        #    primeira versão repartia a largura pelo número de objetos, então
+        #    entregar uma tarefa recolocava todas as outras e a prateleira
+        #    inteira pulava, sem transição, no instante em que a atenção
+        #    estava nela.
+        assert posicoes[: len(anterior)] == anterior, quantidade
 
-def test_primeiros_tres_ficam_na_prateleira_de_cima() -> None:
-    assert all(y == scene.SHELF_LEDGES[0] for _, y in scene.shelf_slots(3))
+        # 4. Nenhuma posição se repete: dois objetos no mesmo lugar são um
+        #    objeto sumido.
+        assert len(set(posicoes)) == len(posicoes), quantidade
+
+        # 5. Tudo dentro da prateleira desenhada.
+        for centro_x, base_y in posicoes:
+            assert scene.SHELF_X_MIN <= centro_x <= scene.SHELF_X_MAX
+            assert base_y in scene.SHELF_LEDGES
+
+        anterior = posicoes[:cabem]
 
 
 def test_a_de_cima_enche_antes_da_de_baixo() -> None:
-    alturas = [y for _, y in scene.shelf_slots(scene.SHELF_PER_LEDGE + 2)]
-    assert alturas.count(scene.SHELF_LEDGES[0]) == scene.SHELF_PER_LEDGE
-    assert alturas.count(scene.SHELF_LEDGES[1]) == 2
-
-
-def test_objeto_ja_posto_nao_muda_de_lugar() -> None:
-    """A invariante da estante, e a razão de os slots serem fixos.
-
-    A primeira versão repartia a largura pelo número de objetos, então entregar
-    uma tarefa recolocava todas as outras: a prateleira inteira pulava, sem
-    transição, no instante em que a atenção estava nela.
-    """
-    for quantidade in range(1, scene.SHELF_CAPACITY):
-        antes = scene.shelf_slots(quantidade)
-        depois = scene.shelf_slots(quantidade + 1)
-        assert depois[:quantidade] == antes
-
-
-def test_lotacao_nao_e_ultrapassada() -> None:
-    assert len(scene.shelf_slots(scene.SHELF_CAPACITY + 40)) == scene.SHELF_CAPACITY
-
-
-def test_posicoes_nao_se_repetem() -> None:
-    posicoes = scene.shelf_slots(scene.SHELF_CAPACITY)
-    assert len(set(posicoes)) == len(posicoes)
-
-
-def test_shelf_slots_e_deterministico() -> None:
-    assert scene.shelf_slots(7) == scene.shelf_slots(7)
+    """A ordem de preenchimento é a leitura: a prateleira de cima primeiro."""
+    for quantidade in range(1, scene.SHELF_CAPACITY + 1):
+        alturas = [y for _, y in scene.shelf_slots(quantidade)]
+        em_cima = min(quantidade, scene.SHELF_PER_LEDGE)
+        assert alturas.count(scene.SHELF_LEDGES[0]) == em_cima, quantidade
+        assert alturas.count(scene.SHELF_LEDGES[1]) == quantidade - em_cima, quantidade
 
 
 # ------------------------------------------------------------- renderização
@@ -98,84 +182,49 @@ def app():
     return instancia
 
 
-def _tem_pixel_visivel(imagem) -> bool:
-    for y in range(0, imagem.height(), 4):
-        for x in range(0, imagem.width(), 4):
-            if imagem.pixelColor(x, y).alpha() > 8:
-                return True
-    return False
+# As três leituras de SVG que havia aqui — camadas nos dois temas, arte de todo
+# objeto, folhagem crescendo — subiram para o inventário lá em cima, onde cada
+# arquivo é aberto uma vez e responde tudo. O que fica nesta seção é o que só a
+# imagem rasterizada responde: onde a tinta caiu.
+
+
+def _desenhado(imagem, limiar: int = 30):
+    """A silhueta do que foi desenhado, medida de uma passada (`imagens.py`).
+
+    A varredura antiga pulava de dois em dois pixels para caber no tempo, o que
+    tornava "não desenhou nada" uma afirmação sobre os pixels pares. Esta olha
+    todos e ainda é mais rápida, porque as contas rodam em C.
+    """
+    return medir(imagem, limiar)
 
 
 @pytest.mark.parametrize("tema", scene.THEMES)
 def test_cenario_estatico_desenha_alguma_coisa(app, tema: str) -> None:
     from PySide6.QtCore import QSize
 
-    imagem = scene.render_static(tema, QSize(550, 350))
-    assert (imagem.width(), imagem.height()) == (550, 350)
-    assert _tem_pixel_visivel(imagem)
-
-
-def test_todas_as_camadas_estaticas_existem_nos_dois_svgs(app) -> None:
-    """Ids idênticos nos dois arquivos é o que permite o crossfade."""
-    from PySide6.QtSvg import QSvgRenderer
-
-    for tema in scene.THEMES:
-        renderer = QSvgRenderer(str(scene.scene_path(tema)))
-        assert renderer.isValid(), tema
-        for camada in scene.STATIC_LAYERS:
-            assert renderer.elementExists(camada), f"{tema}/{camada}"
-
-
-def test_todo_tipo_de_objeto_tem_arte_nos_dois_temas(app) -> None:
-    """O catálogo da projeção e o desenho não podem divergir."""
-    from PySide6.QtSvg import QSvgRenderer
-
-    for tema in scene.THEMES:
-        renderer = QSvgRenderer(str(scene.scene_path(tema)))
-        for tipo in SHELF_OBJECT_TYPES:
-            assert renderer.elementExists(tipo), f"{tema}/{tipo}"
-
-
-@pytest.mark.parametrize("estagio", range(scene.PLANT_STAGES))
-def test_planta_cresce_a_cada_estagio(app, estagio: int) -> None:
-    """Cada estágio tem que desenhar mais folha que o anterior."""
-    from PySide6.QtSvg import QSvgRenderer
-
-    renderer = QSvgRenderer(str(scene.plant_path(estagio)))
-    assert renderer.isValid()
-    assert renderer.elementExists("planta")
-
-    if estagio > 0:
-        anterior = QSvgRenderer(str(scene.plant_path(estagio - 1)))
-        atual = renderer.boundsOnElement("planta")
-        antes = anterior.boundsOnElement("planta")
-        assert atual.width() > antes.width()
-        assert atual.height() > antes.height()
+    quadro = _desenhado(scene.render_static(tema, QSize(550, 350)), 8)
+    assert (quadro.largura, quadro.altura) == (550, 350)
+    assert quadro.desenhou
 
 
 def test_planta_desenha_na_area_do_vaso(app) -> None:
     """Folhagem fora do vaso é sinal de deslocamento errado entre os arquivos."""
     from PySide6.QtCore import QSize
 
-    imagem = scene.render_plant(4, QSize(scene.SCENE_WIDTH, scene.SCENE_HEIGHT))
-    xs, ys = [], []
-    for y in range(0, imagem.height(), 2):
-        for x in range(0, imagem.width(), 2):
-            if imagem.pixelColor(x, y).alpha() > 30:
-                xs.append(x)
-                ys.append(y)
+    quadro = _desenhado(scene.render_plant(4, QSize(scene.SCENE_WIDTH, scene.SCENE_HEIGHT)))
+    assert quadro.caixa is not None, "a planta não desenhou nada"
+    x_min, y_min, x_max, y_max = quadro.caixa
 
-    assert xs, "a planta não desenhou nada"
     # O vaso da cena fica em x 890..998, y 486..581.
-    assert 820 < min(xs) and max(xs) < 1060
-    assert 340 < min(ys) and max(ys) < 520
+    assert 820 < x_min and x_max < 1060
+    assert 340 < y_min and y_max < 520
 
 
 def test_estante_vazia_nao_desenha_nada(app) -> None:
     from PySide6.QtCore import QSize
 
     imagem = scene.render_shelf("noite", [], QSize(scene.SCENE_WIDTH, scene.SCENE_HEIGHT))
-    assert not _tem_pixel_visivel(imagem)
+    assert not _desenhado(imagem, 8).desenhou
 
 
 def test_estante_desenha_na_area_da_estante(app) -> None:
@@ -184,16 +233,12 @@ def test_estante_desenha_na_area_da_estante(app) -> None:
     imagem = scene.render_shelf(
         "noite", ["obj_0", "obj_3", "obj_5"], QSize(scene.SCENE_WIDTH, scene.SCENE_HEIGHT)
     )
-    xs, ys = [], []
-    for y in range(0, imagem.height(), 2):
-        for x in range(0, imagem.width(), 2):
-            if imagem.pixelColor(x, y).alpha() > 30:
-                xs.append(x)
-                ys.append(y)
+    quadro = _desenhado(imagem)
+    assert quadro.caixa is not None, "a estante não desenhou nada"
+    x_min, _, x_max, y_max = quadro.caixa
 
-    assert xs, "a estante não desenhou nada"
-    assert scene.SHELF_X_MIN - 30 < min(xs) and max(xs) < scene.SHELF_X_MAX + 30
-    assert max(ys) <= max(scene.SHELF_LEDGES) + 2
+    assert scene.SHELF_X_MIN - 30 < x_min and x_max < scene.SHELF_X_MAX + 30
+    assert y_max <= max(scene.SHELF_LEDGES) + 2
 
 
 def test_tipo_desconhecido_nao_derruba_a_estante(app) -> None:
@@ -202,7 +247,7 @@ def test_tipo_desconhecido_nao_derruba_a_estante(app) -> None:
     imagem = scene.render_shelf(
         "noite", ["obj_0", "nao_existe"], QSize(scene.SCENE_WIDTH, scene.SCENE_HEIGHT)
     )
-    assert _tem_pixel_visivel(imagem)
+    assert _desenhado(imagem, 8).desenhou
 
 
 @pytest.mark.parametrize("tema", scene.THEMES)

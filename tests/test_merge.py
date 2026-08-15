@@ -26,6 +26,13 @@ from cantinho.core import projections as proj
 from cantinho.core.clock import FakeClock
 from cantinho.core.store import EventStore
 
+# `estado()` chama **todas** as projeções públicas de uma vez
+# (`tests/projecoes.py`). Aqui havia uma tupla com cinco escolhidas à mão, e o
+# cadeado valia só para elas — as outras oito não estavam certas nem erradas,
+# estavam sem cadeado, que é a situação que este arquivo existe para impedir.
+# Com o registro, uma projeção nova nasce trancada.
+from projecoes import estado
+
 CASA = "device-casa"
 TRABALHO = "device-trabalho"
 
@@ -42,17 +49,6 @@ def _um_dia(clock: FakeClock, device: str, rotulo: str) -> list[ev.Event]:
     return [tarefa, sessao, fim, concluida]
 
 
-def _estado(eventos: list[ev.Event], agora: object) -> tuple:
-    """As projeções que a tela mostra, reduzidas a algo comparável."""
-    return (
-        [(t.id, t.label) for t in proj.open_tasks(eventos)],
-        [(t.id, t.label) for t in proj.completed_tasks(eventos)],
-        [(o.task_id, o.object_type) for o in proj.shelf_objects(eventos)],
-        [(i.id, i.text, i.used) for i in proj.ideas(eventos)],
-        proj.plant_stage(eventos, agora),  # type: ignore[arg-type]
-    )
-
-
 def test_o_merge_e_comutativo(clock: FakeClock) -> None:
     """**A propriedade central.** A ordem em que os logs se encontram não importa.
 
@@ -63,7 +59,7 @@ def test_o_merge_e_comutativo(clock: FakeClock) -> None:
     trabalho = _um_dia(clock, TRABALHO, "responder o orientador")
     agora = clock.now()
 
-    assert _estado(casa + trabalho, agora) == _estado(trabalho + casa, agora)
+    assert estado(casa + trabalho, agora) == estado(trabalho + casa, agora)
 
 
 def test_o_merge_e_idempotente(clock: FakeClock) -> None:
@@ -72,8 +68,8 @@ def test_o_merge_e_idempotente(clock: FakeClock) -> None:
     trabalho = _um_dia(clock, TRABALHO, "outra coisa")
     agora = clock.now()
 
-    uma_vez = _estado(casa + trabalho, agora)
-    duas_vezes = _estado(casa + trabalho + casa + trabalho, agora)
+    uma_vez = estado(casa + trabalho, agora)
+    duas_vezes = estado(casa + trabalho + casa + trabalho, agora)
     assert uma_vez == duas_vezes
 
 
@@ -139,7 +135,7 @@ def test_nenhuma_projecao_olha_o_device_id(clock: FakeClock) -> None:
         for e in eventos
     ]
 
-    assert _estado(eventos, agora) == _estado(trocados, agora)
+    assert estado(eventos, agora) == estado(trocados, agora)
 
 
 def test_a_ordem_do_log_nao_depende_de_quem_escreveu(clock: FakeClock) -> None:

@@ -1078,3 +1078,98 @@ def test_a_ideia_aproveitada_sai_da_parede(backend: Backend) -> None:
 def test_sem_ideia_solta_a_parede_fica_lisa(backend: Backend) -> None:
     """Zero, e não uma lista vazia com moldura: o QML esconde o objeto."""
     assert backend.wallIdeas == []
+
+
+# ------------------------------------------- a superfície que o QML enxerga
+#
+# O `Backend` é a única coisa exposta ao QML, e são 52 propriedades. Cada teste
+# deste arquivo lê as poucas de que precisa; ninguém lia todas — e a que
+# levantasse exceção na primeira abertura derrubaria o app antes da primeira
+# janela, que é o pior defeito possível e o mais fácil de não ter teste.
+#
+# A varredura abaixo sai do `staticMetaObject`, que é a mesma lista que o QML
+# enxerga. Propriedade nova entra sozinha.
+
+
+def propriedades() -> list[str]:
+    """Os nomes que o QML pode ler, direto do metaobjeto do Qt."""
+    meta = Backend.staticMetaObject
+    return [
+        meta.property(indice).name()
+        for indice in range(meta.propertyOffset(), meta.propertyCount())
+    ]
+
+
+def test_a_varredura_alcanca_a_superficie_inteira() -> None:
+    """Guarda das duas provas seguintes: lista vazia passaria calada."""
+    nomes = propriedades()
+    assert len(nomes) >= 50, f"achei só {len(nomes)} propriedades"
+    # Uma de cada canto da tela, para o caso de o metaobjeto vir pela metade.
+    assert {"backlog", "shelf", "weekDays", "plantStage", "soundMode"} <= set(nomes)
+
+
+def _o_que_estourou(backend: Backend) -> list[str]:
+    """Lê a superfície inteira e devolve o que levantou, com o motivo.
+
+    Uma varredura e não um teste por propriedade: montar 52 backends para ler
+    52 atributos custa mais do que a suíte inteira, e a falha interessa junta —
+    "estas três propriedades quebram no log vazio" é o diagnóstico, não a
+    primeira delas em ordem alfabética.
+    """
+    quebradas = []
+    for nome in propriedades():
+        try:
+            getattr(backend, nome)
+        # Captura larga de propósito: o que se procura é qualquer coisa
+        # que estoure na leitura, não uma exceção prevista.
+        except Exception as erro:
+            quebradas.append(f"{nome}: {type(erro).__name__}: {erro}")
+    return quebradas
+
+
+def test_a_tela_inteira_monta_no_log_vazio(backend: Backend) -> None:
+    """Primeira abertura: o log está vazio e o QML lê tudo isto de uma vez.
+
+    Uma propriedade que estourasse aqui não daria erro de teste: daria um app
+    que não abre, na máquina de quem acabou de instalar.
+    """
+    assert backend._events == []
+    assert _o_que_estourou(backend) == []
+
+
+def test_a_tela_inteira_monta_depois_de_um_dia_de_uso(backend: Backend) -> None:
+    """E de novo com o quarto cheio: tarefa, sessão, entrega, ideia, revisão.
+
+    Os dois extremos são o que importa, porque quase toda propriedade daqui
+    projeta o log: as que quebram em lista vazia e as que quebram com conteúdo
+    são defeitos diferentes.
+    """
+    ids = semear(backend, "entregar", "continuar")
+    backend.startSession(ids[0])
+    backend._clock.advance(timedelta(minutes=30))
+    backend.endSessionAndComplete()
+    backend.captureIdea("uma ideia")
+    backend.saveReview(4, 3, "foi bom")
+
+    assert _o_que_estourou(backend) == []
+
+
+def test_ler_uma_propriedade_nao_muda_nada(tmp_path: Path) -> None:
+    """Binding de QML relê o tempo todo, e leitura tem que ser leitura.
+
+    Uma propriedade que gravasse evento, mexesse no foco ou virasse a página da
+    semana ao ser lida faria a tela mudar sozinha — e o culpado seria
+    procurado em qualquer lugar menos numa leitura.
+    """
+    with EventStore(tmp_path / "cantinho.db", device_id=DEVICE) as store:
+        # Relógio parado: com o que anda, o cronômetro muda entre as duas
+        # leituras por motivo legítimo e a comparação perde o sentido.
+        backend = Backend(store, FakeClock(datetime.now(timezone.utc)))
+        backend.addTask("uma tarefa")
+
+        antes = len(backend._events)
+        primeira = {nome: repr(getattr(backend, nome)) for nome in propriedades()}
+        segunda = {nome: repr(getattr(backend, nome)) for nome in propriedades()}
+
+        assert primeira == segunda
+        assert len(backend._events) == antes

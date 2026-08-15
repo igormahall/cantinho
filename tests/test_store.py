@@ -10,10 +10,10 @@ from cantinho.core import events as ev
 from cantinho.core import store as store_module
 from cantinho.core.clock import FakeClock
 from cantinho.core.events import Event
-from cantinho.core.projections import completed_tasks, open_tasks, sessions
 from cantinho.core.store import DEVICE_ID_FILENAME, EventStore, default_data_dir
 
 from conftest import DEVICE
+from projecoes import estado, log_de_prova
 
 
 # --------------------------------------------------------------------- setup
@@ -227,44 +227,30 @@ def test_read_all_vazio(store: EventStore) -> None:
 # ----------------------------------------------- reconstrução a partir do log
 
 
-def test_estado_reconstruido_do_zero_apos_reabrir(tmp_path: Path, clock: FakeClock) -> None:
-    """Nada de derivado vai a disco: fechar e reabrir tem que dar o mesmo estado."""
+def test_estado_reconstruido_do_zero_apos_reabrir(tmp_path: Path) -> None:
+    """Nada de derivado vai a disco: fechar e reabrir tem que dar o mesmo estado.
+
+    A comparação é do estado **inteiro** — as treze projeções públicas de uma
+    vez, pelo banco de provas (`tests/projecoes.py`). Antes eram três escolhidas
+    à mão, e é justamente uma projeção esquecida que teria como divergir aqui
+    sem ninguém ver: a ida ao disco passa por serialização de JSON e de
+    timestamp, e o que ela deforma não é o que se lembra de conferir.
+    """
     caminho = tmp_path / "cantinho.db"
-    log: list[Event] = []
+    log, agora = log_de_prova(DEVICE)
 
     with EventStore(caminho, device_id=DEVICE) as primeiro:
-        feita = ev.task_created(clock, DEVICE, label="entregar capítulo")
-        pendente = ev.task_created(clock, DEVICE, label="revisar bibliografia")
-        largada = ev.task_created(clock, DEVICE, label="ideia velha")
-        log += [feita, pendente, largada]
-
-        sessao = ev.session_started(clock, DEVICE, task_id=feita.payload["id"])
-        clock.advance(timedelta(minutes=50))
-        log += [sessao, ev.session_ended(clock, DEVICE, id=sessao.payload["id"])]
-
-        log.append(ev.task_completed(clock, DEVICE, id=feita.payload["id"]))
-        log.append(ev.task_archived(clock, DEVICE, id=largada.payload["id"]))
-        log.append(ev.idea_captured(clock, DEVICE, text="mudar o abajur de lugar"))
-
         primeiro.append_many(log)
-        estado_antes = (
-            open_tasks(log),
-            completed_tasks(log),
-            sessions(log),
-        )
+        estado_antes = estado(log, agora)
 
     with EventStore(caminho, device_id=DEVICE) as segundo:
         relido = segundo.read_all()
         assert relido == sorted(log, key=lambda e: e.sort_key)
-
-        estado_depois = (
-            open_tasks(relido),
-            completed_tasks(relido),
-            sessions(relido),
-        )
+        estado_depois = estado(relido, agora)
 
     assert estado_depois == estado_antes
-    abertas, concluidas, sessoes = estado_depois
-    assert [t.label for t in abertas] == ["revisar bibliografia"]
-    assert [t.label for t in concluidas] == ["entregar capítulo"]
-    assert [s.duration_minutes for s in sessoes] == [50.0]
+    # E não é um estado vazio comparado com outro vazio: o log de prova faz
+    # toda projeção falar, e há teste disso junto com o banco de provas.
+    assert [t.label for t in estado_depois["open_tasks"]] == ["ler o artigo novo"]
+    assert [t.label for t in estado_depois["completed_tasks"]] == ["revisar o capítulo 3"]
+    assert estado_depois["focus_minutes_14d"] == 240.0

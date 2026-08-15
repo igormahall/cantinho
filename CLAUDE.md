@@ -241,7 +241,7 @@ screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
 ### O checklist do sistema
 
 **A suíte descobre em que sistema está e coleta só o checklist dele.** No
-Windows dá **472 passados e nenhum pulado**; no Ubuntu, 475. A diferença são
+Windows dá **550 passados e nenhum pulado**; no Ubuntu, 553. A diferença são
 quatro testes de semântica POSIX de verdade — barra `/` no `Exec=` e bit de
 execução no `.desktop` —, que no Windows não são coletados: a fixture finge o
 `sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação e o
@@ -256,7 +256,7 @@ cada sistema termina com o seu checklist inteiro e nada pendurado, e o cabeçalh
 reconcilia os números:
 
 ```
-checklist: posix — 475 testes dos 476 coletados; fora: 1 exclusivo de windows
+checklist: posix — 553 testes dos 554 coletados; fora: 1 exclusivo de windows
 ```
 
 As peças:
@@ -281,6 +281,39 @@ As peças:
 
 Há um teste exclusivo de Windows em `test_checklist.py` e ele existe para isto:
 a filtragem tem duas direções, e a direção que ninguém exercita é a que apodrece.
+
+### O banco de provas das projeções
+
+**`tests/projecoes.py` é o registro de todas as projeções públicas**, cada uma
+reduzida a `eventos -> resultado`, mais um log de prova que passa por todos os
+kinds. Não é utilitário de conveniência: é o que faz as propriedades do
+`CLAUDE.md` valerem para o módulo inteiro em vez de para uma amostra.
+
+O problema que ele resolve é o de listas escritas à mão. As propriedades que
+valem para toda projeção — log vazio não quebra, a entrada não é consumida, a
+ordem de chegada não importa, o `device_id` não é olhado, o lote repetido não
+muda nada — estavam conferidas cada uma sobre a sua própria seleção: seis
+projeções aqui, cinco ali, duas acolá, de treze. **O cadeado do merge, que este
+documento descreve como "nenhuma projeção olha o `device_id`", provava isso de
+cinco.** As outras oito não estavam certas nem erradas: estavam sem cadeado.
+
+Agora cada propriedade roda sobre as treze, e
+`test_o_registro_cobre_toda_projecao_publica` sai de `projections.__all__` e
+falha enquanto uma projeção nova não for registrada. Quem escreve uma projeção
+nova ganha as seis provas de graça e é avisado se esquecer.
+
+Duas peças completam o mesmo raciocínio para o resto da suíte:
+
+- **`tests/imagens.py`** mede uma imagem numa passada, com operações de bytes.
+  A varredura anterior era `pixelColor` em laço aninhado, repetida em seis
+  testes, e pulava pixels para caber no tempo — **e uma delas media a coisa
+  errada por causa disso**: procurava o pé do vaso no ícone de 128 px, onde o
+  ladrilho opaco ocupa o quadro inteiro, então a resposta era a borda da imagem
+  para todos os estágios e o teste passaria com o vaso andando meio quadro.
+- **A superfície do backend** (`test_backend.py`) é varrida pelo
+  `staticMetaObject`: as 52 propriedades que o QML lê são lidas todas, no log
+  vazio e depois de um dia de uso. Uma que estourasse na primeira abertura não
+  daria teste vermelho — daria um app que não abre.
 
 **Não rode nada disto num terminal elevado.** Com token de administrador o
 Windows põe `BUILTIN\Administradores` como dono de todo diretório criado, no
@@ -531,6 +564,11 @@ Regras invioláveis:
    **idempotente**, que **nenhuma projeção olha o `device_id`** — trocar o
    dispositivo de todo evento não pode mudar nada na tela —, e que o desempate
    do log é por uuid e não por dispositivo.
+
+   As três primeiras comparam o **estado inteiro**, e não uma amostra dele: a
+   comparação passa pelo banco de provas (`tests/projecoes.py`), que chama todas
+   as projeções públicas de uma vez. Antes eram cinco escolhidas à mão, de
+   treze — ver **O banco de provas das projeções**.
 
 ### Kinds
 
@@ -944,7 +982,9 @@ cantinho/
     services/  timer.py audio.py hotkey.py tray.py scene.py single_instance.py
                graphics.py desktop_entry.py heartbeat.py fonts.py
     ui/        Main.qml Mini.qml theme/ room/ panels/
-  tests/
+  tests/     conftest.py + os três módulos que não são teste, e sim montagem
+             compartilhada: checklist.py (de qual sistema é cada teste),
+             projecoes.py (o banco de provas), imagens.py (medir um desenho)
   tools/     check_svg.py check_qml.py simular_uso.py semear.py
              gerar_{audio,icone,capturas}.py
              instalar_atalho.py atalho_windows.py empacotar_portatil.py

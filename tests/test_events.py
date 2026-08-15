@@ -94,8 +94,17 @@ def test_occurred_at_normalizado_para_utc() -> None:
 # ------------------------------------------------------------- serialização
 
 
-def _um_de_cada(clock: FakeClock) -> list[Event]:
-    return [
+def _um_de_cada(clock: FakeClock) -> dict[str, Event]:
+    """Um evento de cada kind, indexado pelo kind.
+
+    É a amostra de onde saem as provas de serialização. Indexada e não em
+    lista: a versão anterior parametrizava o round-trip por `range(12)`, e o 12
+    era um número escrito à mão que ninguém liga a nada — um kind novo entrava
+    aqui e não era serializado por teste nenhum, em silêncio. Agora a
+    parametrização é por `ev.KINDS`, e quem cobra a cobertura é
+    `test_todos_os_kinds_tem_construtor`.
+    """
+    eventos = [
         ev.task_created(clock, DEVICE, label="tese", project="doutorado"),
         ev.task_renamed(clock, DEVICE, id="task-1", label="a tese"),
         ev.task_completed(clock, DEVICE, id="task-1"),
@@ -109,16 +118,30 @@ def _um_de_cada(clock: FakeClock) -> list[Event]:
         ev.day_review(clock, DEVICE, date="2026-03-02", mood=4, energy=2, note="ok"),
         ev.backlog_reordered(clock, DEVICE, order=["task-2", "task-1"]),
     ]
+    return {evento.kind: evento for evento in eventos}
 
 
 def test_todos_os_kinds_tem_construtor(clock: FakeClock) -> None:
-    assert {evento.kind for evento in _um_de_cada(clock)} == set(ev.KINDS)
+    """Kind sem construtor é kind que só se escreve na mão, sem validação."""
+    assert set(_um_de_cada(clock)) == set(ev.KINDS)
 
 
-@pytest.mark.parametrize("indice", range(12))
-def test_round_trip_por_kind(clock: FakeClock, indice: int) -> None:
-    original = _um_de_cada(clock)[indice]
-    assert Event.from_row(original.to_row()) == original
+@pytest.mark.parametrize("kind", ev.KINDS)
+def test_round_trip_por_kind(clock: FakeClock, kind: str) -> None:
+    """Ida e volta pelo disco, e a forma da linha, para cada kind.
+
+    As duas coisas juntas porque são a mesma passada: a linha é o que o SQLite
+    guarda, e o que ela não carregar direito volta diferente. Um payload que
+    não sobrevive à serialização é um evento que o app grava hoje e não
+    consegue reler amanhã — e não há como corrigir depois, porque não existe
+    UPDATE no log.
+    """
+    original = _um_de_cada(clock)[kind]
+    linha = original.to_row()
+
+    assert len(linha) == 5, "a linha tem que ter as cinco colunas da tabela"
+    assert linha[3] == kind
+    assert Event.from_row(linha) == original
 
 
 def test_to_row_segue_a_ordem_das_colunas(clock: FakeClock) -> None:

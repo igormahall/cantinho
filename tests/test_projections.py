@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import random
 import subprocess
 import sys
 from datetime import timedelta
@@ -273,31 +272,10 @@ def test_um_objeto_por_tarefa_concluida(clock: FakeClock) -> None:
     assert all(o.object_type in SHELF_OBJECT_TYPES for o in estante)
 
 
-def test_shelf_objects_e_deterministico_na_mesma_entrada(clock: FakeClock) -> None:
-    log: list[Event] = []
-    for indice in range(20):
-        criada = ev.task_created(clock, DEVICE, label=f"t{indice}")
-        log += [criada, ev.task_completed(clock, DEVICE, id=criada.payload["id"])]
-        clock.advance(timedelta(minutes=3))
-
-    referencia = shelf_objects(log)
-    for _ in range(5):
-        assert shelf_objects(log) == referencia
-
-
-def test_ordem_de_chegada_nao_muda_a_estante(clock: FakeClock) -> None:
-    log: list[Event] = []
-    for indice in range(20):
-        criada = ev.task_created(clock, DEVICE, label=f"t{indice}")
-        log += [criada, ev.task_completed(clock, DEVICE, id=criada.payload["id"])]
-        clock.advance(timedelta(minutes=3))
-
-    referencia = shelf_objects(log)
-    embaralhado = log[:]
-    random.Random(7).shuffle(embaralhado)
-
-    assert embaralhado != log
-    assert shelf_objects(embaralhado) == referencia
+# Determinismo e independência da ordem de chegada eram dois testes daqui, com
+# a mesma montagem de vinte tarefas repetida nos dois. Viraram propriedade do
+# banco de provas (`test_projecoes_invariantes.py`), onde valem para as treze
+# projeções em vez de só para a estante — e onde a estante continua incluída.
 
 
 def test_objeto_depende_so_do_uuid_da_tarefa(clock: FakeClock) -> None:
@@ -407,38 +385,14 @@ def test_sessao_de_duracao_zero(clock: FakeClock) -> None:
 
 
 # --------------------------------------------------------------------- pureza
-
-
-def test_projecoes_nao_consomem_nem_alteram_a_entrada(clock: FakeClock) -> None:
-    criada = ev.task_created(clock, DEVICE, label="a")
-    log = [criada, ev.task_completed(clock, DEVICE, id=criada.payload["id"])]
-    log += sessao(clock, 20)
-    copia = list(log)
-
-    agora = clock.now()
-    for _ in range(2):
-        open_tasks(log)
-        completed_tasks(log)
-        sessions(log)
-        focus_minutes_14d(log, agora)
-        plant_stage(log, agora)
-        shelf_objects(log)
-
-    assert log == copia
-
-
-def test_projecoes_aceitam_iterador_esgotavel(clock: FakeClock) -> None:
-    criada = ev.task_created(clock, DEVICE, label="a")
-    log = [criada, ev.task_completed(clock, DEVICE, id=criada.payload["id"])]
-    assert len(completed_tasks(iter(log))) == 1
-    assert len(shelf_objects(iter(log))) == 1
-
-
-def test_log_vazio_nao_quebra_nenhuma_projecao(clock: FakeClock) -> None:
-    agora = clock.now()
-    assert open_tasks([]) == []
-    assert completed_tasks([]) == []
-    assert sessions([]) == []
-    assert focus_minutes_14d([], agora) == 0.0
-    assert plant_stage([], agora) == 0
-    assert shelf_objects([]) == []
+#
+# Estavam aqui três testes que enumeravam projeções à mão: log vazio, entrada
+# não consumida, iterador esgotável. Cada um escolhia a sua amostra — seis, seis
+# e duas das treze —, e uma projeção nova nasceria fora das três listas sem
+# ninguém notar.
+#
+# As três viraram propriedades do banco de provas, em
+# `test_projecoes_invariantes.py`: rodam sobre **todas** as projeções públicas,
+# a partir de `projections.__all__`, e um teste de completude cobra o registro
+# de quem chegar depois. O que ficou neste arquivo é o comportamento de cada
+# projeção, que é diferente para cada uma.

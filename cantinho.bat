@@ -239,8 +239,8 @@ call :exigir_ferramentas || goto :dev
 echo.
 rem A suite escolhe o checklist do sistema em que esta rodando: o que e
 rem exclusivo do outro fica fora da coleta em vez de virar pulado, e o
-rem cabecalho diz quantos foram e de quem. No Windows o resultado certo e 472
-rem passados e nenhum pulado; no Ubuntu sao 475. A diferenca sao os testes de
+rem cabecalho diz quantos foram e de quem. No Windows o resultado certo e 550
+rem passados e nenhum pulado; no Ubuntu sao 553. A diferenca sao os testes de
 rem semantica POSIX - caminho com barra e bit de execucao -, que nao existem
 rem aqui e nao sao teste faltando.
 "%PY%" -m pytest

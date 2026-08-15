@@ -51,8 +51,8 @@ sistema, que a seção seguinte explica.
 
 ## A suíte
 
-**A suíte escolhe o checklist do sistema em que está rodando.** No Windows: 472
-passados, nenhum pulado. No Ubuntu: 475. A diferença são quatro testes de
+**A suíte escolhe o checklist do sistema em que está rodando.** No Windows: 550
+passados, nenhum pulado. No Ubuntu: 553. A diferença são quatro testes de
 semântica POSIX de verdade — barra `/` no `Exec=` e bit de execução no
 `.desktop` —, que no Windows **não são coletados**. A fixture finge o
 `sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação e o
@@ -65,7 +65,7 @@ que a suíte está incompleta. Agora ficam fora da coleta, e o cabeçalho conta 
 que aconteceu:
 
 ```
-checklist: posix — 475 testes dos 476 coletados; fora: 1 exclusivo de windows
+checklist: posix — 553 testes dos 554 coletados; fora: 1 exclusivo de windows
 ```
 
 Quem decide é `tests/checklist.py`, que é função pura e tem teste próprio; o
@@ -80,6 +80,34 @@ dentro de um só.
 Para rodar sem abrir janela, `QT_QPA_PLATFORM=offscreen`. Nesse modo o Qt fica
 **sem nenhuma família de fonte** e texto vira tofu em screenshot — para avaliar
 a UI de verdade, rode com a plataforma normal.
+
+### As três montagens compartilhadas
+
+Três arquivos de `tests/` não são testes: são montagens caras que muitos testes
+leem. Existem porque a mesma preparação estava sendo refeita a cada pergunta —
+e, pior que o custo, cada teste escolhia a sua própria amostra, então ninguém
+cobria o conjunto inteiro.
+
+- **`projecoes.py`** — um log de prova que passa por todos os kinds, e o
+  registro de **todas** as projeções públicas reduzidas a `eventos -> resultado`.
+  Sobre ele rodam as propriedades que valem para todas
+  (`test_projecoes_invariantes.py`): log vazio, iterador esgotável, entrada
+  intacta, determinismo, ordem de chegada, lote repetido. O mesmo registro é o
+  cadeado do `device_id` em `test_merge.py` e a comparação de estado depois de
+  reabrir o banco em `test_store.py`. Um teste de completude sai de
+  `projections.__all__` e falha enquanto uma projeção nova não estiver
+  registrada — é o que impede a lista escrita à mão de envelhecer em silêncio.
+- **`imagens.py`** — mede uma imagem de uma passada só, com operações de bytes
+  em vez de `pixelColor` pixel a pixel: silhueta, caixa, cobertura, pé do
+  desenho. Usado pelo ícone e pela cena.
+- **`checklist.py`** — de qual sistema é cada teste (acima).
+
+Duas coisas que a troca revelou, e que valem como aviso: uma varredura de
+imagem que pulava pixels para caber no tempo estava **medindo a coisa errada**
+(o ícone tem ladrilho opaco acima de 32 px, então "o pixel opaco mais baixo" era
+a borda da imagem, não o pé do vaso — o teste passaria com o vaso andando meio
+quadro), e o round-trip de serialização era parametrizado por `range(12)`, um
+número escrito à mão que deixaria um kind novo sem prova nenhuma.
 
 ## Coisas que só se aprende errando
 
