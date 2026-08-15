@@ -22,3 +22,9 @@
 *.ico binary
 *.wav binary
 *.db  binary
+
+# As fontes embutidas. `text=auto` costuma detectar binário sozinho, mas
+# "costuma" é pouco para um arquivo que, se normalizado, corrompe em silêncio e
+# só aparece na outra máquina — como texto que não desenha.
+*.ttf binary
+*.otf binary
