@@ -38,7 +38,7 @@ from cantinho.services.graphics import ensure_gl_integration  # noqa: E402
 
 ensure_gl_integration()
 
-from PySide6.QtCore import QTimer, QUrl  # noqa: E402
+from PySide6.QtCore import Qt, QTimer, QUrl  # noqa: E402
 from PySide6.QtQml import QQmlApplicationEngine  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -79,10 +79,33 @@ def main() -> int:
     DESTINO.mkdir(parents=True, exist_ok=True)
 
     def fotografar(nome: str) -> None:
+        """Grava sempre no tamanho lógico da janela, custe o que custar ao DPI.
+
+        `grabWindow()` devolve pixels **físicos**: numa tela a 225% ele entrega
+        2475x1575 onde a janela mede 1100x700. Como estas imagens são
+        versionadas, isso faria o mesmo código gerar arquivos diferentes em cada
+        máquina — 948 KB no Ubuntu a 100%, 2,3 MB no Windows a 225% — e todo
+        `gerar_capturas.py` viraria um diff de dois megabytes que ninguém pediu,
+        do lado de quem tem a tela melhor.
+
+        É a mesma doença que o `.gitattributes` cura nas quebras de linha e que
+        a semente fixa cura nos geradores de áudio: artefato versionado tem que
+        ser função só do código.
+        """
         caminho = DESTINO / f"{nome}.png"
-        janela.grabWindow().save(str(caminho))
+        imagem = janela.grabWindow()
+        largura = int(janela.property("width"))
+        altura = int(janela.property("height"))
+        if imagem.width() != largura or imagem.height() != altura:
+            imagem = imagem.scaled(
+                largura, altura,
+                Qt.IgnoreAspectRatio, Qt.SmoothTransformation,
+            )
+        imagem.setDevicePixelRatio(1.0)
+        imagem.save(str(caminho))
         print(f"  -> {caminho.relative_to(RAIZ)} "
-              f"({caminho.stat().st_size / 1024:.0f} KB)")
+              f"({imagem.width()}x{imagem.height()}, "
+              f"{caminho.stat().st_size / 1024:.0f} KB)")
 
     def encerrar() -> None:
         engine.deleteLater()

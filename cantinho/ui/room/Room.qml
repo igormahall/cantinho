@@ -22,6 +22,7 @@ Item {
 
     signal abrirHoje()
     signal abrirSemana()
+    signal abrirIdeias()
 
     // O quarto acende em vez de aparecer.
     //
@@ -475,8 +476,8 @@ Item {
     // calendário como cai sobre a mesa. Se entrassem por cima da luz, ficariam
     // recortados do ambiente, com aquele aspecto de janelinha colada na tela.
     //
-    // As três posições vêm das áreas de parede que a arte deixou livres: acima
-    // da estante à esquerda, e a coluna à direita entre o teto e a folhagem do
+    // As posições vêm das áreas de parede que a arte deixou livres: a coluna da
+    // esquerda acima da estante, e a da direita entre o teto e a folhagem do
     // vaso. Nenhuma delas cobre estante, vaso ou janela.
     //
     // Os números não são soltos: o calendário e o relógio começam na mesma
@@ -493,6 +494,23 @@ Item {
         x: quarto.cx(46)
         y: quarto.cy(quarto.topoParede)
         onAberto: quarto.abrirSemana()
+    }
+
+    // O mural fica embaixo do calendário, na faixa de parede que sobra entre
+    // ele e a prateleira de cima. Alinhado pela mesma borda esquerda do
+    // calendário: a parede da esquerda passa a ser uma coluna só, e não dois
+    // objetos que por acaso caíram perto um do outro.
+    //
+    // A área é curta de propósito — cabem os três papéis e mais nada. Se um dia
+    // couberem mais, o limite continua sendo o desenho e não a projeção, como no
+    // bilhete: mural que rola deixa de ser mural.
+    MuralDeParede {
+        objectName: "mural"
+        unidade: quarto.escala
+        x: quarto.cx(46)
+        y: quarto.cy(258)
+        ideias: backend.wallIdeas
+        onAberto: quarto.abrirIdeias()
     }
 
     RelogioParede {
@@ -514,16 +532,55 @@ Item {
 
     // ------------------------------------------------------- luz do abajur
     //
-    // Só no tema noite, quando o abajur está aceso. O raio respira ±3% num
-    // ciclo de uns seis segundos.
-
+    // O raio respira ±3% num ciclo de uns seis segundos.
+    //
+    // **A luz sabe que tem alguém trabalhando.** Enquanto uma sessão corre ela
+    // fica um pouco mais quente e um pouco mais larga, e volta sozinha quando o
+    // relógio para. É o corpo que faltava ao timer dentro do quarto: o relógio
+    // de parede marca o turno, não a sessão, e o cronômetro mora numa ilha
+    // apoiada no chão — a informação mais importante do app não tinha presença
+    // nenhuma na ilustração.
+    //
+    // É o que este cômodo tem de mais próprio para dizer: a luz está acesa
+    // porque você está aqui. Sem número, sem contorno, sem widget — e é estado
+    // derivado, então não custa evento nenhum ao log.
+    //
+    // Antes disto o abajur era só do tema noite. Continua sendo o abajur da
+    // noite: em repouso, de dia, a luz é exatamente zero, como sempre foi. O
+    // que a sessão acende de dia é bem mais fraco — é a luminária que se liga
+    // sobre a mesa quando alguém senta para trabalhar, não um segundo sol. Isso
+    // importa porque a máquina de uso diurno é a do trabalho: um sinal que só
+    // existisse à noite não existiria justamente onde o app é mais usado.
     Shape {
         id: luz
         anchors.fill: parent
-        opacity: Theme.noite ? 0.5 : 0
+        // A luz de base é da noite; a que a sessão acrescenta existe nos dois
+        // temas, mais forte onde o abajur já está aceso.
+        //
+        // As duas entradas são propriedades **já animadas**, e a `opacity` é uma
+        // conta pura sobre elas — sem `Behavior` próprio. Com um Behavior aqui,
+        // cada quadro da animação de `trabalhando` viraria um alvo novo para a
+        // animação da opacidade, e uma perseguiria a outra: o resultado é um
+        // atraso elástico que não se pediu, e que some de vez com o quarto
+        // quieto, quando `transicao` vira 0.
+        opacity: 0.50 * noturna
+                 + trabalhando * (0.12 * noturna + 0.18 * (1 - noturna))
         visible: opacity > 0.01
         preferredRendererType: Shape.CurveRenderer
-        Behavior on opacity { NumberAnimation { duration: Theme.transicao } }
+
+        // 1 à noite, 0 de dia, atravessando no tempo da troca de tema.
+        property real noturna: Theme.noite ? 1 : 0
+        Behavior on noturna { NumberAnimation { duration: Theme.transicao } }
+
+        // 0 parado, 1 com uma sessão correndo. `chegada` é o eixo certo: uma
+        // sessão que começa é algo entrando no quarto, e não uma reação ao
+        // mouse nem a hora do dia virando. Não obedece a `movimento`, como os
+        // outros dois eixos de gesto — o quarto quieto desliga o que se mexe
+        // sem ninguém pedir, e isto é consequência direta de um clique.
+        property real trabalhando: backend.timerRunning ? 1 : 0
+        Behavior on trabalhando {
+            NumberAnimation { duration: Theme.chegada; easing.type: Easing.InOutSine }
+        }
 
         property real raio: quarto.px(230)
         SequentialAnimation on raio {
@@ -538,7 +595,10 @@ Item {
             fillGradient: RadialGradient {
                 centerX: quarto.cx(334); centerY: quarto.cy(392)
                 focalX: centerX; focalY: centerY
-                centerRadius: luz.raio
+                // O alargamento multiplica o respiro em vez de somar a ele: a
+                // animação escreve direto em `raio`, então um valor ligado ali
+                // seria sobrescrito no primeiro quadro.
+                centerRadius: luz.raio * (1 + 0.06 * luz.trabalhando)
                 GradientStop { position: 0.0; color: Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b, 0.30) }
                 GradientStop { position: 0.45; color: Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b, 0.12) }
                 GradientStop { position: 1.0; color: Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b, 0.0) }

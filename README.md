@@ -164,7 +164,7 @@ Três coisas que economizam tempo depois:
 | **o círculo** | conclui a tarefa sem passar pelo timer. |
 | **o dia** | as sessões, o humor, a nota — e **encerrar o dia**, que guarda a sessão aberta junto. |
 | **a semana** | o que foi entregue, dia a dia. Também abre clicando no calendário da parede. |
-| **ideias** | o mural. A ideia que virar tarefa continua lá, riscada. |
+| **ideias** | o mural. A ideia que virar tarefa continua lá, riscada. As últimas que ainda esperam ficam pregadas na parede, e clicar nelas abre o mural. |
 | **Ctrl+Shift+I** | guarda uma ideia de qualquer lugar, mesmo com o app escondido. Só no Windows. |
 | **mini** | troca a janela por uma janelinha só com o timer, sempre por cima. Arrasta pelo corpo. |
 | **o quarto** | luz, som, movimento, como está o dia e a saída do app. |
@@ -191,6 +191,14 @@ outro. Fora disso vale o relógio. A jornada fica em
 O relógio de parede ganha um traço âmbar onde o trecho atual termina — de
 manhã o almoço, à tarde a hora de ir embora. Não é contagem regressiva: é uma
 marca no mostrador, que se lê de relance e não mostra número nenhum.
+
+**O abajur fica um pouco mais quente enquanto você trabalha**, e volta sozinho
+quando o relógio para. É o timer visto de canto de olho, sem número e sem
+contorno: a luz está acesa porque você está aqui.
+
+Os papéis da parede — o calendário, o bilhete do dia e os bilhetinhos de ideia —
+são cenário, e ficam discretos como cenário deve ficar. Quando o mouse chega
+perto, o papel e o que está escrito nele acendem juntos, o suficiente para ler.
 
 Cinco coisas se mexem sozinhas: a luz do abajur respirando, as folhas, a
 chuva, a poeira no feixe e o grão. Em **o quarto → movimento** elas param

@@ -41,7 +41,7 @@ o PySide6 dentro, e a coleta morre lá antes de rodar um teste.
 
 ## A suíte
 
-**No Windows: 461 passados e 3 pulados. No Ubuntu: 464.** Esse é o resultado
+**No Windows: 465 passados e 3 pulados. No Ubuntu: 468.** Esse é o resultado
 certo, não uma suíte incompleta — os três são de `test_desktop_entry.py` e
 dependem de semântica POSIX: barra `/` no `Exec=` e bit de execução no
 `.desktop`. A fixture finge o `sys.platform`, mas o `pathlib` já escolheu

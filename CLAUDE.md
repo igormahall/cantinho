@@ -150,6 +150,14 @@ abre a página escrita para conferir que ela traz o que foi entregue e nenhuma
 palavra de desempenho. Rode depois de mexer em qualquer `.qml`. Passe uma pasta
 como argumento para guardar as capturas de cada etapa.
 
+No fim ele varre as mensagens do Qt atrás de erro de QML, e a lista do que
+conta (`ERROS_DE_QML`) tem cinco marcas: `TypeError` e `is not defined` pegam
+expressão quebrada; `Cannot anchor`, `Unable to assign` e `Binding loop` pegam
+**montagem** quebrada. As três últimas entraram depois de uma delas passar
+batido por uma execução inteira — uma âncora ilegal pôs um painel no topo da
+janela, o Qt avisou, e o roteiro deu tudo certo porque só olhava `TypeError`.
+Aviso que ninguém lê é aviso que não existe.
+
 **Rode os dois temas.** Sem `--tema` ele herda o modo `auto`, que decide pelo
 relógio — e como o desenvolvimento acontece à noite, na prática **o tema claro
 nunca era exercitado**. Não é diferença cosmética: são dois SVGs de cena
@@ -191,12 +199,12 @@ Para rodar a suíte sem abrir janela: `$env:QT_QPA_PLATFORM="offscreen"`. Cuidad
 que nesse modo o Qt fica **sem nenhuma família de fonte** — texto vira tofu em
 screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
 
-No Windows a suíte dá **461 passados e 3 pulados**, e esse é o resultado certo,
+No Windows a suíte dá **465 passados e 3 pulados**, e esse é o resultado certo,
 não uma suíte incompleta. Os três são de `test_desktop_entry.py` e dependem de
 semântica POSIX: barra `/` no `Exec=` e bit de execução no `.desktop`. A fixture
 finge o `sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação
 e o `chmod` do Windows não tem bit para ligar — eles falhariam com o código
-certo, que é o pior tipo de teste vermelho. No Ubuntu os 464 rodam.
+certo, que é o pior tipo de teste vermelho. No Ubuntu os 468 rodam.
 
 **Não rode nada disto num terminal elevado.** Com token de administrador o
 Windows põe `BUILTIN\Administradores` como dono de todo diretório criado, no
@@ -224,6 +232,15 @@ depender do idioma.
 em `docs/`. As imagens do README são versionadas, e capturar à mão significa
 que elas envelhecem em silêncio — a primeira leva delas ficou mostrando um
 quarto sem calendário, sem relógio e sem bilhete.
+
+Ele **grava sempre em 1100x700**, e a redução é obrigatória: `grabWindow()`
+devolve pixels físicos, então numa tela a 225% ele entrega 2475x1575 onde a
+janela mede 1100x700. Como as imagens são versionadas, o mesmo código produzia
+arquivos diferentes em cada máquina — 948 KB no Ubuntu a 100%, 2,3 MB no
+Windows a 225% — e rodar o gerador virava um diff de dois megabytes que ninguém
+pediu, do lado de quem tem a tela melhor. É a mesma doença que o
+`.gitattributes` cura nas quebras de linha e que a semente fixa cura no gerador
+de áudio: **artefato versionado tem que ser função só do código.**
 
 `tools/check_svg.py` varre `assets/**/*.svg`, rasteriza cada um e sai com código
 1 se algum falhar. Não basta olhar o exit code: **abra os PNGs em
@@ -530,6 +547,17 @@ não acontece.
 3. **Mural de ideias** — atalho global, campo de texto, Enter, some. Zero
    categorização no momento da captura. Ideia aproveitada não sai do mural:
    fica riscada, com a data. Sai só o que for descartado à mão.
+
+   **As últimas três soltas ficam pregadas na parede** (`WALL_IDEAS_LIMIT`,
+   `ui/room/MuralDeParede.qml`). Era a única das cinco camadas sem corpo no
+   quarto: o calendário abre a semana, o bilhete abre o dia, a estante guarda o
+   entregue, a planta guarda o foco — e as ideias existiam só como uma palavra
+   na barra. Cada uma é o seu papelzinho, com o seu prego, na largura que o
+   texto pediu; um bilhete grande repetiria o desenho da folha da direita. Com
+   o mural vazio **não há objeto nenhum**, e isso dá de graça o retorno que
+   faltava à captura: o papel aparecer é a confirmação de que a ideia foi
+   guardada. As aproveitadas não vão para a parede — na parede, papel resolvido
+   é papel que se tira.
 4. **Timer** — vinculado a um item do backlog. É o motor de tudo. A tarefa em
    foco é derivada do backlog e escolhida na barra; o botão nunca abre sessão
    sem dono por omissão.
@@ -540,12 +568,21 @@ não acontece.
    de médio prazo entre a estante (tudo, sem data) e o bilhete (hoje, some à
    meia-noite). Sem barra, sem percentual, sem comparação entre dias. Para
    horizonte mais longo que isso, o rodapé oferece **a página** — ver abaixo.
-6. **Objetos de parede** — calendário do mês à esquerda, relógio analógico à
-   direita, bilhete com a lista do dia embaixo dele. São cenário, não widget:
-   ficam atrás da luz do abajur, em opacidade baixa, retos. Dois respondem a
-   clique, cada um abrindo a sua leitura literal: o bilhete abre o "hoje", o
-   calendário abre a semana. O relógio não abre nada. O bilhete leva o tempo de
-   cada tarefa e o total do dia.
+6. **Objetos de parede** — calendário do mês à esquerda com o mural de ideias
+   embaixo dele, relógio analógico à direita com o bilhete do dia embaixo. São
+   cenário, não widget: ficam atrás da luz do abajur, em opacidade baixa,
+   retos. Três respondem a clique, cada um abrindo a sua leitura literal: o
+   bilhete abre o "hoje", o calendário abre a semana, os papeizinhos abrem o
+   mural. O relógio não abre nada — não há painel que seja "as horas". O
+   bilhete leva o tempo de cada tarefa e o total do dia.
+
+   **A escrita acende junto com o papel** (`FolhaDeParede.lido`). Por muito
+   tempo só o fundo e a borda reagiam ao mouse e os textos tinham opacidade
+   fixa: o papel acendia e o que estava escrito nele continuava igual, o que
+   entrega metade do ganho de leitura. À noite é onde mais falta — a parede é
+   escura, a vinheta puxa os cantos, e estes são os objetos do cenário que
+   carregam informação. Em repouso nada muda; quem chega com o mouse chegou
+   para ler.
 7. **Menu do quarto** — luz, som, movimento, humor/energia, a página e a
    saída do app.
    Não é gosto por menu: com "entreguei" na barra, a fileira de botões passava
@@ -788,6 +825,31 @@ tela, porque ele é textura de filme; o que para é o sorteio da semente.
 A chuva pintada dentro de `cena_noite.svg` não é essas partículas e não some:
 a janela continua sendo uma noite de chuva, ela só para de se mexer.
 
+**A luz do abajur sabe que tem alguém trabalhando.** Enquanto uma sessão corre
+ela fica um pouco mais quente e um pouco mais larga, e volta sozinha quando o
+relógio para. É o corpo que faltava ao timer dentro do quarto: o relógio de
+parede marca o turno e não a sessão, e o cronômetro mora numa ilha apoiada no
+chão — a informação mais importante do app não tinha presença nenhuma na
+ilustração. É a frase mais própria que este cômodo tem: a luz está acesa porque
+você está aqui. Sem número, sem contorno, sem widget, e derivada do log, então
+não custa evento nenhum.
+
+Três detalhes que não são arbitrários:
+
+- **Existe nos dois temas.** Em repouso, de dia, a luz continua exatamente zero
+  como sempre foi; o que a sessão acende ali é bem mais fraco — é a luminária
+  que se liga sobre a mesa quando alguém senta, não um segundo sol. Importa
+  porque a máquina de uso diurno é a do trabalho: um sinal só noturno não
+  existiria justamente onde o app é mais usado.
+- **O alargamento multiplica o respiro em vez de somar a ele.** A
+  `SequentialAnimation` escreve direto em `raio`, então um valor ligado ali
+  seria sobrescrito no primeiro quadro; quem recebe o fator é o `centerRadius`.
+- **A `opacity` é conta pura sobre duas propriedades já animadas, sem
+  `Behavior` própria.** Com uma ali, cada quadro da animação da sessão viraria
+  alvo novo para a animação da opacidade e uma perseguiria a outra — atraso
+  elástico que ninguém pediu, e que sumiria de vez com o quarto quieto, quando
+  `transicao` vira 0.
+
 ## Estrutura
 
 ```
@@ -814,9 +876,14 @@ cantinho/
              instalar_atalho.py atalho_windows.py empacotar_portatil.py
 ```
 
-Painéis: `Backlog`, `Retrospectiva`, `Semana`, `SeletorTarefa`, `Passeio` e os
+Painéis: `Backlog`, `Retrospectiva`, `Semana`, `SeletorTarefa`, `Passeio`; as
+sobreposições `AvisoDeQueda`, `PerguntaDoExtra`, `ToqueDoQuarto`,
+`MenuDoQuarto`, `AvisoDaPagina`, `SaidaDoApp` e `CapturaDeIdeia`; e os
 elementos de base (`Painel`, `BotaoSuave`, `CampoTexto`, `EscalaPontos`,
 `LinhaMenu`, `Rolagem`).
+
+Objetos do quarto: `Room`, `FolhaDeParede` e os três papéis que herdam dela —
+`Calendario`, `BilheteDoDia`, `MuralDeParede` — mais o `RelogioParede`.
 
 `core/clock.py` é injetável. Sem isso, nada que dependa da janela de 14 dias é
 testável.
@@ -1182,6 +1249,35 @@ Todas deliberadas, todas com motivo:
   mostra: botão de largura zero na fila do Tab é um passo em que a atenção some
   da tela. E o clique também dá foco, senão Tab depois de clicar recomeça do
   início.
+
+  **E anuncia o próprio nome** (`Accessible.role`, `.name`, `.onPressAction`,
+  no componente e não em cada chamada — assim os quase quarenta botões do app
+  são cobertos de uma vez e um botão novo nasce coberto, pela mesma lógica de
+  `services/fonts.py` definir a fonte da aplicação em vez de cada `Text`
+  declarar a família). Sem isso o Narrator e o Orca leem "painel, painel,
+  painel" ao andar pela barra: o `Item` do QML não tem papel nem nome, e o
+  rótulo está num filho que a árvore de acessibilidade não associa a nada. É um
+  app de um usuário só, então isto é barato e não urgente — mas o anel de foco
+  e a fila do Tab já existiam, e teclado sem nome é meio caminho.
+- **As sobreposições vivem em `panels/`, uma por arquivo.** `Main.qml` tinha
+  1.653 linhas e carregava dez coisas independentes — o aviso de queda, a
+  pergunta do extra, o toque, o menu do quarto, o aviso da página, a saída, a
+  captura de ideia — cada uma um painel autocontido que nada mais lê. Extraídas,
+  a janela ficou com 897 linhas e passou a conter o que é de fato dela: o
+  quarto, a gaveta, a barra, os atalhos e a cola entre eles. Nenhum pixel mudou.
+  Duas regras saíram do processo e valem para a próxima:
+
+  **Estado mora com quem o muda.** O menu virou dono do próprio `aberto` em vez
+  de espelhar uma propriedade da janela: quem fecha o menu é quase sempre o
+  próprio menu — o clique fora, a linha que dispara uma ação —, e um binding
+  vindo de fora se romperia na primeira dessas atribuições, deixando os dois
+  lados discordando em silêncio.
+
+  **Âncora não atravessa fronteira de componente.** Embrulhar o menu num `Item`
+  para trazer junto o clique de fora tornou o rodapé irmão do *componente* e não
+  do painel, e `anchors.bottom: rodape.top` virou aviso em runtime com o painel
+  parado no topo da janela. Onde o embrulho existe, a conta vai em `y`. Os
+  painéis que são `Painel` na raiz continuam ancorando normalmente.
 - **O cartão do mural corta em quatro linhas.** Uma ideia aceita até 4.000
   caracteres, e sem teto de linhas um texto colado empurrava o resto do mural
   para fora da tela. O mural é uma parede de bilhetes; bilhete que ocupa a

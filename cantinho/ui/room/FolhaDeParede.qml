@@ -20,6 +20,27 @@ Rectangle {
     // do papel sem mudar nada de lugar.
     property real destaque: 0.0
 
+    // A escrita sobe junto com o papel.
+    //
+    // Por muito tempo só o fundo e a borda reagiam ao mouse, e os textos de
+    // dentro tinham opacidade fixa: o papel acendia e o que estava escrito nele
+    // continuava igual, o que entrega metade do ganho de leitura. À noite é onde
+    // mais falta — a parede é escura, a vinheta puxa os cantos para baixo, e
+    // estes são os objetos do cenário que **carregam informação**: a lista do
+    // dia com o tempo de cada tarefa, e os números do mês.
+    //
+    // Em repouso nada muda, que é a regra dos objetos de parede: eles são
+    // decoração do cômodo até alguém se aproximar. Quem chega com o mouse chegou
+    // para ler.
+    //
+    // Quem escreve na folha chama isto em vez de pôr número solto em `opacity`.
+    // O teto é 1: base alta somada ao realce estouraria, e opacidade acima de 1
+    // não dá erro no Qt — só desperdiça o realce em silêncio, justamente nas
+    // linhas que já estavam legíveis.
+    function lido(base) {
+        return Math.min(1, base + 0.22 * folha.destaque)
+    }
+
     property bool prego: true
 
     // Sem inclinação, de propósito.

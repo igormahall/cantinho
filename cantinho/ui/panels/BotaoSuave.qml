@@ -48,6 +48,25 @@ Item {
     Keys.onEnterPressed: botao.aciona()
     Keys.onSpacePressed: botao.aciona()
 
+    // E anunciável por leitor de tela.
+    //
+    // Vai aqui e não em cada chamada porque assim os quase quarenta botões do
+    // app são cobertos de uma vez, e um botão novo nasce coberto — a mesma razão
+    // pela qual a fonte padrão é definida em `services/fonts.py` em vez de em
+    // cada `Text`.
+    //
+    // Sem isto o Narrator e o Orca leem "painel, painel, painel" ao andar pela
+    // barra: o `Item` do QML não tem papel nem nome, e o texto do rótulo está
+    // num filho que a árvore de acessibilidade não associa a nada. O `onPress`
+    // deixa o leitor acionar o botão pelo caminho dele em vez de simular tecla.
+    //
+    // É um app de um usuário só, e por isso isto é barato e não urgente — mas o
+    // anel de foco e a fila do Tab já existem, e teclado sem nome é meio
+    // caminho: quem navega sem ver a tela chega no botão e não sabe qual é.
+    Accessible.role: Accessible.Button
+    Accessible.name: rotulo.text
+    Accessible.onPressAction: botao.aciona()
+
     function aciona() {
         backend.sfx("clique")
         botao.clicked()

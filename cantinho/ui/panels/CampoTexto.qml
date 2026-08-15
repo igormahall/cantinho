@@ -25,6 +25,14 @@ Item {
     function limpar() { entrada.text = "" }
     function focar() { entrada.forceActiveFocus() }
 
+    // O `placeholder` é o único rótulo que estes campos têm — não há legenda
+    // acima de nenhum deles, porque "o que você quer fazer?" dentro da linha já
+    // diz tudo para quem enxerga. Para quem não enxerga, ele precisa ser dito, e
+    // é daqui que sai.
+    Accessible.role: Accessible.EditableText
+    Accessible.name: campo.placeholder
+    Accessible.description: entrada.text
+
     TextInput {
         id: entrada
         anchors.left: parent.left

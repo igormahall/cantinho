@@ -986,13 +986,30 @@ def conferir_o_log():
     relido.close()
 
 
+# O que conta como erro de QML aqui.
+#
+# Os dois primeiros pegam expressão quebrada; os outros três pegam montagem
+# quebrada, e foram acrescentados depois de um deles passar batido por uma
+# execução inteira: extrair um painel para dentro de um Item novo tornou ilegal
+# a âncora dele no rodapé — que virou irmão do componente e não do painel —, o
+# Qt avisou, o painel foi parar no topo da janela, e o roteiro deu tudo certo
+# porque só olhava `TypeError`. Aviso que ninguém lê é aviso que não existe.
+ERROS_DE_QML = (
+    "TypeError",
+    "is not defined",
+    "Cannot anchor",       # âncora atravessando fronteira de componente
+    "Unable to assign",    # tipo errado numa propriedade
+    "Binding loop",        # duas propriedades se perseguindo
+)
+
+
 @passo
 def conferir_avisos():
-    print("-- procura erro de binding no QML")
-    ruins = [m for m in mensagens if "TypeError" in m or "is not defined" in m]
+    print("-- procura erro no QML")
+    ruins = [m for m in mensagens if any(marca in m for marca in ERROS_DE_QML)]
     for aviso in ruins[:10]:
         print("     !", aviso)
-    checar(not ruins, "nenhum erro de binding no QML")
+    checar(not ruins, "nenhum erro de QML")
 
 
 # ------------------------------------------------------------------- execução

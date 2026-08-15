@@ -38,6 +38,13 @@ __all__ = ["Backend"]
 # projeção: uma lista que rola na parede deixaria de ser um bilhete.
 BOARD_LIMIT = 6
 
+# Quantos bilhetinhos de ideia cabem no mural da parede.
+#
+# Três, e o número é do desenho: são papeizinhos pregados num quarto, não uma
+# lista. O mural inteiro continua a um clique dali — o que a parede mostra é que
+# **existe** alguma coisa esperando, e o que é, não quantas são.
+WALL_IDEAS_LIMIT = 3
+
 # Quantas intenções `day.checkin` aceita numa lista só.
 #
 # Existe porque `LABEL_LIMIT` limita cada item e não a lista: com itens no
@@ -910,6 +917,25 @@ class Backend(QObject):
             }
             for ideia in self._ideias
         ]
+
+    @Property("QVariantList", notify=stateChanged)
+    def wallIdeas(self) -> list[dict]:
+        """As ideias que ainda esperam, prontas para o mural da parede.
+
+        Só as soltas. As aproveitadas continuam no painel, riscadas e com a
+        data — é lá que elas contam a história de que a ideia virou tarefa. Na
+        parede seriam ruído: um papelzinho pregado que já foi resolvido é um
+        papelzinho que se tira.
+
+        A projeção já entrega as soltas primeiro e da mais recente para a mais
+        antiga, então cortar no começo dá as últimas três. O corte é do desenho,
+        como o do bilhete — ver `WALL_IDEAS_LIMIT`.
+        """
+        return [
+            {"id": ideia.id, "text": ideia.text}
+            for ideia in self._ideias
+            if not ideia.used
+        ][:WALL_IDEAS_LIMIT]
 
     @Slot(str)
     def captureIdea(self, text: str) -> None:

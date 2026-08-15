@@ -12,6 +12,8 @@ import theme
 // objeto: um calendário de parede é onde se olha para saber onde a semana está.
 // A folha inteira responde, com o mesmo destaque de hover do bilhete — nenhuma
 // célula é clicável sozinha, porque escolher um dia seria a tal seleção de data.
+// Os números acendem junto com o papel, por `lido()`: de longe o mês é textura
+// na parede, e de perto ele é legível.
 FolhaDeParede {
     id: calendario
 
@@ -78,7 +80,7 @@ FolhaDeParede {
                 anchors.verticalCenter: parent.verticalCenter
                 text: calendario.agora.toLocaleDateString(Qt.locale("pt_BR"), "MMMM")
                 color: Theme.texto
-                opacity: 0.85
+                opacity: calendario.lido(0.85)
                 font.pixelSize: Math.round(15 * calendario.unidade)
                 font.family: Theme.fontePapel
                 font.letterSpacing: 0.5 * calendario.unidade
@@ -90,7 +92,7 @@ FolhaDeParede {
                 anchors.baselineOffset: 5 * calendario.unidade
                 text: calendario.ano
                 color: Theme.textoSuave
-                opacity: 0.7
+                opacity: calendario.lido(0.7)
                 font.pixelSize: Math.round(10 * calendario.unidade)
                 font.family: Theme.fontePapel
             }
@@ -100,7 +102,7 @@ FolhaDeParede {
             width: parent.width
             height: 1
             color: Theme.borda
-            opacity: 0.6
+            opacity: calendario.lido(0.6)
         }
 
         // ---------------------------------------------- iniciais da semana
@@ -113,7 +115,7 @@ FolhaDeParede {
                     horizontalAlignment: Text.AlignHCenter
                     text: modelData
                     color: Theme.textoSuave
-                    opacity: 0.55
+                    opacity: calendario.lido(0.55)
                     font.pixelSize: Math.round(9 * calendario.unidade)
                     font.family: Theme.fontePapel
                 }
@@ -163,7 +165,9 @@ FolhaDeParede {
                         visible: parent.doMes
                         text: parent.dia
                         color: parent.ehHoje ? Theme.ambar : Theme.texto
-                        opacity: parent.ehHoje ? 1.0 : (parent.fimDeSemana ? 0.38 : 0.62)
+                        opacity: calendario.lido(
+                                     parent.ehHoje ? 1.0
+                                     : (parent.fimDeSemana ? 0.38 : 0.62))
                         font.pixelSize: Math.round(11 * calendario.unidade)
                         font.family: Theme.fontePapel
                     }

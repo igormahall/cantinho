@@ -27,6 +27,7 @@ from cantinho.backend import (
     NUDGE_AFTER_MINUTES,
     NUDGE_REPEAT_MINUTES,
     NUDGES,
+    WALL_IDEAS_LIMIT,
     Backend,
 )
 from cantinho.core import events as ev
@@ -1033,3 +1034,47 @@ def test_exportar_duas_vezes_sobrescreve_a_mesma_pagina(backend: Backend) -> Non
     assert primeiro == segundo
     texto = Path(segundo).read_text(encoding="utf-8")
     assert "primeira" in texto and "segunda" in texto
+
+
+# ------------------------------------------------------- o mural da parede
+#
+# Os papeizinhos pregados no quarto. O que se prova aqui é o corte e o filtro:
+# a parede mostra o que ainda espera, e mostra pouco. O resto — quem abre, onde
+# fica — é da tela, e quem cobre é o `tools/simular_uso.py`.
+
+
+def test_o_mural_da_parede_mostra_as_ultimas_ideias(backend: Backend) -> None:
+    """Da mais recente para a mais antiga, que é a ordem da projeção."""
+    for texto in ("primeira", "segunda", "terceira"):
+        backend.captureIdea(texto)
+
+    assert [i["text"] for i in backend.wallIdeas] == ["terceira", "segunda", "primeira"]
+
+
+def test_o_mural_da_parede_para_no_limite_do_desenho(backend: Backend) -> None:
+    """É a folha que limita, como no bilhete: mural que rola não é mural."""
+    for i in range(WALL_IDEAS_LIMIT + 4):
+        backend.captureIdea(f"ideia {i}")
+
+    assert len(backend.wallIdeas) == WALL_IDEAS_LIMIT
+
+
+def test_a_ideia_aproveitada_sai_da_parede(backend: Backend) -> None:
+    """E continua no painel, riscada — é lá que ela conta que virou tarefa.
+
+    Na parede, um papel já resolvido é um papel que se tira: o mural mostra o
+    que ainda espera, não o histórico.
+    """
+    backend.captureIdea("virar tarefa")
+    backend.captureIdea("ficar esperando")
+    [ideia] = [i for i in backend.ideas if i["text"] == "virar tarefa"]
+
+    backend.ideaToTask(ideia["id"])
+
+    assert [i["text"] for i in backend.wallIdeas] == ["ficar esperando"]
+    assert [i["text"] for i in backend.ideas] == ["ficar esperando", "virar tarefa"]
+
+
+def test_sem_ideia_solta_a_parede_fica_lisa(backend: Backend) -> None:
+    """Zero, e não uma lista vazia com moldura: o QML esconde o objeto."""
+    assert backend.wallIdeas == []

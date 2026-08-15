@@ -45,6 +45,9 @@ FolhaDeParede {
     height: alturaBase * unidade
     destaque: area.containsMouse ? 1.0 : 0.0
 
+    // Toda opacidade de texto daqui passa por `lido()`, que é da FolhaDeParede:
+    // o papel e o que está escrito nele acendem juntos quando o mouse chega.
+
     // "1h35" e não "95 min": em horas o número para de crescer e volta a ser
     // legível de relance, que é como um bilhete na parede é lido.
     function duracao(minutos) {
@@ -66,7 +69,7 @@ FolhaDeParede {
             bottomPadding: 4 * bilhete.unidade
             text: "hoje"
             color: Theme.textoSuave
-            opacity: 0.7
+            opacity: bilhete.lido(0.7)
             font.pixelSize: Math.round(10 * bilhete.unidade)
             font.family: Theme.fontePapel
             font.letterSpacing: 1.6 * bilhete.unidade
@@ -77,7 +80,7 @@ FolhaDeParede {
             visible: bilhete.linhas.length === 0
             text: "o dia ainda está em branco"
             color: Theme.textoSuave
-            opacity: 0.5
+            opacity: bilhete.lido(0.5)
             font.pixelSize: Math.round(11 * bilhete.unidade)
             font.family: Theme.fontePapel
             font.italic: true
@@ -108,7 +111,7 @@ FolhaDeParede {
                     border.width: Math.max(1, 1.2 * bilhete.unidade)
                     border.color: feita ? Theme.musgo
                                   : (emCurso ? Theme.ambar : Theme.textoSuave)
-                    opacity: feita ? 0.55 : 0.8
+                    opacity: bilhete.lido(feita ? 0.55 : 0.8)
                     Behavior on color { ColorAnimation { duration: Theme.chegada } }
                 }
 
@@ -120,7 +123,7 @@ FolhaDeParede {
                     anchors.verticalCenter: parent.verticalCenter
                     text: modelData.label
                     color: emCurso ? Theme.ambar : Theme.texto
-                    opacity: feita ? 0.42 : (emCurso ? 1.0 : 0.78)
+                    opacity: bilhete.lido(feita ? 0.42 : (emCurso ? 1.0 : 0.78))
                     font.pixelSize: Math.round(12 * bilhete.unidade)
                     font.family: Theme.fontePapel
                     font.strikeout: feita
@@ -139,7 +142,7 @@ FolhaDeParede {
                     horizontalAlignment: Text.AlignRight
                     text: bilhete.duracao(modelData.minutes)
                     color: emCurso ? Theme.ambar : Theme.musgo
-                    opacity: feita ? 0.5 : 0.75
+                    opacity: bilhete.lido(feita ? 0.5 : 0.75)
                     font.pixelSize: Math.round(11 * bilhete.unidade)
                     font.family: Theme.fontePapel
                 }
@@ -163,7 +166,7 @@ FolhaDeParede {
             anchors.right: parent.right
             height: 1
             color: Theme.borda
-            opacity: 0.7
+            opacity: bilhete.lido(0.7)
         }
 
         Text {
@@ -171,7 +174,7 @@ FolhaDeParede {
             anchors.bottom: parent.bottom
             text: "no dia"
             color: Theme.textoSuave
-            opacity: 0.6
+            opacity: bilhete.lido(0.6)
             font.pixelSize: Math.round(10 * bilhete.unidade)
             font.family: Theme.fontePapel
         }
@@ -183,7 +186,7 @@ FolhaDeParede {
             horizontalAlignment: Text.AlignRight
             text: bilhete.duracao(bilhete.minutosDoDia)
             color: Theme.musgo
-            opacity: 0.85
+            opacity: bilhete.lido(0.85)
             font.pixelSize: Math.round(11 * bilhete.unidade)
             font.family: Theme.fontePapel
         }

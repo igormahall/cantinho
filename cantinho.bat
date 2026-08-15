@@ -233,7 +233,7 @@ goto :dev
 
 :dev_testar
 echo.
-rem No Windows o resultado certo e 461 passados e 3 pulados: os tres sao de
+rem No Windows o resultado certo e 465 passados e 3 pulados: os tres sao de
 rem test_desktop_entry.py e dependem de semantica POSIX que nao existe aqui.
 "%PY%" -m pytest
 pause
