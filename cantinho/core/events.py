@@ -22,9 +22,14 @@ __all__ = [
     "EventError",
     "UnknownKind",
     "InvalidPayload",
+    "PayloadTooLong",
     "KINDS",
     "MOOD_SCALE",
+    "LABEL_LIMIT",
+    "TEXT_LIMIT",
+    "PAYLOAD_LIMIT",
     "validate_payload",
+    "check_limits",
     "make_event",
     "new_id",
     "format_timestamp",
@@ -54,6 +59,13 @@ class UnknownKind(EventError):
 
 class InvalidPayload(EventError):
     """Payload que não bate com o formato do kind."""
+
+
+class PayloadTooLong(EventError):
+    """Texto acima do limite do kind, ou payload grande demais.
+
+    Erro de construção, nunca de leitura. Ver `check_limits`.
+    """
 
 
 # ---------------------------------------------------------------- timestamps
@@ -145,6 +157,29 @@ def _mood_scale(kind: str, name: str, value: Any) -> None:
         _fail(kind, name, f"inteiro de {baixo} a {alto}", value)
 
 
+# ------------------------------------------------------------------- limites
+#
+# O log é append-only e não tem UPDATE nem DELETE: o que entra fica, é relido
+# em toda abertura e reprojetado a cada evento novo. Um texto colado por
+# engano — o e-mail inteiro no campo de ideia — não é um erro que se conserta
+# depois, é um erro que se carrega para sempre. É a imutabilidade que torna
+# este limite barato agora e impossível depois.
+#
+# Os números são folgados de propósito. Não são regra de estilo sobre o
+# tamanho de um rótulo; são o ponto a partir do qual o conteúdo deixou de ser
+# o que o campo pedia. Ninguém digita duzentos caracteres de nome de tarefa
+# sem ter colado outra coisa ali.
+LABEL_LIMIT = 200
+TEXT_LIMIT = 4000
+
+# Teto do payload inteiro, em bytes do JSON como ele vai para o banco.
+#
+# Os limites por campo cobrem o texto livre, que é o vetor real. Este cobre o
+# resto — uma lista de ids que cresceu sem controle, um kind futuro com campo
+# novo que ninguém lembrou de limitar. É rede, não regra.
+PAYLOAD_LIMIT = 64_000
+
+
 def _list_of_str(kind: str, name: str, value: Any) -> None:
     # Lista vazia é legítima: dia sem intenção declarada.
     if not isinstance(value, list) or not all(
@@ -157,12 +192,17 @@ def _list_of_str(kind: str, name: str, value: Any) -> None:
 class _Spec:
     required: Mapping[str, _Check]
     optional: Mapping[str, _Check] = field(default_factory=dict)
+    # Campo -> máximo de caracteres. Só os de texto livre entram aqui: id e
+    # data têm formato fixo, e o que os valida já os limita. Num campo de
+    # lista o limite vale para cada item, não para a lista.
+    limits: Mapping[str, int] = field(default_factory=dict)
 
 
 KINDS: Mapping[str, _Spec] = {
     "task.created": _Spec(
         required={"id": _non_empty_str, "label": _non_empty_str},
         optional={"project": _non_empty_str},
+        limits={"label": LABEL_LIMIT, "project": LABEL_LIMIT},
     ),
     # Corrigir o texto de uma tarefa é um fato novo, não uma edição do
     # `task.created` — que já está gravado e é imutável. O id é o mesmo, então
@@ -170,6 +210,7 @@ KINDS: Mapping[str, _Spec] = {
     # hash do id, não do rótulo.
     "task.renamed": _Spec(
         required={"id": _non_empty_str, "label": _non_empty_str},
+        limits={"label": LABEL_LIMIT},
     ),
     "task.completed": _Spec(required={"id": _non_empty_str}),
     "task.archived": _Spec(required={"id": _non_empty_str}),
@@ -180,9 +221,11 @@ KINDS: Mapping[str, _Spec] = {
     "session.ended": _Spec(
         required={"id": _non_empty_str, "interrupted": _strict_bool},
         optional={"note": _any_str},
+        limits={"note": TEXT_LIMIT},
     ),
     "idea.captured": _Spec(
         required={"id": _non_empty_str, "text": _non_empty_str},
+        limits={"text": TEXT_LIMIT},
     ),
     # Ciclo de vida da ideia. Aditivos, e por evento próprio em vez de campo
     # novo em `idea.captured`: o evento de captura já está gravado no log e é
@@ -196,10 +239,12 @@ KINDS: Mapping[str, _Spec] = {
     "idea.archived": _Spec(required={"id": _non_empty_str}),
     "day.checkin": _Spec(
         required={"date": _iso_date, "intents": _list_of_str},
+        limits={"intents": LABEL_LIMIT},
     ),
     "day.review": _Spec(
         required={"date": _iso_date, "mood": _mood_scale, "energy": _mood_scale},
         optional={"note": _any_str},
+        limits={"note": TEXT_LIMIT},
     ),
     # Aditivo, não estava no desenho original. A lista do backlog é arrastável,
     # e a ordem escolhida pelo usuário é decisão dele, não estado derivado:
@@ -233,6 +278,46 @@ def validate_payload(kind: str, payload: Mapping[str, Any]) -> None:
     extras = sorted(set(payload) - conhecidos)
     if extras:
         raise InvalidPayload(f"{kind}: campos desconhecidos {extras}")
+
+
+def check_limits(kind: str, payload: Mapping[str, Any]) -> None:
+    """Confere os limites de tamanho. **Só na construção, nunca na leitura.**
+
+    Esta é a razão de os limites viverem aqui e não dentro de
+    `validate_payload`: aquela roda também no `Event.from_row`, então um limite
+    novo tornaria ilegível todo evento antigo acima dele. Um banco que abria
+    ontem pararia de abrir hoje, e o log é justamente o que não se pode
+    reescrever para consertar. Limite serve para o que ainda não foi gravado.
+
+    Kind desconhecido passa em silêncio: quem reporta isso é `validate_payload`,
+    logo em seguida, e com a mensagem certa.
+    """
+    spec = KINDS.get(kind)
+    if spec is None:
+        return
+
+    for name, maximo in spec.limits.items():
+        value = payload.get(name)
+        if isinstance(value, str):
+            itens: list[str] = [value]
+        elif isinstance(value, list):
+            itens = [item for item in value if isinstance(item, str)]
+        else:
+            continue
+        for item in itens:
+            if len(item) > maximo:
+                raise PayloadTooLong(
+                    f"{kind}: campo {name!r} tem {len(item)} caracteres, "
+                    f"o máximo é {maximo}"
+                )
+
+    tamanho = len(
+        json.dumps(dict(payload), ensure_ascii=False, sort_keys=True).encode("utf-8")
+    )
+    if tamanho > PAYLOAD_LIMIT:
+        raise PayloadTooLong(
+            f"{kind}: payload tem {tamanho} bytes, o máximo é {PAYLOAD_LIMIT}"
+        )
 
 
 # -------------------------------------------------------------------- evento
@@ -303,8 +388,12 @@ def make_event(
 
     Campos opcionais em `None` são descartados em vez de gravados como nulo:
     ausência e nulo devem ser a mesma coisa no log.
+
+    É aqui que os limites de tamanho valem, e só aqui: todo construtor de kind
+    passa por esta função, e nenhum caminho de leitura passa. Ver `check_limits`.
     """
     limpo = {name: value for name, value in payload.items() if value is not None}
+    check_limits(kind, limpo)
     return Event(
         uuid=new_id(),
         device_id=device_id,

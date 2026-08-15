@@ -25,6 +25,7 @@ from cantinho.core.store import DATABASE_FILENAME, EventStore, default_data_dir
 from cantinho.services import scene
 from cantinho.services.audio import Ambience, Sfx
 from cantinho.services.desktop_entry import ensure_installed
+from cantinho.services.fonts import load_fonts
 from cantinho.services.graphics import ensure_gl_integration
 from cantinho.services.hotkey import create_hotkey
 from cantinho.services.single_instance import SingleInstance
@@ -91,6 +92,10 @@ def main(argv: list[str] | None = None) -> int:
     # Liga a janela ao `.desktop` do Linux. Sem isto o GNOME não reconhece a
     # janela como sendo daquele atalho e mostra um ícone genérico ao lado dele.
     app.setDesktopFileName("cantinho")
+    # Antes de qualquer QML: a fonte padrão da aplicação é herdada por cada
+    # `Text` que não declara família, e trocá-la depois de a tela existir
+    # remede todo o layout.
+    load_fonts(app)
     # Fechar a janela principal não encerra o app: ele continua na bandeja.
     app.setQuitOnLastWindowClosed(False)
 

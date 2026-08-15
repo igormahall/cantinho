@@ -20,6 +20,8 @@ from typing import Iterator
 import pytest
 
 from cantinho.backend import (
+    CHECKIN_LIMIT,
+    _RelogioFixo,
     DEFAULT_SOUND_MODE,
     LONG_SESSION_MINUTES,
     NUDGE_AFTER_MINUTES,
@@ -27,6 +29,7 @@ from cantinho.backend import (
     NUDGES,
     Backend,
 )
+from cantinho.core import events as ev
 from cantinho.core import projections as proj
 from cantinho.core.clock import FakeClock
 from cantinho.core.store import EventStore
@@ -804,3 +807,229 @@ def test_o_rosto_do_passeio_nao_e_o_da_planta_de_agora(backend: Backend) -> None
     """
     assert backend.plantStage == 0
     assert backend.tourAvatarStage == 2
+
+
+# ------------------------------------------------- limites de texto na entrada
+#
+# A regra destes: **nenhum slot pode levantar exceção.** Exceção em slot morre
+# dentro do laço de eventos do Qt, e perder o app inteiro por ter colado um
+# texto grande no campo errado é pior do que perder o excedente do texto. Quem
+# recusa de vez é `check_limits`, em `core/events.py`; aqui o que se prova é que
+# a fronteira corta antes de chegar lá.
+
+
+def test_rotulo_gigante_e_cortado_em_vez_de_derrubar(backend: Backend) -> None:
+    backend.addTask("t" * (ev.LABEL_LIMIT * 10))
+    assert len(backend.backlog) == 1
+    assert len(backend.backlog[0]["label"]) == ev.LABEL_LIMIT
+
+
+def test_ideia_gigante_e_cortada(backend: Backend) -> None:
+    backend.captureIdea("i" * (ev.TEXT_LIMIT * 10))
+    assert len(backend.ideas) == 1
+    assert len(backend.ideas[0]["text"]) == ev.TEXT_LIMIT
+
+
+def test_renomear_com_texto_gigante_nao_derruba(backend: Backend) -> None:
+    [task_id] = semear(backend, "original")
+    backend.renameTask(task_id, "r" * (ev.LABEL_LIMIT * 10))
+    assert len(backend.backlog[0]["label"]) == ev.LABEL_LIMIT
+
+
+def test_nota_gigante_na_revisao_e_cortada(backend: Backend) -> None:
+    backend.saveReview(3, 3, "n" * (ev.TEXT_LIMIT * 10))
+    assert len(backend.todayReview["note"]) == ev.TEXT_LIMIT
+
+
+def test_checkin_corta_a_lista_e_cada_item(backend: Backend) -> None:
+    """Limitar cada item não limita a lista, e é ela que estoura o payload."""
+    backend.saveCheckin(["i" * (ev.LABEL_LIMIT * 2)] * (CHECKIN_LIMIT * 4))
+    [evento] = [e for e in backend._events if e.kind == "day.checkin"]
+    assert len(evento.payload["intents"]) == CHECKIN_LIMIT
+    assert all(len(texto) == ev.LABEL_LIMIT for texto in evento.payload["intents"])
+
+
+def test_reordenar_um_backlog_grande_nao_esbarra_no_teto(backend: Backend) -> None:
+    """`backlog.reordered` não é cortado, e a folga do teto é a razão."""
+    ids = semear(backend, *(f"tarefa {n}" for n in range(60)))
+    backend.reorderBacklog(list(reversed(ids)))
+    assert [tarefa["id"] for tarefa in backend.backlog] == list(reversed(ids))
+
+
+# ------------------------------------------------------- os limites da semana
+
+
+def test_a_semana_nao_anda_para_antes_do_log(backend: Backend) -> None:
+    """O passado tem fim, e ele é o primeiro evento — com um piso de uma semana.
+
+    A semana passada aconteceu mesmo que o app não estivesse lá, e vazia ela diz
+    uma coisa verdadeira. É a assimetria deliberada com o futuro, que não diz
+    nada porque ainda não é.
+    """
+    semear(backend, "uma tarefa")
+    for _ in range(300):
+        backend.previousWeek()
+    assert backend.weekOffset == 1
+    assert not backend.hasPreviousWeek
+
+
+def test_a_semana_anda_ate_o_primeiro_evento(backend: Backend) -> None:
+    from datetime import datetime as _dt
+
+    # Um evento de cinco semanas atrás: o recuo passa a ir até lá, e para.
+    antigo = _dt.now(timezone.utc) - timedelta(weeks=5)
+    backend._events.insert(
+        0,
+        ev.task_created(_RelogioFixo(antigo), DEVICE, label="tarefa velha"),
+    )
+    for _ in range(50):
+        backend.previousWeek()
+    assert backend.weekOffset == 5
+    assert not backend.hasPreviousWeek
+
+    backend.nextWeek()
+    assert backend.hasPreviousWeek
+
+
+def test_semana_de_log_vazio_para_na_semana_passada(backend: Backend) -> None:
+    for _ in range(10):
+        backend.previousWeek()
+    assert backend.weekOffset == 1
+    assert not backend.hasPreviousWeek
+
+
+def test_o_periodo_diz_o_ano_quando_nao_e_o_de_hoje(backend: Backend) -> None:
+    from datetime import datetime as _dt
+
+    antigo = _dt.now(timezone.utc) - timedelta(weeks=80)
+    backend._events.insert(
+        0,
+        ev.task_created(_RelogioFixo(antigo), DEVICE, label="tarefa velha"),
+    )
+    while backend.hasPreviousWeek:
+        backend.previousWeek()
+    assert str(antigo.year) in backend.weekRange
+
+    backend.thisWeek()
+    assert str(datetime.now(timezone.utc).year) not in backend.weekRange
+
+
+def test_as_tres_propriedades_da_semana_concordam(backend: Backend) -> None:
+    """`weekDelivered` e `weekMinutes` saem da mesma passada que `weekDays`."""
+    [task_id] = semear(backend, "entregar isso")
+    backend.startSession(task_id)
+    backend.endSessionAndComplete()
+
+    assert backend.weekDelivered == sum(
+        len(dia["delivered"]) for dia in backend.weekDays
+    )
+    entregues = [rotulo for dia in backend.weekDays for rotulo in dia["delivered"]]
+    assert "entregar isso" in entregues
+
+
+# ------------------------------------------------------ a estante se explica
+
+
+def test_a_estante_diz_de_qual_tarefa_e_cada_objeto(backend: Backend) -> None:
+    """Objeto sem nome é decoração; com nome é a lembrança do que se fez."""
+    ids = semear(backend, "primeira", "segunda")
+    for task_id in ids:
+        backend.completeTask(task_id)
+
+    slots = backend.shelfSlots
+    assert [slot["label"] for slot in slots] == ["primeira", "segunda"]
+    # A posição vem do mesmo lugar que desenha a imagem: se divergisse, o rótulo
+    # apareceria ao lado do objeto errado.
+    from cantinho.services import scene
+
+    assert [(slot["x"], slot["y"]) for slot in slots] == scene.shelf_slots(2)
+
+
+def test_a_estante_lotada_nao_estoura_os_slots(backend: Backend) -> None:
+    """A projeção guarda tudo para sempre; é o desenho que lota."""
+    from cantinho.services import scene
+
+    ids = semear(backend, *(f"entrega {n}" for n in range(scene.SHELF_CAPACITY + 4)))
+    for task_id in ids:
+        backend.completeTask(task_id)
+
+    assert len(backend.shelf) == len(ids)
+    assert len(backend.shelfSlots) == scene.SHELF_CAPACITY
+
+
+# ------------------------------------------------------------------ a página
+#
+# Levar o quarto embora. E, junto, a regra que segura a semana: o horizonte
+# mais longo é respondido por uma página, não por um painel maior.
+
+
+def test_exportar_tudo_escreve_a_pagina(backend: Backend) -> None:
+    [task_id] = semear(backend, "escrever a tese")
+    backend.completeTask(task_id)
+    backend.captureIdea("trocar a fonte do editor")
+
+    caminho = Path(backend.exportEverything())
+    assert caminho.is_file()
+    texto = caminho.read_text(encoding="utf-8")
+    assert "escrever a tese" in texto
+    assert "trocar a fonte do editor" in texto
+
+
+def test_a_pagina_fica_ao_lado_do_banco(backend: Backend) -> None:
+    """A regra de que o app só escreve na própria pasta de dados continua de pé."""
+    semear(backend, "algo")
+    caminho = Path(backend.exportEverything())
+    assert caminho.parent == Path(backend.exportFolder)
+    assert caminho.parent.parent == backend._store.db_path.parent
+
+
+def test_a_semana_exporta_o_periodo_que_esta_na_tela(backend: Backend) -> None:
+    """C2: ver mais que uma semana é gerar a página, não abrir outro painel."""
+    [task_id] = semear(backend, "entrega desta semana")
+    backend.completeTask(task_id)
+
+    desta = Path(backend.exportCurrentWeek())
+    assert "entrega desta semana" in desta.read_text(encoding="utf-8")
+
+    # Andando para trás, a página é a daquele período — e não tem o de agora.
+    backend.previousWeek()
+    passada = Path(backend.exportCurrentWeek())
+    assert passada != desta
+    assert "entrega desta semana" not in passada.read_text(encoding="utf-8")
+
+
+def test_exportar_avisa_com_o_caminho(backend: Backend) -> None:
+    """Exportação sem retorno na tela é igual a exportação que não aconteceu."""
+    avisos: list[str] = []
+    backend.exported.connect(avisos.append)
+    semear(backend, "algo")
+    caminho = backend.exportEverything()
+    assert avisos == [caminho]
+
+
+def test_exportar_com_a_pasta_bloqueada_nao_derruba(backend: Backend) -> None:
+    """Slot que levanta exceção morre dentro do laço de eventos do Qt."""
+    falhas: list[int] = []
+    backend.exportFailed.connect(lambda: falhas.append(1))
+
+    # Um arquivo onde deveria haver uma pasta: `mkdir` falha com OSError.
+    pasta = Path(backend.exportFolder)
+    pasta.parent.mkdir(parents=True, exist_ok=True)
+    pasta.write_text("nao sou uma pasta", encoding="utf-8")
+
+    assert backend.exportEverything() == ""
+    assert falhas == [1]
+
+
+def test_exportar_duas_vezes_sobrescreve_a_mesma_pagina(backend: Backend) -> None:
+    """O nome vem do período, então a página do período é uma só."""
+    ids = semear(backend, "primeira", "segunda")
+    backend.completeTask(ids[0])
+    primeiro = backend.exportEverything()
+
+    backend.completeTask(ids[1])
+    segundo = backend.exportEverything()
+
+    assert primeiro == segundo
+    texto = Path(segundo).read_text(encoding="utf-8")
+    assert "primeira" in texto and "segunda" in texto

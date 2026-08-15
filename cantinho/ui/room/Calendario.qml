@@ -80,6 +80,7 @@ FolhaDeParede {
                 color: Theme.texto
                 opacity: 0.85
                 font.pixelSize: Math.round(15 * calendario.unidade)
+                font.family: Theme.fontePapel
                 font.letterSpacing: 0.5 * calendario.unidade
             }
 
@@ -91,6 +92,7 @@ FolhaDeParede {
                 color: Theme.textoSuave
                 opacity: 0.7
                 font.pixelSize: Math.round(10 * calendario.unidade)
+                font.family: Theme.fontePapel
             }
         }
 
@@ -113,6 +115,7 @@ FolhaDeParede {
                     color: Theme.textoSuave
                     opacity: 0.55
                     font.pixelSize: Math.round(9 * calendario.unidade)
+                    font.family: Theme.fontePapel
                 }
             }
         }
@@ -162,6 +165,7 @@ FolhaDeParede {
                         color: parent.ehHoje ? Theme.ambar : Theme.texto
                         opacity: parent.ehHoje ? 1.0 : (parent.fimDeSemana ? 0.38 : 0.62)
                         font.pixelSize: Math.round(11 * calendario.unidade)
+                        font.family: Theme.fontePapel
                     }
                 }
             }

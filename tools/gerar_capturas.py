@@ -46,6 +46,7 @@ from cantinho.backend import Backend  # noqa: E402
 from cantinho.core.clock import SystemClock  # noqa: E402
 from cantinho.core.store import EventStore  # noqa: E402
 from cantinho.services import scene  # noqa: E402
+from cantinho.services.fonts import load_fonts  # noqa: E402
 from tools.semear import semear  # noqa: E402
 DESTINO = RAIZ / "docs"
 
@@ -60,6 +61,7 @@ def main() -> int:
     semear(banco)
 
     app = QApplication([])
+    load_fonts(app)
     store = EventStore(banco, device_id="capturas")
     backend = Backend(store, SystemClock())
 

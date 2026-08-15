@@ -33,6 +33,7 @@ Item {
     }
 
     Flickable {
+        id: rolo
         anchors.fill: parent
         contentHeight: coluna.height
         clip: true
@@ -149,6 +150,7 @@ Item {
             CampoTexto {
                 id: nota
                 width: parent.width
+                limite: backend.textLimit
                 placeholder: "alguma coisa que valha lembrar (opcional)"
             }
 
@@ -178,10 +180,15 @@ Item {
                     text: "a sessão em curso é guardada junto"
                     color: Theme.textoSuave
                     opacity: 0.8
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.nano
                     leftPadding: 10
                 }
             }
         }
+    }
+
+    Rolagem {
+        anchors.fill: rolo
+        lista: rolo
     }
 }

@@ -12,16 +12,21 @@ caminho fizer isso, reabrir o app mostra outra coisa.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import replace
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
-from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices
 
 from cantinho.core import events as ev
+from cantinho.core import export
 from cantinho.core import projections as proj
 from cantinho.core import schedule
 from cantinho.core.clock import Clock
 from cantinho.core.store import EventStore
+from cantinho.services import scene
 from cantinho.services.heartbeat import HEARTBEAT_FILENAME, Heartbeat
 from cantinho.services.timer import SessionTimer
 
@@ -32,6 +37,17 @@ __all__ = ["Backend"]
 # Quantas linhas cabem no bilhete da parede. É a folha que limita, não a
 # projeção: uma lista que rola na parede deixaria de ser um bilhete.
 BOARD_LIMIT = 6
+
+# Quantas intenções `day.checkin` aceita numa lista só.
+#
+# Existe porque `LABEL_LIMIT` limita cada item e não a lista: com itens no
+# tamanho máximo, algumas centenas deles passam do `PAYLOAD_LIMIT` e o evento
+# se recusa a nascer — dentro de um slot, que é onde exceção derruba o app.
+# Cinquenta itens de 200 caracteres dão 10 KB contra um teto de 64 KB, com
+# folga de sobra. O outro kind de lista, `backlog.reordered`, não precisa de
+# corte: são uuids gerados pelo app a partir do próprio backlog, e caberiam
+# cerca de mil e seiscentos antes de o teto chegar perto.
+CHECKIN_LIMIT = 50
 
 # Modos de som, na ordem em que o botão gira.
 #
@@ -104,6 +120,23 @@ class _RelogioFixo:
         return self._moment
 
 
+def _texto(valor: str, limite: int) -> str:
+    """Texto de entrada pronto para virar payload: sem folga nas pontas e cortado.
+
+    Cortar aqui é o que garante que `check_limits` nunca dispare vindo da tela.
+    A diferença importa: um slot que levanta exceção morre dentro do laço de
+    eventos do Qt, e o usuário perde o app inteiro por ter colado um texto
+    grande demais no campo errado.
+
+    No caminho normal isto nunca corta nada, porque o campo da tela já recusa o
+    que passa do limite (`CampoTexto.limite`). Isto é a rede para o resto: o
+    atalho global, o roteiro de simulação, um caminho futuro que ninguém ligou
+    a um campo.
+    """
+    limpo = valor.strip()
+    return limpo if len(limpo) <= limite else limpo[:limite].strip()
+
+
 def _format_elapsed(delta: timedelta) -> str:
     total = int(delta.total_seconds())
     horas, resto = divmod(total, 3600)
@@ -137,6 +170,9 @@ class Backend(QObject):
     # o serviço de áudio.
     sfxRequested = Signal(str)
     quitRequested = Signal()
+    # A página foi escrita: leva o caminho dela.
+    exported = Signal(str)
+    exportFailed = Signal()
 
     def __init__(
         self,
@@ -306,6 +342,17 @@ class Backend(QObject):
     def todayLimit(self) -> int:
         return proj.TODAY_LIMIT
 
+    # Os limites de texto, para os campos da tela recusarem o que o log não
+    # aceitaria. Ficam aqui em vez de repetidos no QML porque quem manda é o
+    # contrato do evento, não a caixa de texto.
+    @Property(int, constant=True)
+    def labelLimit(self) -> int:
+        return ev.LABEL_LIMIT
+
+    @Property(int, constant=True)
+    def textLimit(self) -> int:
+        return ev.TEXT_LIMIT
+
     @Property(bool, notify=stateChanged)
     def backlogEmpty(self) -> bool:
         return not self._backlog
@@ -313,7 +360,7 @@ class Backend(QObject):
     @Slot(str)
     @Slot(str, str)
     def addTask(self, label: str, project: str = "") -> None:
-        label = label.strip()
+        label = _texto(label, ev.LABEL_LIMIT)
         if not label:
             return
         self._registrar(
@@ -321,7 +368,7 @@ class Backend(QObject):
                 self._clock,
                 self.device_id,
                 label=label,
-                project=project.strip() or None,
+                project=_texto(project, ev.LABEL_LIMIT) or None,
             )
         )
 
@@ -337,7 +384,7 @@ class Backend(QObject):
         Dois eventos no mesmo lote, como todo composto: `task.created` e
         `task.completed` continuam sendo fatos distintos no log.
         """
-        label = label.strip()
+        label = _texto(label, ev.LABEL_LIMIT)
         if not label:
             return
         tarefa = ev.task_created(self._clock, self.device_id, label=label)
@@ -361,7 +408,7 @@ class Backend(QObject):
         Rótulo vazio ou igual ao atual não gera evento — um log cheio de
         renomeações que não mudaram nada é ruído.
         """
-        label = label.strip()
+        label = _texto(label, ev.LABEL_LIMIT)
         if not task_id or not label:
             return
         atual = next((task for task in self._backlog if task.id == task_id), None)
@@ -551,7 +598,7 @@ class Backend(QObject):
             self.device_id,
             id=session_id,
             interrupted=bool(interrupted),
-            note=note.strip() or None,
+            note=_texto(note, ev.TEXT_LIMIT) or None,
         )
 
     def _parar_timer(self) -> None:
@@ -817,6 +864,34 @@ class Backend(QObject):
     def shelf(self) -> list[str]:
         return [objeto.object_type for objeto in self._estante]
 
+    @Property("QVariantList", notify=stateChanged)
+    def shelfSlots(self) -> list[dict]:
+        """Onde cada objeto está e o que ele é, em coordenada do viewBox.
+
+        Existe para o quarto poder dizer **qual tarefa** é cada objeto quando o
+        mouse passa por cima. A estante é o retorno central do app e era a única
+        coisa da tela que não sabia se explicar: um objeto na prateleira é
+        recompensa, e recompensa que não se sabe do quê é decoração.
+
+        A posição vem de `scene.shelf_slots`, a mesma função que o provedor usa
+        para desenhar — se as duas contas divergissem, o rótulo apareceria ao
+        lado do objeto errado, que é pior do que não aparecer. O QML converte
+        para pixel de tela por `Room.cx`/`cy`, porque a cena é centralizada e
+        escalada.
+
+        A lista é cortada na lotação do desenho, não na do log: a projeção
+        guarda todas as entregas para sempre, e é a arte que comporta doze. Sem
+        o corte, `zip(..., strict=True)` estoura na décima terceira — dentro de
+        uma propriedade lida pelo QML, que é onde exceção vira tela quebrada.
+        """
+        posicoes = scene.shelf_slots(len(self._estante))
+        return [
+            {"label": objeto.label, "x": x, "y": y}
+            for objeto, (x, y) in zip(
+                self._estante[: len(posicoes)], posicoes, strict=True
+            )
+        ]
+
     @Property(int, notify=stateChanged)
     def plantStage(self) -> int:
         return self._estagio
@@ -838,7 +913,7 @@ class Backend(QObject):
 
     @Slot(str)
     def captureIdea(self, text: str) -> None:
-        text = text.strip()
+        text = _texto(text, ev.TEXT_LIMIT)
         if not text:
             return
         self._registrar(ev.idea_captured(self._clock, self.device_id, text=text))
@@ -986,7 +1061,7 @@ class Backend(QObject):
                 date=self._hoje().isoformat(),
                 mood=int(mood),
                 energy=int(energy),
-                note=note.strip() or None,
+                note=_texto(note, ev.TEXT_LIMIT) or None,
             )
         )
 
@@ -1007,7 +1082,14 @@ class Backend(QObject):
         guardado, e o diário fecha.
 
         Gesto só na tela e lote só no log: o dia não fecha pela metade.
+
+        Pergunta o que mais se fechou junto, pela mesma razão que "entreguei" e
+        "parar" perguntam: uma sessão longa raramente é uma coisa só, e o gesto
+        de registrar acontece no fim, quando já se esqueceu. Encerrar o dia com
+        três horas correndo é o caso mais forte disso, não o mais fraco — era a
+        única saída de sessão que não perguntava nada.
         """
+        decorrido = self._timer.elapsed
         fim = self._evento_de_fim(False, "")
         eventos = [] if fim is None else [fim]
         eventos.append(
@@ -1017,16 +1099,27 @@ class Backend(QObject):
                 date=self._hoje().isoformat(),
                 mood=int(mood),
                 energy=int(energy),
-                note=note.strip() or None,
+                note=_texto(note, ev.TEXT_LIMIT) or None,
             )
         )
         self._registrar_lote(eventos)
         if fim is not None:
             self._parar_timer()
+            self._talvez_perguntar_extra(decorrido)
 
     @Slot("QVariantList")
     def saveCheckin(self, intents: list) -> None:
-        textos = [str(item).strip() for item in intents if str(item).strip()]
+        # Limitar cada item não limita a lista, e é ela que pode estourar o
+        # teto do payload — com o limite por item respeitado, item por item.
+        # Aqui a lista é cortada; quem recusa de vez é `check_limits`, e a
+        # divisão é a mesma do texto: o slot nunca levanta, o contrato nunca
+        # cede. O corte é folgado de propósito — não é opinião sobre quantas
+        # intenções cabem num dia, é o ponto onde deixou de ser uma lista.
+        textos = [
+            texto
+            for texto in (_texto(str(item), ev.LABEL_LIMIT) for item in intents)
+            if texto
+        ][:CHECKIN_LIMIT]
         self._registrar(
             ev.day_checkin(
                 self._clock,
@@ -1060,12 +1153,48 @@ class Backend(QObject):
         segunda = hoje - timedelta(days=hoje.weekday())
         return segunda - timedelta(weeks=self._week_offset)
 
-    @Property("QVariantList", notify=weekChanged)
-    def weekDays(self) -> list[dict]:
+    def _semana(self) -> tuple[list[dict], int]:
+        """Os sete dias e os minutos da semana, numa passada só pelo log.
+
+        **Este método é a correção de um custo que doía de verdade.** A versão
+        anterior tinha três propriedades independentes, e cada uma reprojetava
+        o log inteiro várias vezes: `weekDays` chamava `completed_on` sete
+        vezes (sete `completed_tasks`), `weekMinutes` chamava `minutes_on`
+        outras sete (sete `sessions`), e `weekDelivered` chamava `weekDays`
+        de novo por completo, só para contar.
+
+        Como as três são propriedades notificadas por `weekChanged`, e
+        `_recomputar` emite `weekChanged` a cada evento gravado, a conta toda
+        rodava **a cada clique que escrevia no log** — com o painel da semana
+        fechado, porque os bindings ficam vivos de qualquer jeito. Medido: 95 ms
+        por clique com um ano de uso, 301 ms com três anos, justamente no gesto
+        em que a estante deveria animar suave.
+
+        Aqui `completed_tasks` e `sessions` rodam uma vez cada, e os sete dias
+        saem de um agrupamento em memória. As três propriedades passaram a ler
+        deste resultado.
+        """
         fuso = self._fuso()
         hoje = self._hoje()
         inicio = self._inicio_da_semana()
+        fim = inicio + timedelta(days=6)
         revisoes = proj.day_reviews(self._events)
+
+        entregas: dict[date, list[str]] = {}
+        for task in proj.completed_tasks(self._events):
+            if task.completed_at is None:
+                continue
+            dia = task.completed_at.astimezone(fuso).date()
+            if inicio <= dia <= fim:
+                entregas.setdefault(dia, []).append(task.label)
+
+        minutos = 0.0
+        for sessao in proj.sessions(self._events):
+            if sessao.ended_at is None:
+                continue
+            dia = sessao.ended_at.astimezone(fuso).date()
+            if inicio <= dia <= fim:
+                minutos += sessao.duration_minutes
 
         dias: list[dict] = []
         for passo in range(7):
@@ -1081,14 +1210,16 @@ class Backend(QObject):
                     # nada a dizer, e escrever "em branco" nele soaria como
                     # cobrança antecipada.
                     "ahead": dia > hoje,
-                    "delivered": [
-                        task.label for task in proj.completed_on(self._events, dia, fuso)
-                    ],
+                    "delivered": entregas.get(dia, []),
                     "mood": revisao.mood if revisao else 0,
                     "note": (revisao.note or "") if revisao else "",
                 }
             )
-        return dias
+        return dias, int(round(minutos))
+
+    @Property("QVariantList", notify=weekChanged)
+    def weekDays(self) -> list[dict]:
+        return self._semana()[0]
 
     @Property(str, notify=weekChanged)
     def weekTitle(self) -> str:
@@ -1100,35 +1231,76 @@ class Backend(QObject):
 
     @Property(str, notify=weekChanged)
     def weekRange(self) -> str:
+        """As datas da semana. Com o ano quando ele não é o de hoje.
+
+        Sem o ano, "9 a 15 de novembro" deixa de identificar a semana assim que
+        se anda algumas para trás — e navegar para trás é a razão de este painel
+        ter setas. No ano corrente ele fica de fora, porque aí é ruído: ninguém
+        precisa que o app diga em que ano está hoje.
+        """
         inicio = self._inicio_da_semana()
         fim = inicio + timedelta(days=6)
+        sufixo = "" if fim.year == self._hoje().year else f" de {fim.year}"
         if inicio.month == fim.month:
-            return f"{inicio.day} a {fim.day} de {self._MESES[fim.month - 1]}"
+            return f"{inicio.day} a {fim.day} de {self._MESES[fim.month - 1]}{sufixo}"
         return (
             f"{inicio.day} de {self._MESES[inicio.month - 1]}"
-            f" a {fim.day} de {self._MESES[fim.month - 1]}"
+            f" a {fim.day} de {self._MESES[fim.month - 1]}{sufixo}"
         )
 
     @Property(int, notify=weekChanged)
     def weekDelivered(self) -> int:
-        return sum(len(dia["delivered"]) for dia in self.weekDays)
+        return sum(len(dia["delivered"]) for dia in self._semana()[0])
 
     @Property(int, notify=weekChanged)
     def weekMinutes(self) -> int:
-        fuso = self._fuso()
-        inicio = self._inicio_da_semana()
-        total = sum(
-            proj.minutes_on(self._events, inicio + timedelta(days=passo), fuso)
-            for passo in range(7)
-        )
-        return int(round(total))
+        return self._semana()[1]
 
     @Property(int, notify=weekChanged)
     def weekOffset(self) -> int:
         return self._week_offset
 
+    # Quanto se pode voltar mesmo sem log nenhum atrás.
+    #
+    # Uma semana, e a assimetria com o futuro é de propósito: a semana passada
+    # **aconteceu**, ainda que o app não estivesse lá para ver. Vazia, ela diz
+    # uma coisa verdadeira — "nada aqui" —, enquanto a semana que vem não diz
+    # nada, porque ainda não é. É a mesma razão de `weekDays` marcar `ahead` em
+    # vez de tratar dia futuro como dia em branco.
+    _RECUO_MINIMO = 1
+
+    def _recuo_maximo(self) -> int:
+        """Quantas semanas atrás a navegação ainda vai.
+
+        O fim do passado é o primeiro evento do log: antes dele o cantinho não
+        tem o que dizer, que é o argumento que já barra o futuro do outro lado
+        da linha. Sem este limite a navegação ia para sempre — trezentos cliques
+        levavam a 2020, sete dias vazios em cada tela e uma reprojeção do log
+        inteiro em cada passo.
+
+        O piso de uma semana é o que preserva a leitura honesta de quem começou
+        ontem: a semana passada existe e está vazia, e ver isso é diferente de
+        não poder olhar.
+        """
+        if not self._events:
+            return self._RECUO_MINIMO
+        primeiro = min(evento.occurred_at for evento in self._events)
+        dia = primeiro.astimezone(self._fuso()).date()
+        semana_do_primeiro = dia - timedelta(days=dia.weekday())
+        hoje = self._hoje()
+        semana_atual = hoje - timedelta(days=hoje.weekday())
+        semanas = (semana_atual - semana_do_primeiro).days // 7
+        return max(self._RECUO_MINIMO, semanas)
+
+    @Property(bool, notify=weekChanged)
+    def hasPreviousWeek(self) -> bool:
+        """Se ainda há semana atrás desta. É o que apaga a seta no fim."""
+        return self._week_offset < self._recuo_maximo()
+
     @Slot()
     def previousWeek(self) -> None:
+        if self._week_offset >= self._recuo_maximo():
+            return
         self._week_offset += 1
         self.weekChanged.emit()
 
@@ -1417,3 +1589,82 @@ class Backend(QObject):
     def requestQuit(self) -> None:
         """Encerrar de verdade. Quem confirma é a tela; aqui já é decisão."""
         self.quitRequested.emit()
+
+    # ----------------------------------------------------------- a página
+    #
+    # Levar o quarto embora.
+    #
+    # Um log pessoal de anos sem exportação é um refém: o banco é SQLite e o
+    # esquema é simples, mas "abra o sqlite3 e escreva um SELECT" não é uma
+    # saída, é a ausência de uma.
+    #
+    # **A página é também a resposta ao horizonte longo.** Ver mais que uma
+    # semana é gerar o diário daquele período e lê-lo como texto — não abrir um
+    # painel de mês, que seria mais tela dentro do mesmo lugar e com a mesma
+    # pressão de virar comparação. Daí os dois caminhos: a semana exporta o que
+    # está na tela, o menu do quarto exporta tudo.
+    #
+    # O arquivo vai para uma pasta ao lado do banco, e não para a Área de
+    # Trabalho ou os Documentos: descobrir onde essas pastas ficam é código de
+    # plataforma (em português elas têm outro nome, e com OneDrive corporativo
+    # estão redirecionadas), e o app abre a pasta em seguida, então onde ela
+    # fica deixa de importar. Também é o que mantém de pé a regra de que o app
+    # só escreve na própria pasta de dados.
+
+    @Property(str, notify=stateChanged)
+    def exportFolder(self) -> str:
+        return str(self._store.db_path.parent / "paginas")
+
+    @Slot(result=str)
+    def exportEverything(self) -> str:
+        """Escreve a página com tudo. Devolve o caminho, ou vazio se falhou."""
+        return self._escrever_pagina(None, None)
+
+    @Slot(result=str)
+    def exportCurrentWeek(self) -> str:
+        """Escreve a página da semana que o painel está mostrando."""
+        inicio = self._inicio_da_semana()
+        return self._escrever_pagina(inicio, inicio + timedelta(days=6))
+
+    def _escrever_pagina(self, inicio: date | None, fim: date | None) -> str:
+        texto = export.diary_markdown(
+            self._events,
+            self._fuso(),
+            inicio=inicio,
+            fim=fim,
+            gerado_em=self._clock.now(),
+        )
+        destino = Path(self.exportFolder) / export.suggested_filename(inicio, fim)
+        try:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            # Escrita atômica, pela mesma razão da marca de vida: uma queda no
+            # meio deixaria meia página no lugar de uma página inteira, e a
+            # anterior — que estava certa — já teria sido truncada.
+            temporario = destino.with_name(destino.name + ".novo")
+            temporario.write_text(texto, encoding="utf-8")
+            os.replace(temporario, destino)
+        except OSError:
+            logger.warning("não deu para escrever a página", exc_info=True)
+            self.exportFailed.emit()
+            return ""
+
+        logger.info("página escrita em %s", destino)
+        self.exported.emit(str(destino))
+        return str(destino)
+
+    @Slot()
+    def openExportFolder(self) -> None:
+        """Abre a pasta das páginas no gerenciador de arquivos.
+
+        `QDesktopServices` é a abstração do próprio Qt e funciona nos dois
+        sistemas — não é código de plataforma e por isso não precisa morar em
+        `services/`. É ela que torna aceitável guardar as páginas ao lado do
+        banco: o caminho deixa de ser algo que alguém tem que decorar.
+        """
+        pasta = Path(self.exportFolder)
+        try:
+            pasta.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            logger.warning("não deu para criar %s", pasta, exc_info=True)
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(pasta)))

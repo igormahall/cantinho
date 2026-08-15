@@ -100,7 +100,7 @@ Painel {
         Text {
             text: "o que vem agora"
             color: Theme.textoSuave
-            font.pixelSize: 11
+            font.pixelSize: Theme.nano
             bottomPadding: 4
         }
 

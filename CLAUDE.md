@@ -58,6 +58,7 @@ cantinho.bat empacotar       :: pyinstaller -> dist\Cantinho\
 cantinho.bat atualizar       :: dependências + build com o cache limpo
 cantinho.bat portatil        :: o zip que roda sobre o Python oficial
 cantinho.bat testar          :: a suíte
+cantinho.bat lint            :: ruff + qmllint (opcional)
 cantinho.bat refazer         :: apaga o venv e começa de novo
 cantinho.bat atalho          :: põe o Cantinho na Área de Trabalho
 ```
@@ -86,7 +87,9 @@ python -m pytest                  # suíte completa
 python -m pytest tests/test_projections.py::test_planta_decai_ao_avancar_14_dias
 python -m pytest -k planta -x     # por nome, parando no primeiro erro
 python tools/check_svg.py         # validar SVGs -> build/svg_check/*.png
-python tools/simular_uso.py       # percorre a UI com mouse e teclado sintéticos
+python tools/check_qml.py         # qmllint com o import path certo
+python tools/simular_uso.py --tema tarde   # percorre a UI clicando de verdade
+python tools/simular_uso.py --tema noite   # e de novo no outro tema
 python tools/semear.py            # banco de demonstração em build/demo.db
 python tools/semear.py --de-novo  # refaz um banco já semeado
 python tools/gerar_audio.py       # regera assets/audio/*.wav
@@ -121,10 +124,19 @@ dá foco a um campo de texto continua não funcionando nesse estado.
 
 `tools/simular_uso.py` é o que cobre o QML — o pytest não cobre. Ele cria
 tarefa, escolhe o que vem agora, roda sessão, conclui, arrasta, corrige texto,
-captura ideia, abre a semana e fecha o dia clicando de verdade; depois reabre o
-banco e confere o log evento por evento. Rode depois de mexer em qualquer
-`.qml`. Passe uma pasta como argumento para guardar as
-capturas de cada etapa.
+captura ideia, abre a semana, guarda a página, abre e usa a mini e fecha o dia
+clicando de verdade; depois reabre o banco e confere o log evento por evento — e
+abre a página escrita para conferir que ela traz o que foi entregue e nenhuma
+palavra de desempenho. Rode depois de mexer em qualquer `.qml`. Passe uma pasta
+como argumento para guardar as capturas de cada etapa.
+
+**Rode os dois temas.** Sem `--tema` ele herda o modo `auto`, que decide pelo
+relógio — e como o desenvolvimento acontece à noite, na prática **o tema claro
+nunca era exercitado**. Não é diferença cosmética: são dois SVGs de cena
+distintos, quatro camadas de estante (duas listas × dois temas) e uma paleta com
+contraste e opacidades próprios. Uma regressão que só aparecesse de dia passaria
+batido indefinidamente. Com a pasta de capturas, cada tema grava com o nome
+sufixado, para não sobrescrever o outro.
 
 O que ele **não** cobre são os limiares de tempo: ele emite `nudged` e
 `extraAsked` na mão, então o que fica sem exercício é justamente o tique de um
@@ -159,12 +171,12 @@ Para rodar a suíte sem abrir janela: `$env:QT_QPA_PLATFORM="offscreen"`. Cuidad
 que nesse modo o Qt fica **sem nenhuma família de fonte** — texto vira tofu em
 screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
 
-No Windows a suíte dá **390 passados e 3 pulados**, e esse é o resultado certo,
+No Windows a suíte dá **458 passados e 3 pulados**, e esse é o resultado certo,
 não uma suíte incompleta. Os três são de `test_desktop_entry.py` e dependem de
 semântica POSIX: barra `/` no `Exec=` e bit de execução no `.desktop`. A fixture
 finge o `sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação
 e o `chmod` do Windows não tem bit para ligar — eles falhariam com o código
-certo, que é o pior tipo de teste vermelho. No Ubuntu os 393 rodam.
+certo, que é o pior tipo de teste vermelho. No Ubuntu os 461 rodam.
 
 **Não rode nada disto num terminal elevado.** Com token de administrador o
 Windows põe `BUILTIN\Administradores` como dono de todo diretório criado, no
@@ -197,6 +209,83 @@ quarto sem calendário, sem relógio e sem bilhete.
 1 se algum falhar. Não basta olhar o exit code: **abra os PNGs em
 `build/svg_check/`**, porque um SVG com feature não suportada renderiza vazio ou
 parcial sem que `isValid()` reclame.
+
+`tools/check_qml.py` roda o `qmllint` sobre `cantinho/ui/`. Ele existe pelo
+import path, e isso não é detalhe: **sem `-I cantinho/ui` o `theme` não resolve**,
+o `Theme` vira tipo desconhecido e o relatório enche de "Unqualified access" que
+só existem porque a ferramenta foi mal chamada. Uma auditoria deste projeto
+reportou 569 avisos assim; com o caminho certo eram 313, todos do `backend`, que
+é context property e o `qmllint` nunca vai conhecer — não tem tipo declarado em
+lugar nenhum, por construção. Chamar errado não deixa a análise rigorosa, deixa
+ela inútil.
+
+O `.qmllint.ini` desliga `UnqualifiedAccess` e `ContextProperties` por essa
+razão, e é isso que faz sobrar sinal: depois de desligadas restaram **2** avisos,
+e os 2 eram defeito de verdade — `Passeio.qml` chamava `cx`/`cy` numa
+`property Item`, e `Item` não tem nenhum dos dois. A correção foi tipar como
+`Room`, que é de quem os métodos são.
+
+O preço de desligar é conhecido: erro de digitação em nome de propriedade do
+backend não é pego aqui. Quem pega é `tools/simular_uso.py`. Acabar com o preço
+exigiria expor o backend como singleton QML em vez de context property — mexeria
+nos 18 arquivos `.qml`, e em troca o `qmlcachegen` passaria a compilar os
+bindings em vez de interpretá-los. A decisão não foi tomada.
+
+Os dois se completam e nenhum substitui o outro: `check_qml.py` é estático e
+pega propriedade que não existe no tipo, `simular_uso.py` clica de verdade e
+pega comportamento.
+
+`docs/auditoria.md` é o que sobrou da auditoria de 14/08/2026: **as direções**,
+que não são pendências e algumas das quais não devem ser feitas. Os achados de
+bug, de usabilidade e o plano estético saíram de lá quando foram implementados —
+o raciocínio de cada um foi para onde ele serve, que é junto do código que o
+tomou, aqui e nos comentários. O que um arquivo separado guarda bem é decisão
+sobre o futuro; o porquê de uma linha de código envelhece longe dela.
+
+### Ruff
+
+`ruff==0.16.3`, configurado em `ruff.toml`, e **de propósito fora de
+`requirements-dev.txt`**: aquele arquivo é o que `cantinho.bat instalar` roda na
+máquina restrita, sem internet confiável, e uma dependência a mais ali é uma
+chance a mais de o passo de instalação falhar onde ele mais importa. Lint não é
+o que faz o app rodar. Ele mora em `requirements-lint.txt`, e a falta dele é
+aviso e não erro — `cantinho.bat lint` pula a parte Python e roda o qmllint
+assim mesmo.
+
+```powershell
+pip install -r requirements-lint.txt
+python -m ruff check cantinho tests tools
+```
+
+O conjunto de regras é escolhido a dedo (`E4 E7 E9 E402 F B DTZ RUF100`) e
+fixado em vez de herdado do padrão do ruff, que muda entre versões — e as duas
+máquinas deste projeto não atualizam juntas. O critério de inclusão é um só:
+**lint que reclama de código certo é lint que se aprende a ignorar.** Cada
+família ligada pega defeito; as de fora saíram porque reclamavam de decisões
+deliberadas — a ordem dos `__all__` segue o ciclo de vida do domínio e não o
+alfabeto, `int(mood)` é a fronteira do número vindo do QML, os
+`subprocess.run` sem `check` são melhor-esforço de propósito.
+
+Duas coisas não óbvias:
+
+- **`E402` é a regra que faz o resto funcionar.** Toda ferramenta de `tools/`
+  importa `cantinho.*` depois de mexer no `sys.path`, e cada uma vinha marcada
+  com `# noqa: E402`. Com a regra desligada esses noqa não serviam para nada, e
+  o `RUF100` denunciava dezenove de uma vez. Ligada, cada um volta a significar
+  o que significa. O ruff, aliás, **tolera `sys.path.insert` antes de import
+  sozinho** — o que dispara E402 mesmo é chamada de função antes do import, que
+  é o caso do `ensure_gl_integration()` em `simular_uso.py`.
+- **`ruff format` não é usado, e não é esquecimento.** Reflui a base inteira, e
+  o pior conflito deste projeto é um arquivo editado nas duas máquinas —
+  reformatar tudo de uma vez é fabricar esse conflito. Está desligado no
+  `ruff.toml` com o motivo escrito.
+
+A primeira passada achou 64 avisos e sobraram 20 depois do conjunto escolhido.
+Desses, os que eram defeito de verdade: `not x is None` em `simular_uso.py`,
+dois `zip()` sem `strict=` sobre listas que têm o mesmo tamanho por construção
+(um deles em `services/scene.py`, na estante), e um
+`pytest.raises(Exception)` que aceitaria `AttributeError` por nome de campo
+errado como se fosse a prova de imutabilidade.
 
 ## Duas máquinas, um log de commits
 
@@ -304,6 +393,19 @@ Regras invioláveis:
 6. `device_id` existe mesmo sem sync. Custa um campo e preserva a opção de
    merge futuro (que seria `INSERT OR IGNORE`, sem conflito).
 
+   **A opção tem cadeado** (`tests/test_merge.py`). Sync continua proibido e não
+   deve ser implementado; o que os testes garantem é que a porta não se feche
+   sozinha. Opção preservada por acidente é opção que se perde por acidente:
+   bastaria uma projeção passar a filtrar por `device_id`, ou a ordem do log
+   passar a depender de quem escreveu, e ela sumiria sem ninguém perceber — para
+   se descobrir no dia em que alguém precisasse dela, que é o pior dia possível.
+
+   O cadeado prova quatro coisas: que juntar dois logs é **comutativo** (a ordem
+   do encontro não muda o resultado, então não há conflito a resolver), que é
+   **idempotente**, que **nenhuma projeção olha o `device_id`** — trocar o
+   dispositivo de todo evento não pode mudar nada na tela —, e que o desempate
+   do log é por uuid e não por dispositivo.
+
 ### Kinds
 
 ```
@@ -328,6 +430,47 @@ projeção ele é o único caso em que **o último evento vence** — renomear �
 correção, e corrigir duas vezes tem que valer a segunda. O id não muda, então o
 objeto que a tarefa deixa na estante continua sendo o mesmo desenho: ele vem do
 hash do id, nunca do rótulo.
+
+### Limites de texto, e por que eles só valem na construção
+
+Todo campo de texto livre tem teto: `LABEL_LIMIT` (200) para rótulo, projeto e
+intenção do dia; `TEXT_LIMIT` (4000) para ideia e nota. Por cima dos dois há
+`PAYLOAD_LIMIT` (64 000 bytes no JSON serializado), que é rede para o que os
+limites por campo não cobrem — uma lista que cresceu, um kind futuro que
+ninguém lembrou de limitar.
+
+Existem porque o log não tem `UPDATE` nem `DELETE`: o e-mail inteiro colado por
+engano no campo de ideia fica no banco para sempre, é relido em toda abertura e
+reprojetado a cada evento. É a imutabilidade que torna o limite barato agora e
+impossível depois.
+
+**A regra que sustenta tudo isto: o limite vale na construção, nunca na
+leitura.** `check_limits` é chamado de `make_event`, e de propósito não está
+dentro de `validate_payload` — aquela roda também em `Event.from_row`, então um
+limite novo lá tornaria ilegível todo evento antigo acima dele, e um banco que
+abria ontem pararia de abrir hoje. Há teste para isso.
+
+São três camadas, e cada uma existe por um motivo diferente:
+
+1. `CampoTexto.limite` (`maximumLength`) — a tela para de aceitar. Silenciosa:
+   sem diálogo, sem aviso, o campo só não cresce. É o caminho normal, e nele
+   nada é cortado nem recusado.
+2. `_texto()` em `backend.py` — corta antes de montar o evento. É o que garante
+   que um slot nunca levante exceção: exceção em slot morre dentro do laço de
+   eventos do Qt, e perder o app por ter colado texto grande é pior do que
+   perder o excedente do texto.
+3. `check_limits` em `core/events.py` — a garantia do contrato, para quem não
+   passa por tela nenhuma (`tools/`, atalho global, código futuro).
+
+Um caso não é texto e por isso escapa das duas primeiras: **limitar cada item de
+uma lista não limita a lista.** Com itens no tamanho máximo, algumas centenas
+deles passam do `PAYLOAD_LIMIT` — e aí o evento se recusa a nascer dentro de um
+slot, que é onde exceção derruba o app. Daí `CHECKIN_LIMIT` (50) em
+`backend.py`, cortando `day.checkin` na mesma divisão de trabalho. O outro kind
+de lista, `backlog.reordered`, não é cortado de propósito: são uuids que o app
+gera do próprio backlog, e caberiam cerca de mil e seiscentos antes de o teto
+chegar perto. Cortar ali seria perder ordem de tarefa real para prevenir o que
+não acontece.
 
 ## Regras de gamificação
 
@@ -360,16 +503,76 @@ hash do id, nunca do rótulo.
    sessão que estiver correndo.
 5b. **A semana** — as entregas dia a dia, com navegação para trás. É o retorno
    de médio prazo entre a estante (tudo, sem data) e o bilhete (hoje, some à
-   meia-noite). Sem barra, sem percentual, sem comparação entre dias.
+   meia-noite). Sem barra, sem percentual, sem comparação entre dias. Para
+   horizonte mais longo que isso, o rodapé oferece **a página** — ver abaixo.
 6. **Objetos de parede** — calendário do mês à esquerda, relógio analógico à
    direita, bilhete com a lista do dia embaixo dele. São cenário, não widget:
    ficam atrás da luz do abajur, em opacidade baixa, retos. Dois respondem a
    clique, cada um abrindo a sua leitura literal: o bilhete abre o "hoje", o
    calendário abre a semana. O relógio não abre nada. O bilhete leva o tempo de
    cada tarefa e o total do dia.
-7. **Menu do quarto** — luz, som, movimento, humor/energia e a saída do app.
+7. **Menu do quarto** — luz, som, movimento, humor/energia, a página e a
+   saída do app.
    Não é gosto por menu: com "entreguei" na barra, a fileira de botões passava
    da largura da janela, e esses são ajustes do ambiente, não ações do dia.
+
+## A página, e a regra que ela carrega
+
+`core/export.py` transforma o log em Markdown: a estante, o diário dia a dia e
+o mural. Função pura, `events -> str`, sem I/O e sem Qt — quem escreve em disco
+é o backend.
+
+Existe por dois motivos, e o segundo é o que importa para decisões futuras.
+
+**Um: um log pessoal de anos sem exportação é um refém.** O banco é SQLite e o
+esquema é simples, mas "abra o sqlite3 e escreva um SELECT" não é uma saída, é
+a ausência de uma.
+
+**Dois: é a resposta ao horizonte longo.** A semana é a costura por onde este
+projeto viraria planilha — é o único painel com número somado e navegação
+temporal, e daqui todo pedido natural ("e o mês?", "e o ano?", "e comparado com
+a semana passada?") é um passo em direção ao dashboard que o princípio de design
+recusa. A regra que segura isso: **a resposta é uma página, não um painel
+maior.** Ver mais que uma semana é gerar o diário daquele período e lê-lo como
+texto, fora do app. **Não existe aba de mês, e não deve existir.**
+
+A diferença não é de formato, é de natureza: um painel de mês seria mais tela no
+mesmo lugar, com a mesma pressão de virar comparação; a página é um artefato que
+se lê, se guarda e se fecha.
+
+Decisões que não são arbitrárias:
+
+- **Markdown, não HTML.** Por longevidade. O ponto de uma saída de emergência é
+  ser legível sem ferramenta nenhuma, daqui a dez anos, por quem não tem o app
+  instalado — e um `.md` continua sendo texto num bloco de notas. HTML seria
+  mais bonito e menos útil exatamente onde importa, e converter Markdown em HTML
+  é trivial enquanto o caminho inverso perde a legibilidade crua.
+- **A página não é relatório.** Sem média, sem percentual, sem comparação de
+  períodos. O único número é a soma dos minutos de um dia, a mesma conta que o
+  bilhete da parede já faz. A regra vale mais forte aqui do que na tela: um
+  arquivo dura mais, e número de cobrança impresso cobra por mais tempo. Há
+  teste varrendo a página em busca dessas palavras.
+- **Parte sem conteúdo não aparece**, em vez de aparecer vazia. Cabeçalho
+  seguido de nada é cobrança silenciosa por não ter nada ali.
+- **Vai para `<pasta de dados>/paginas/`**, e não para a Área de Trabalho ou os
+  Documentos. Descobrir onde essas pastas ficam é código de plataforma — em
+  português elas têm outro nome, e com OneDrive corporativo estão redirecionadas
+  —, e `openExportFolder` abre a pasta em seguida por `QDesktopServices`, que é
+  abstração do próprio Qt e não código de plataforma. Assim o caminho deixa de
+  ser algo que alguém precise decorar, e continua de pé a regra de que o app só
+  escreve na própria pasta de dados.
+- **O nome do arquivo começa pela data em ISO**, que é o único formato que
+  ordena alfabeticamente na mesma ordem em que ordena cronologicamente. Numa
+  pasta com dois anos de páginas, é a diferença entre uma lista e uma bagunça. O
+  nome vem do período, então exportar de novo o mesmo período reescreve a mesma
+  página em vez de acumular cópias.
+- **Escrita atômica**, pela mesma razão da marca de vida: uma queda no meio
+  deixaria meia página no lugar de uma inteira, com a anterior — que estava
+  certa — já truncada.
+- **Dois caminhos, e eles dizem coisas diferentes.** `o quarto → a página` grava
+  tudo; o rodapé da semana grava o período que está na tela. O segundo é o que
+  torna a regra do horizonte longo utilizável, e é por isso que ele fica no
+  painel onde a pergunta aparece, não escondido num menu.
 
 ## Janelas
 
@@ -377,8 +580,9 @@ Uma `QQmlApplicationEngine`, dois `Window` QML ligados ao **mesmo** backend
 Python exposto como context property. Sem IPC, sem estado duplicado.
 
 - `Main.qml` — 1100x700, cena completa.
-- `Mini.qml` — 300x112, `Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
-  Qt.Tool`. Frameless exige drag manual via `DragHandler`.
+- `Mini.qml` — **264x82 em repouso, 264x118 com o mouse em cima**,
+  `Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool`. Frameless exige
+  drag manual via `DragHandler`.
 
 As duas são a mesma coisa em dois tamanhos e **nunca ficam visíveis juntas**.
 `setMainVisible(True)` esconde a mini e vice-versa; as duas escondidas é o app na
@@ -392,12 +596,29 @@ frente — sempre por cima de tudo. Para chamar a mini existe o botão "mini". A
 reaparecer, `Main.qml` desfaz o estado minimizado — sem isso a janela volta
 minimizada e "abrir" pela bandeja parece não ter funcionado.
 
-A mini é o app reduzido ao gesto: ver o relógio, trocar de tarefa, encerrar.
-Três faixas empilhadas, e nenhuma sobrepondo a outra — antes o nome da tarefa
-ocupava a largura inteira com os botões ancorados por cima, e uma tarefa de nome
-comprido passava por baixo do botão. Ajuste não mora ali: o som tem duas
-posições (`toggleMute`, que devolve o estado anterior), e o ciclo de três
-estados, o tema e o humor ficam na janela grande.
+A mini é um **lembrete**, não um painel. Ela responde três coisas, nesta ordem:
+em que você está, há quanto tempo, e como encerrar isso. Ajuste não mora ali — o
+som tem duas posições (`toggleMute`, que devolve o estado anterior), e o ciclo de
+três estados, o tema e o humor ficam na janela grande.
+
+**Ela tem dois tamanhos, e é isso que a fez encolher.** Eram 300x112 com cinco
+controles à mostra o tempo todo: o principal no alto à direita e mais quatro numa
+fileira embaixo, também à direita — duas bordas direitas desalinhadas e **o
+quadrante inferior esquerdo completamente vazio**, não como respiro mas porque a
+fileira era ancorada num canto de uma faixa de largura inteira. Muita janela para
+pouca informação, que é o oposto do que um lembrete deve ser.
+
+Em repouso agora são 264x82: relógio, nome do que está correndo, e o botão que
+encerra aquilo. Quando o mouse chega — ou seja, quando alguém *vai* mexer — a
+janela cresce para baixo e mostra os secundários (parar, som, abrir, fechar),
+distribuídos pela largura inteira em vez de amontoados num canto. O conteúdo é
+ancorado no topo, então nada do que já estava na tela muda de lugar.
+
+A troca é essa: um clique a mais nos controles secundários, em troca de **36%
+menos janela** ocupando a tela durante todas as horas em que ninguém vai tocar
+neles. E "parar" só aparece quando há o que parar sem entregar — numa sessão
+livre o botão principal já é "parar", e a fileira se redistribui entre três em
+vez de deixar um buraco.
 
 ## Temas
 
@@ -432,6 +653,54 @@ claro, casa abre escuro) e override manual. **Transição nunca é corte seco:**
 crossfade de ~3s entre camadas de cenário + `ColorAnimation` nos painéis.
 
 Cores vivem só em `ui/theme/Theme.qml`. Nenhum hex hardcoded em outro arquivo.
+
+## Tipografia
+
+Duas famílias embutidas em `assets/fonts/`, carregadas de dois lugares que
+fazem metades diferentes do trabalho.
+
+**Antes disto o projeto não definia fonte em lugar nenhum.** O app herdava a do
+sistema — Segoe UI no Windows, Cantarell ou DejaVu no Ubuntu —, e as duas
+máquinas são os dois contextos de uso daqui: era outro programa em cada uma, com
+outro desenho de letra, outra métrica e outras larguras de botão. Um repositório
+que fixa cor em hex num arquivo só e proíbe hardcode em qualquer outro estava
+deixando metade do que se vê na tela por conta do sistema operacional.
+
+- **Inter** (`Theme.fonte`) — a interface: painéis, barra, botões, campos.
+- **EB Garamond** (`Theme.fontePapel`) — as superfícies de papel do quarto: o
+  bilhete e o calendário. É o que faz o bilhete parecer papel pregado na parede
+  em vez de um retângulo com texto.
+
+Ambas SIL OFL 1.1, com a licença ao lado do arquivo. **Não são dependência
+nova**: são asset, como os SVGs e os WAVs, e o `FontLoader` é do próprio Qt.
+
+Quem carrega:
+
+- `services/fonts.py` define a **fonte padrão da aplicação**
+  (`QApplication.setFont`). É o que faz cada `Text` herdar a família certa sem
+  declarar nada — e faz código novo nascer certo em vez de depender de alguém
+  lembrar de escrever `font.family`. Chamam-no `main.py` e as duas ferramentas
+  que sobem Qt Quick, pelo mesmo padrão de `ensure_gl_integration()`.
+- O `FontLoader` do `Theme.qml` garante a família para o QML mesmo sem passar
+  pelo Python, e expõe o nome para os poucos lugares que trocam de propósito.
+
+**Os algarismos do cronômetro precisam de `tnum`** (`Theme.digitos`). Por padrão
+os da Inter são proporcionais — o "1" tem 6,95 px onde o "0" tem 9,6 —, então
+`00:00` e `11:11` não medem igual e o relógio **treme a cada segundo**. Com o
+recurso ligado os dez ficam com a mesma largura. Há teste, e ele prova as duas
+pontas: que sem `tnum` os algarismos divergem mesmo, e que com ele param de
+divergir.
+
+A escala de corpos vive no `Theme`, pela mesma regra das cores e dos tempos:
+
+```
+nano 11 · miudo 13 · corpo 15 · titulo 19 · destaque 30
+```
+
+Havia 9, 10, 11, 13, 15, 16, 18 e 30 espalhados, o 11 sozinho em oito lugares —
+a mesma doença que os quatro eixos de tempo curaram nas durações. Os corpos dos
+objetos de parede **não** vêm daqui: eles escalam com o desenho, por `unidade`,
+porque são parte da ilustração e não da interface.
 
 ## Assets
 
@@ -488,26 +757,30 @@ a janela continua sendo uma noite de chuva, ela só para de se mexer.
 
 ```
 cantinho/
-  assets/       scenes/ plant/ audio/ icon/  (gerados ou desenhados, versionados)
+  assets/       scenes/ plant/ audio/ icon/ fonts/  (gerados ou desenhados,
+                versionados)
   docs/         quarto-{noite,tarde}.png     (capturas do README)
                 instalar-no-windows.md      (o passo a passo para leigos)
+                auditoria.md                (os achados de 14/08/2026)
                 windows.md linux.md desenvolvimento.md
   build/        saída de ferramenta e cache, nada versionado
   cantinho.bat  instalação e build no Windows (ASCII, CRLF)
   cantinho/
     main.py
     core/      events.py store.py projections.py clock.py schedule.py
+               export.py
     services/  timer.py audio.py hotkey.py tray.py scene.py single_instance.py
-               graphics.py desktop_entry.py heartbeat.py
+               graphics.py desktop_entry.py heartbeat.py fonts.py
     ui/        Main.qml Mini.qml theme/ room/ panels/
   tests/
-  tools/     check_svg.py simular_uso.py semear.py gerar_{audio,icone,capturas}.py
+  tools/     check_svg.py check_qml.py simular_uso.py semear.py
+             gerar_{audio,icone,capturas}.py
              instalar_atalho.py atalho_windows.py empacotar_portatil.py
 ```
 
-Painéis: `Backlog`, `Retrospectiva`, `Semana`, `SeletorTarefa`, `Passeio` e os quatro
+Painéis: `Backlog`, `Retrospectiva`, `Semana`, `SeletorTarefa`, `Passeio` e os
 elementos de base (`Painel`, `BotaoSuave`, `CampoTexto`, `EscalaPontos`,
-`LinhaMenu`).
+`LinhaMenu`, `Rolagem`).
 
 `core/clock.py` é injetável. Sem isso, nada que dependa da janela de 14 dias é
 testável.
@@ -641,8 +914,8 @@ Todas deliberadas, todas com motivo:
   desalinhado, não como espontâneo. O prego ficou, a inclinação não.
 - **`cantinho/services/desktop_entry.py` é a única coisa que escreve fora da
   pasta de dados.** Um `.desktop` em `~/.local/share/applications` mais o ícone
-  em `icons/hicolor/256x256/apps` — só no Linux, no-op nos outros sistemas como
-  em `hotkey.py`. A regra que sustenta o resto é **criar uma vez e nunca
+  em `icons/hicolor/<lado>x<lado>/apps` — só no Linux, no-op nos outros sistemas
+  como em `hotkey.py`. A regra que sustenta o resto é **criar uma vez e nunca
   sobrescrever**: revalidar o `Exec=` a cada abertura sobreviveria a mover o
   repositório sozinho, mas daria a qualquer clone de teste o poder de roubar o
   atalho do menu apontando para si. Para mudar de ideia existe `--de-novo`.
@@ -797,6 +1070,100 @@ Todas deliberadas, todas com motivo:
   `Image` do QML é assíncrono, e as camadas do quarto compartilham um
   `QSvgRenderer` em cache, que não é reentrante.
 
+- **O quarto sai de foco quando um painel abre** (`Main.qml`, `profundidade`).
+  A gaveta era uma laje clara pousada sobre a ilustração, cobrindo a janela **e**
+  o abajur, e lia como caixa de diálogo colada por cima do desenho: o quarto
+  sumia justamente na hora de usar o app. Com o fundo desfocado e um pouco mais
+  escuro (`MultiEffect`, que já vem no PySide6 — sem shader compilado e sem
+  etapa de build nova), a mesma laje passa a ler como "à frente". O `blurMax` é
+  **14 e não 40**: no primeiro ajuste o quarto virava mancha, o que dá
+  profundidade e custa a cena inteira. O alvo é ainda reconhecer os objetos da
+  estante e as folhas do vaso, só fora de foco. Com `layer.enabled` falso o
+  custo é exatamente zero, e esse é o estado padrão do app.
+- **A gaveta é posicionada em coordenada de cena** (`quarto.cx(400)`). Era
+  `x: 330` em pixel de janela, que coincide com a cena só em 1100x700: ao
+  maximizar, o desenho é centralizado e escalado e o painel ficava parado no
+  lugar antigo, descolando do abajur que ele existe para não cobrir. É a mesma
+  armadilha que já tirou a chuva e a poeira de cena, e que o balão do passeio
+  corrigiu.
+- **A barra de baixo são duas ilhas, não uma faixa.** Era uma laje que
+  atravessava a tela com o cronômetro numa ponta, os botões na outra e um vazio
+  enorme no meio — a peça mais "aplicativo" da tela, e a que cortava o chão do
+  quarto em dois. O vazio não era respiro: era superfície pintada sobre a
+  ilustração para não ligar nada a nada. Agora o chão aparece entre os dois
+  agrupamentos, cada um do tamanho do que carrega. `barra` continua existindo
+  como guia de layout — é a ela que a gaveta se ancora —, mas não desenha nada.
+- **`Painel.sombra`**, ligada só em quem cobre alguma coisa. É o detalhe mais
+  barato que separa "painel na frente do quarto" de "retângulo pintado por cima
+  da ilustração": sem ela o olho não tem como saber que existem duas camadas.
+  Larga, difusa e quase transparente — sombra dura viraria caixa de diálogo de
+  sistema.
+- **Vinheta e paralaxe, para o cômodo ter volume** (`Room.qml`). O desenho é
+  iluminado de forma plana: a parede tem a mesma intensidade no centro e no
+  canto, o que lê como ilustração chapada. A vinheta é mais forte à noite, e por
+  um motivo físico — de dia a luz entra pela janela e chega aos cantos; à noite
+  há uma lâmpada só. Ela **não** obedece a `movimento`, porque não se mexe: é
+  iluminação. O paralaxe são **quatro pixels** e obedece, sim; a escala de 1,2%
+  existe só para dar folga, senão deslocar descobriria faixa vazia na borda
+  oposta. O `Behavior` sobre a ligação é o que dá o arrasto: grudado no cursor
+  seria enjoativo e denunciaria o truque.
+- **A estante tem presença, e diz de quem é cada objeto.** Ela é o retorno
+  inteiro do app e era a coisa **menos visível** da tela: um borrão escuro no
+  canto, menor que o ícone do calendário e longe da única luz do quarto. Ganhou
+  luz própria, que sobe no instante da chegada e volta sozinha
+  (`brilhoDaChegada`), e o rótulo da tarefa quando o mouse para em cima. A
+  geometria do hover vem de `scene.shelf_slots`, **a mesma função que desenha a
+  imagem** — se as duas contas divergissem, o nome apareceria ao lado do objeto
+  errado, que é pior do que não aparecer. Só o rótulo: no instante em que
+  mostrar data ou minutos, deixa de ser memória e vira registro. E não responde
+  com painel aberto (`Room.focoNoQuarto`), porque ali o quarto é cenário — balão
+  nítido sobre cena desfocada denunciaria que as duas camadas não são o mesmo
+  lugar.
+- **`Rolagem.qml` em vez de barra de rolagem.** As listas rolavam desde sempre e
+  não diziam isso: `clip: true` e nenhum indicador, então com sete tarefas a
+  oitava não existia para quem olhava. Barra de rolagem é cromo de aplicativo,
+  ocupa espaço fixo e fica parada dizendo "isto é um widget"; o que se usa é o
+  **desvanecimento das bordas** — onde a lista continua, o conteúdo dissolve no
+  fundo do painel em vez de ser cortado numa reta. É a pista que uma folha
+  dobrada dá, e ela só aparece quando há conteúdo do outro lado.
+- **`BotaoSuave` aceita foco de teclado.** O app tinha bons atalhos e nenhum
+  jeito de andar entre os controles sem o mouse. O anel é âmbar, a mesma cor que
+  o `CampoTexto` já usava para dizer "a digitação vai para aqui" — outra cor
+  daria ao app duas linguagens de foco. `activeFocusOnTab` só nos que estão à
+  mostra: botão de largura zero na fila do Tab é um passo em que a atenção some
+  da tela. E o clique também dá foco, senão Tab depois de clicar recomeça do
+  início.
+- **O cartão do mural corta em quatro linhas.** Uma ideia aceita até 4.000
+  caracteres, e sem teto de linhas um texto colado empurrava o resto do mural
+  para fora da tela. O mural é uma parede de bilhetes; bilhete que ocupa a
+  parede inteira deixou de ser um.
+
+- **O ícone do Linux sai do `.ico` do Windows, e nos sete tamanhos**
+  (`install_icons`). Era só o 256 que ia para o `hicolor`, e o ambiente reduzia
+  esse arquivo único para os 22-24 px da bandeja e os 48-64 do dock. Só que a
+  arte do 256 é a planta **sobre um ladrilho escuro**: reduzida a 24 px ela vira
+  um quadrado escuro com um borrão dentro, que na barra do Ubuntu lê como ícone
+  genérico. No Windows nunca apareceu porque lá o `.ico` entrega os sete
+  tamanhos e o sistema escolhe o certo — e é por isso que o desenho *muda* com
+  o tamanho (ver "Ícone"): abaixo de 32 px o ladrilho sai e a planta ocupa o
+  quadro. Instalar só o maior desfazia exatamente a decisão que o gerador do
+  ícone tomou.
+
+  A correção lê os quadros de dentro do `.ico` com `struct` — **sem Qt**, porque
+  este módulo roda antes de a aplicação existir — e escreve cada um no tamanho
+  correspondente. Os dois sistemas passam a mostrar literalmente os mesmos
+  bytes, que é o que "igual ao do Windows" quer dizer.
+
+  Duas coisas mais, que faltavam junto: **`gtk-update-icon-cache`** é chamado
+  como irmão do `update-desktop-database` (sem ele, um tamanho novo fica em
+  disco e o GTK continua servindo o índice antigo — ícone certo no disco,
+  genérico na tela), e **o ícone é reparado mesmo com o `.desktop` já no
+  lugar**. Esta última é o que faz a correção chegar em quem já tinha instalado:
+  `install` sai cedo quando o atalho existe, e antes o ícone saía junto, então
+  uma instalação antiga jamais ganharia os tamanhos que faltam. "Criar uma vez e
+  nunca sobrescrever" protege o `Exec=` de ser sequestrado e respeita um atalho
+  editado à mão; o ícone é asset do app e ninguém o edita.
+
 ### Limites conhecidos do MVP
 
 - A estante comporta **12 objetos** (duas prateleiras, seis cada). A projeção
@@ -828,6 +1195,41 @@ Todas deliberadas, todas com motivo:
   nome em `assets/audio/`.
 - O bilhete da parede comporta **seis linhas** (`BOARD_LIMIT`). É a folha que
   limita, não a projeção: uma lista que rola na parede deixa de ser bilhete.
+- **`_recomputar` reprojeta o log inteiro a cada evento gravado**, não só na
+  abertura. É o custo que cresce com o tempo, e o enquadramento importa: o
+  `read_all` do startup roda uma vez e some, mas a reprojeção roda no clique.
+  Medido no Ubuntu, com uso sintético pesado (3 tarefas + 4 sessões + ideia +
+  revisão por dia):
+
+  | período | eventos | `read_all` (abertura) | projeções (**por clique**) |
+  |---|---|---|---|
+  | 30 dias | 480 | 2,5 ms | 1,5 ms |
+  | 1 ano | 5.840 | 30 ms | 17 ms |
+  | 3 anos | 17.520 | 84 ms | 59 ms |
+  | 10 anos | 58.400 | 328 ms | 213 ms |
+
+  Não é problema hoje e não pede conserto. O que ele pede é que a saída, se um
+  dia for preciso, **não seja tabela de snapshot** — isso quebraria "`events` é
+  a única tabela persistida" e "não persistir estado derivado" de uma vez. A
+  saída que preserva a arquitetura é memoização em memória, que continua sendo
+  função pura do log.
+
+  **O que já foi consertado ali é a semana**, que pagava cinco vezes esse custo
+  sem ninguém ter aberto o painel. Três propriedades notificadas por
+  `weekChanged` — que `_recomputar` emite a cada evento — e cada uma
+  reprojetando o log várias vezes: `weekDays` chamava `completed_on` sete vezes,
+  `weekMinutes` chamava `minutes_on` outras sete, e `weekDelivered` chamava
+  `weekDays` inteiro só para contar. Com o painel **fechado**, porque os
+  bindings ficam vivos de qualquer jeito: os quatro painéis se cruzam por
+  opacidade, não por `Loader`. Media 95 ms por clique com um ano de log e 301 ms
+  com três anos, justamente no gesto em que a estante deveria animar suave.
+
+  Duas correções, e as duas valem lembrar porque a segunda quase sempre é
+  esquecida: `_semana()` faz uma passada só e as três propriedades leem dela
+  (301 ms → 82 ms aos três anos), **e** a `Semana` foi para dentro de um
+  `Loader` com `active` ligado à aba — com o painel fechado o custo é zero, não
+  "menor". É o único painel que precisa disso; para os outros três a instância
+  permanente é barata.
 - Os objetos de parede vivem nas duas áreas que a arte deixou livres (acima da
   estante à esquerda, e a coluna à direita entre o teto e a folhagem do vaso).
   Mexer nos SVGs de cena pode invalidar essas posições.
@@ -903,8 +1305,25 @@ descobrir na F3 custa caro.
 
 ## Convenções
 
-- Português do Brasil em UI, commits e comentários. Código e identificadores em
-  inglês.
+- Português do Brasil em UI, commits e comentários.
+- **Idioma de identificador é regra de fronteira, não de arquivo.** O que
+  atravessa para o QML é inglês; o que é interno acompanha os comentários, que
+  são todos em português. Em detalhe:
+  - **Inglês, sem exceção:** tudo que o QML enxerga — `@Property`, `@Slot`,
+    `Signal` e os kinds do log. `addTask`, `focusedTaskId`, `weekDelivered`,
+    `task.completed`. É API, e API que muda de idioma no meio obriga a
+    adivinhar de que lado cada nome está.
+  - **Inglês também:** constantes públicas de módulo (`TODAY_LIMIT`,
+    `SHELF_OBJECT_TYPES`, `LABEL_LIMIT`) e nomes de arquivo e função de
+    `core/`, `services/` e `tools/`.
+  - **Português:** locais, atributos privados e o vocabulário do quarto —
+    `_estante`, `_concluidas`, `eventos`, `posicoes`, e no QML `Theme.noite`,
+    `movimento`, `chegada`. Nesses lugares o nome está cercado de comentário em
+    português, e traduzir só o identificador quebra a frase.
+
+  A regra escrita antes era "identificadores em inglês", que o código nunca
+  seguiu e não deveria seguir: renomear os internos daria um diff enorme, risco
+  puro e nenhum ganho. O que estava errado era a documentação, não o código.
 - Commits: Conventional Commits (`feat:`, `fix:`, `chore:`, `test:`).
 - Type hints em todo o `core/`.
 - `core/` não importa PySide6 exceto `QObject`/`Signal` na fronteira. Deve ser

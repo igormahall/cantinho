@@ -10,6 +10,14 @@ Item {
     property string placeholder: ""
     property alias entradaAtiva: entrada.activeFocus
 
+    // Quanto o campo aceita, e não quanto ele mostra. O log é append-only: o
+    // que entra fica para sempre e é relido em toda abertura, então o texto
+    // colado por engano não é um erro que se conserta depois. Recusar aqui é o
+    // jeito silencioso de impedir isso — o campo simplesmente para de crescer,
+    // sem aviso, sem diálogo. O backend ainda corta por conta própria, porque
+    // nem todo texto chega por um campo. Ver `LABEL_LIMIT` e `TEXT_LIMIT`.
+    property alias limite: entrada.maximumLength
+
     signal aceito(string texto)
 
     implicitHeight: 34

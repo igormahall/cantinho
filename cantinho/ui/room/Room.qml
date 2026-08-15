@@ -12,6 +12,14 @@ Item {
     property int plantStage: 0
     property var shelf: []
 
+    // Se o quarto está na frente ou virou fundo.
+    //
+    // Com um painel aberto ele fica desfocado e atrás, e ali é cenário — o
+    // rótulo dos objetos da estante não responde ao mouse nesse estado. Um
+    // balão nítido sobre uma cena fora de foco denunciaria que as duas camadas
+    // não são o mesmo lugar.
+    property bool focoNoQuarto: true
+
     signal abrirHoje()
     signal abrirSemana()
 
@@ -64,6 +72,62 @@ Item {
     // janela volta, e nenhum abaixo do tamanho de tela: rasterizar acima e
     // reduzir não custa nitidez, o contrário custa.
     readonly property int larguraFonte: Math.max(1100, Math.ceil(width / 200) * 200)
+
+    // ------------------------------------------------------------- paralaxe
+    //
+    // O quarto acompanha o mouse de leve, e a palavra que importa é **leve**:
+    // são quatro pixels no eixo mais folgado. Não é para ser notado como
+    // movimento; é para o cômodo deixar de ser uma imagem colada no fundo da
+    // janela e passar a ter um "dentro". O olho lê profundidade em deslocamento
+    // muito antes de conseguir apontar que houve deslocamento.
+    //
+    // A escala de 1,2% existe só para dar folga: sem ela, deslocar quatro
+    // pixels descobriria uma faixa vazia na borda oposta. Sobra é overscan, não
+    // zoom — em 1100 px são treze pixels de margem para um deslocamento de
+    // quatro.
+    //
+    // Obedece a `Theme.movimento`, como os outros laços do ambiente: com o
+    // quarto quieto ele para no centro. E os objetos de parede andam junto, o
+    // que é o certo — eles estão pregados nesta parede.
+    readonly property real _alcanceX: 4
+    readonly property real _alcanceY: 2.5
+
+    HoverHandler {
+        id: olhar
+        enabled: Theme.movimento
+    }
+
+    // Invertido: o quarto se afasta do cursor, que é como um cenário atrás de
+    // uma janela se comporta quando a cabeça se move.
+    //
+    // O `Behavior` sobre uma ligação que muda a cada movimento do mouse é o que
+    // dá o arrasto: a cena persegue o cursor com atraso em vez de grudar nele.
+    // Grudado seria enjoativo e denunciaria o truque.
+    property real deslocaX: (Theme.movimento && olhar.hovered)
+                            ? -(olhar.point.position.x / Math.max(1, width) - 0.5)
+                              * 2 * _alcanceX
+                            : 0
+    property real deslocaY: (Theme.movimento && olhar.hovered)
+                            ? -(olhar.point.position.y / Math.max(1, height) - 0.5)
+                              * 2 * _alcanceY
+                            : 0
+
+    Behavior on deslocaX {
+        NumberAnimation { duration: 420; easing.type: Easing.OutQuad }
+    }
+    Behavior on deslocaY {
+        NumberAnimation { duration: 420; easing.type: Easing.OutQuad }
+    }
+
+    transform: [
+        Scale {
+            origin.x: quarto.width / 2
+            origin.y: quarto.height / 2
+            xScale: 1.012
+            yScale: 1.012
+        },
+        Translate { x: quarto.deslocaX; y: quarto.deslocaY }
+    ]
 
     // --------------------------------------------------------- cenário fixo
 
@@ -181,6 +245,143 @@ Item {
 
         CamadaEstante { tema: "noite"; lista: quarto.estantePousada }
         CamadaEstante { tema: "noite"; lista: quarto.estanteEntrando; opacity: quarto.entradaEstante }
+    }
+
+    // ------------------------------------------------- a estante tem presença
+    //
+    // A estante é o retorno inteiro do app — a vitrine de entregas — e era a
+    // coisa **menos visível** da tela: um borrão escuro no canto de cima à
+    // esquerda, menor que o ícone do calendário e longe da única luz do quarto.
+    // A recompensa central estava desenhada como cenário de fundo.
+    //
+    // São três coisas, e nenhuma delas mexe no SVG:
+    //
+    //   1. luz própria na prateleira, para ela existir à noite;
+    //   2. essa luz sobe quando um objeto chega, e volta sozinha;
+    //   3. o objeto diz de qual tarefa ele é quando o mouse para em cima.
+    //
+    // O item 3 é o que responde a "por que eu deveria olhar para lá": um objeto
+    // sem nome é decoração, e com nome é a lembrança de uma coisa que se fez.
+
+    // Sobe para 1 no instante da chegada e volta a zero sozinha. `entradaEstante`
+    // vai de 0 a 1 durante o crossfade, então `1 - ela` é exatamente o pulso.
+    readonly property real brilhoDaChegada: 1 - entradaEstante
+
+    Shape {
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        opacity: quarto.aceso ? 1 : 0
+        visible: quarto.shelf.length > 0
+        Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
+
+        ShapePath {
+            strokeWidth: 0
+            strokeColor: "transparent"
+            fillGradient: RadialGradient {
+                // O centro das duas prateleiras juntas.
+                centerX: quarto.cx(165)
+                centerY: quarto.cy(440)
+                focalX: centerX; focalY: centerY
+                centerRadius: quarto.px(190)
+                GradientStop {
+                    position: 0.0
+                    color: Qt.rgba(
+                        Theme.ambar.r, Theme.ambar.g, Theme.ambar.b,
+                        (Theme.noite ? 0.13 : 0.06)
+                        + 0.10 * quarto.brilhoDaChegada)
+                }
+                GradientStop {
+                    position: 0.5
+                    color: Qt.rgba(
+                        Theme.ambar.r, Theme.ambar.g, Theme.ambar.b,
+                        (Theme.noite ? 0.05 : 0.02)
+                        + 0.04 * quarto.brilhoDaChegada)
+                }
+                GradientStop {
+                    position: 1.0
+                    color: Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b, 0)
+                }
+            }
+            PathRectangle { x: 0; y: 0; width: quarto.width; height: quarto.height }
+        }
+    }
+
+    // De qual tarefa é o objeto sob o mouse. Vazio quando não há nenhum.
+    property string objetoSobOMouse: ""
+    property real objetoX: 0
+    property real objetoY: 0
+
+    Repeater {
+        model: backend.shelfSlots
+
+        // Uma área de toque por objeto, invisível, em cima da arte.
+        //
+        // A estante é uma imagem rasterizada inteira, não um item por objeto —
+        // então não há o que receber o mouse, e é por isso que estas áreas
+        // existem. A geometria vem de `scene.shelf_slots`, a mesma conta que
+        // desenhou a imagem: se as duas divergissem, o nome apareceria em cima
+        // do objeto errado.
+        Item {
+            required property var modelData
+
+            width: quarto.px(26)
+            height: quarto.px(34)
+            x: quarto.cx(modelData.x) - width / 2
+            // `y` do slot é onde o objeto **apoia**; ele cresce para cima.
+            y: quarto.cy(modelData.y) - height
+
+            HoverHandler {
+                // Com um painel aberto o quarto está desfocado e atrás: ali ele
+                // é cenário, e cenário não responde a mouse.
+                enabled: quarto.focoNoQuarto
+                onHoveredChanged: {
+                    if (hovered) {
+                        quarto.objetoSobOMouse = parent.modelData.label
+                        quarto.objetoX = parent.x + parent.width / 2
+                        quarto.objetoY = parent.y
+                    } else if (quarto.objetoSobOMouse === parent.modelData.label) {
+                        quarto.objetoSobOMouse = ""
+                    }
+                }
+            }
+        }
+    }
+
+    // O nome da entrega, ao lado do objeto.
+    //
+    // Só o rótulo, e é uma decisão: no instante em que mostrar a data ou os
+    // minutos, isto deixa de ser memória e vira registro — que é o gênero de
+    // coisa que este app recusa. "O que é isto?" tem resposta; "quanto tempo
+    // faz?" não é pergunta que a estante deva responder.
+    Rectangle {
+        id: nomeDoObjeto
+        readonly property bool mostrando: quarto.objetoSobOMouse !== ""
+
+        width: rotuloDoObjeto.implicitWidth + 16
+        height: rotuloDoObjeto.implicitHeight + 10
+        radius: Theme.raio - 4
+        color: Qt.rgba(Theme.superficie.r, Theme.superficie.g, Theme.superficie.b, 0.96)
+        border.width: 1
+        border.color: Qt.rgba(Theme.borda.r, Theme.borda.g, Theme.borda.b, 0.8)
+
+        // Acima do objeto, e preso na largura da cena para não sair pela
+        // esquerda quando o objeto é o primeiro da prateleira.
+        x: Math.max(quarto.cx(8),
+                    Math.min(quarto.objetoX - width / 2,
+                             quarto.cx(1092) - width))
+        y: quarto.objetoY - height - 6
+
+        opacity: mostrando ? 1 : 0
+        visible: opacity > 0.01
+        Behavior on opacity { NumberAnimation { duration: Theme.reacao } }
+
+        Text {
+            id: rotuloDoObjeto
+            anchors.centerIn: parent
+            text: quarto.objetoSobOMouse
+            color: Theme.texto
+            font.pixelSize: Theme.miudo
+        }
     }
 
     // -------------------------------------------------------------- planta
@@ -460,6 +661,44 @@ Item {
                 grao.seed = grao.seed % 6 + 1
                 grao.source = "image://cena/grao/" + grao.seed
             }
+        }
+    }
+
+    // ------------------------------------------------------------- vinheta
+    //
+    // Os cantos escurecem de leve, e é a peça que faltava para o cômodo ter
+    // volume. A luz do abajur já sugeria que a claridade vem de um ponto e
+    // morre nas bordas, mas o desenho é iluminado de forma plana — sem a
+    // vinheta, a parede tem a mesma intensidade no centro e no canto superior
+    // esquerdo, o que faz a cena ler como ilustração chapada em vez de
+    // fotografia de um quarto.
+    //
+    // Bem fraca de propósito, e mais forte à noite: de dia a luz entra pela
+    // janela e chega aos cantos; à noite existe uma lâmpada só, e o canto
+    // longe dela é escuro mesmo.
+    //
+    // Não obedece a `movimento`: ela não se mexe. É iluminação, não animação.
+    Shape {
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        opacity: quarto.aceso ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
+
+        ShapePath {
+            strokeWidth: 0
+            strokeColor: "transparent"
+            fillGradient: RadialGradient {
+                centerX: quarto.width / 2
+                centerY: quarto.height / 2
+                focalX: centerX; focalY: centerY
+                centerRadius: Math.max(quarto.width, quarto.height) * 0.72
+                GradientStop { position: 0.55; color: "transparent" }
+                GradientStop {
+                    position: 1.0
+                    color: Qt.rgba(0, 0, 0, Theme.noite ? 0.34 : 0.13)
+                }
+            }
+            PathRectangle { x: 0; y: 0; width: quarto.width; height: quarto.height }
         }
     }
 }

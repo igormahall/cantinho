@@ -68,6 +68,7 @@ FolhaDeParede {
             color: Theme.textoSuave
             opacity: 0.7
             font.pixelSize: Math.round(10 * bilhete.unidade)
+            font.family: Theme.fontePapel
             font.letterSpacing: 1.6 * bilhete.unidade
         }
 
@@ -78,6 +79,7 @@ FolhaDeParede {
             color: Theme.textoSuave
             opacity: 0.5
             font.pixelSize: Math.round(11 * bilhete.unidade)
+            font.family: Theme.fontePapel
             font.italic: true
         }
 
@@ -120,6 +122,7 @@ FolhaDeParede {
                     color: emCurso ? Theme.ambar : Theme.texto
                     opacity: feita ? 0.42 : (emCurso ? 1.0 : 0.78)
                     font.pixelSize: Math.round(12 * bilhete.unidade)
+                    font.family: Theme.fontePapel
                     font.strikeout: feita
                     elide: Text.ElideRight
                     Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
@@ -138,6 +141,7 @@ FolhaDeParede {
                     color: emCurso ? Theme.ambar : Theme.musgo
                     opacity: feita ? 0.5 : 0.75
                     font.pixelSize: Math.round(11 * bilhete.unidade)
+                    font.family: Theme.fontePapel
                 }
             }
         }
@@ -169,6 +173,7 @@ FolhaDeParede {
             color: Theme.textoSuave
             opacity: 0.6
             font.pixelSize: Math.round(10 * bilhete.unidade)
+            font.family: Theme.fontePapel
         }
 
         Text {
@@ -180,6 +185,7 @@ FolhaDeParede {
             color: Theme.musgo
             opacity: 0.85
             font.pixelSize: Math.round(11 * bilhete.unidade)
+            font.family: Theme.fontePapel
         }
     }
 

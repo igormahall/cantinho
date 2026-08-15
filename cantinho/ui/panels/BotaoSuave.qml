@@ -33,6 +33,26 @@ Item {
 
     signal clicked()
 
+    // Navegável pelo teclado.
+    //
+    // O app tinha bons atalhos — Espaço começa e para, Escape fecha em cascata,
+    // Ctrl+Shift+I captura — e nenhum jeito de andar entre os controles sem o
+    // mouse: só o campo de texto aceitava foco, e nada na tela mostrava onde o
+    // foco estava. Tab agora percorre os botões, e o anel diz qual deles o
+    // Enter vai acionar.
+    //
+    // `activeFocusOnTab` só nos que estão à mostra: um botão de largura zero na
+    // fila do Tab é um passo em que a atenção some da tela.
+    activeFocusOnTab: mostrando && enabled
+    Keys.onReturnPressed: botao.aciona()
+    Keys.onEnterPressed: botao.aciona()
+    Keys.onSpacePressed: botao.aciona()
+
+    function aciona() {
+        backend.sfx("clique")
+        botao.clicked()
+    }
+
     implicitWidth: rotulo.implicitWidth + 20
     implicitHeight: rotulo.implicitHeight + 12
 
@@ -51,7 +71,10 @@ Item {
 
     // Cresce a partir do meio, senão o botão anda para o lado ao ser apontado.
     transformOrigin: Item.Center
-    scale: area.pressed ? 0.96 : (area.containsMouse ? 1.04 : 1.0)
+    // O teclado recebe a mesma reação do mouse: quem chega pelo Tab vê o botão
+    // responder do mesmo jeito que quem chega apontando.
+    scale: area.pressed ? 0.96
+           : ((area.containsMouse || activeFocus) ? 1.04 : 1.0)
 
     // Curvas diferentes na ida e na volta: entra com um respiro (OutBack dá o
     // leve exagero no fim), sai reto. Reação carinhosa é assimétrica.
@@ -67,8 +90,17 @@ Item {
         anchors.fill: parent
         radius: Theme.raio
         color: Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b,
-                       area.pressed ? 0.20 : (area.containsMouse ? 0.10 : 0.0))
+                       area.pressed ? 0.20
+                       : ((area.containsMouse || botao.activeFocus) ? 0.10 : 0.0))
         Behavior on color { ColorAnimation { duration: Theme.reacao } }
+
+        // O anel do foco. Fino, âmbar e por fora do fundo aceso — é a mesma
+        // cor que o campo de texto já usa para dizer "a digitação vai para
+        // aqui", e usar outra faria o app ter duas linguagens de foco.
+        border.width: botao.activeFocus ? 1 : 0
+        border.color: Qt.rgba(Theme.ambar.r, Theme.ambar.g, Theme.ambar.b,
+                              botao.activeFocus ? 0.75 : 0)
+        Behavior on border.color { ColorAnimation { duration: Theme.reacao } }
     }
 
     Text {
@@ -86,8 +118,10 @@ Item {
         cursorShape: Qt.PointingHandCursor
         onEntered: backend.sfx("toque")
         onClicked: {
-            backend.sfx("clique")
-            botao.clicked()
+            // O clique também dá o foco, senão Tab depois de clicar recomeça do
+            // início da tela em vez de seguir de onde a mão estava.
+            botao.forceActiveFocus()
+            botao.aciona()
         }
     }
 }

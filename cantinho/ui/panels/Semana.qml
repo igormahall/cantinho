@@ -24,9 +24,14 @@ Item {
     property int entregas: 0
     property int minutos: 0
     property int recuo: 0
+    // O passado tem fim, e ele é o primeiro evento do log. A seta apaga lá
+    // pelo mesmo motivo que a outra apaga em "esta semana": adiante e atrás do
+    // log não há o que mostrar, só sete dias vazios repetidos para sempre.
+    property bool temAnterior: true
 
     signal anterior()
     signal seguinte()
+    signal guardarPagina()
 
     function duracao(m) {
         if (m < 60) return m + " min"
@@ -61,7 +66,7 @@ Item {
             Text {
                 text: raiz.titulo
                 color: raiz.recuo === 0 ? Theme.textoSuave : Theme.ambar
-                font.pixelSize: 11
+                font.pixelSize: Theme.nano
             }
         }
 
@@ -73,6 +78,8 @@ Item {
             BotaoSuave {
                 text: "‹"
                 tamanho: Theme.corpo
+                opacity: raiz.temAnterior ? 1 : 0.25
+                enabled: raiz.temAnterior
                 onClicked: raiz.anterior()
             }
 
@@ -100,6 +107,7 @@ Item {
     // ------------------------------------------------------------ os dias
 
     Flickable {
+        id: rolo
         anchors.top: risco.bottom
         anchors.topMargin: Theme.espaco
         anchors.left: parent.left
@@ -137,7 +145,7 @@ Item {
                         Text {
                             text: modelData.weekday
                             color: modelData.today ? Theme.ambar : Theme.textoSuave
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.nano
                         }
                         Text {
                             text: modelData.day
@@ -195,7 +203,7 @@ Item {
                             visible: modelData.note !== ""
                             text: modelData.note
                             color: Theme.textoSuave
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.nano
                             font.italic: true
                             wrapMode: Text.WordWrap
                         }
@@ -256,5 +264,34 @@ Item {
             color: Theme.textoSuave
             font.pixelSize: Theme.miudo
         }
+
+        // **A resposta deste projeto ao horizonte mais longo.**
+        //
+        // A semana é a costura por onde o Cantinho poderia virar planilha: é o
+        // único painel com um número somado e navegação temporal, e daqui todo
+        // pedido natural — "e o mês?", "e o ano?", "e comparado com a semana
+        // passada?" — é um passo em direção ao dashboard que o projeto recusa.
+        //
+        // A saída não é um painel maior: é uma **página**. Ver mais que uma
+        // semana é gerar o diário daquele período e lê-lo como texto, fora do
+        // app. A diferença não é de formato, é de natureza: um painel de mês
+        // seria mais tela no mesmo lugar, com a mesma pressão de virar
+        // comparação; a página é um artefato que se lê, se guarda e se fecha.
+        //
+        // Por isso o botão está aqui, no rodapé da semana, e não escondido num
+        // menu: é neste painel que a pergunta aparece.
+        Item { width: 1; height: 4 }
+
+        BotaoSuave {
+            anchors.right: parent.right
+            text: "guardar esta página"
+            tamanho: Theme.miudo
+            onClicked: raiz.guardarPagina()
+        }
+    }
+
+    Rolagem {
+        anchors.fill: rolo
+        lista: rolo
     }
 }

@@ -116,7 +116,13 @@ Item {
         visible: relogio.marca >= 0
         opacity: visible ? 1 : 0
         rotation: (relogio.marca % 720) / 720 * 360
-        Behavior on opacity { NumberAnimation { duration: 600 } }
+        // `chegada`, que é o eixo de "algo entrou no quarto": o traço aparece
+        // quando o turno começa e some quando ele acaba, e é literalmente uma
+        // coisa a mais no mostrador. Era 600 solto — o único número de duração
+        // fora do Theme que não é laço de ambiente. Os de `Room.qml` (chuva,
+        // folhas, luz respirando) ficam de fora dos quatro eixos de propósito:
+        // aqueles têm tempo físico, não tempo de interface.
+        Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
 
         Rectangle {
             width: 2.6 * relogio.unidade

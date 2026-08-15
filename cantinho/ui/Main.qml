@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import theme
 import "room"
 import "panels"
@@ -63,11 +64,52 @@ Window {
         seletor.aberto = false
     }
 
+    // Quanto o quarto está "atrás". Zero com a gaveta fechada.
+    //
+    // É o que liga o desfoque do cenário à abertura do painel, num valor só,
+    // para que a profundidade e o painel andem no mesmo ritmo. Não obedece a
+    // `Theme.movimento`: é consequência de um gesto, como `gesto` e `chegada`.
+    property real profundidade: aba === "" ? 0 : 1
+    Behavior on profundidade {
+        NumberAnimation { duration: Theme.gesto; easing.type: Easing.OutCubic }
+    }
+
     Room {
         id: quarto
         anchors.fill: parent
         plantStage: backend.plantStage
         shelf: backend.shelf
+        focoNoQuarto: janela.aba === ""
+
+        // O quarto sai de foco quando um painel abre — e isto é a correção do
+        // problema de composição mais visível que a auditoria achou.
+        //
+        // A gaveta era uma laje clara pousada sobre a ilustração, cobrindo a
+        // janela **e** o abajur, e lia como caixa de diálogo colada por cima do
+        // desenho: o quarto sumia justamente na hora de usar o app. Com o fundo
+        // desfocado e um pouco mais escuro, a mesma laje passa a ler como
+        // "à frente" — a cena continua lá, reconhecível, e o olho sabe para
+        // onde olhar sem que nada precise ser escondido.
+        //
+        // `layer.effect` cuida de esconder a fonte sozinho, e com
+        // `layer.enabled` falso o custo é exatamente zero: nada disto roda com
+        // a gaveta fechada, que é o estado padrão do app.
+        layer.enabled: janela.profundidade > 0.01
+        layer.effect: MultiEffect {
+            blurEnabled: true
+            // **Fraco de propósito, e o número foi calibrado olhando.** Com
+            // `blurMax: 40` o quarto virava mancha: dava profundidade e custava
+            // a cena inteira, que é o contrário do que este app é. O alvo é
+            // ainda reconhecer os objetos da estante e as folhas do vaso, só
+            // fora de foco — o quarto continua sendo um quarto, apenas atrás.
+            blurMax: 14
+            blur: janela.profundidade
+            // Escurecer e dessaturar junto, de leve. Só o desfoque deixaria a
+            // cena com a mesma luminosidade do painel, e aí as duas camadas
+            // voltariam a brigar por atenção.
+            brightness: -0.10 * janela.profundidade
+            saturation: -0.12 * janela.profundidade
+        }
 
         // Os dois papéis da parede que respondem a clique: o bilhete abre o
         // "hoje", o calendário abre a semana. É a leitura literal de cada um —
@@ -315,6 +357,7 @@ Window {
             CampoTexto {
                 id: entradaExtra
                 width: parent.width
+                limite: backend.labelLimit
                 placeholder: "ou escreva o que apareceu no caminho"
                 onAceito: function (texto) {
                     backend.addAndCompleteTask(texto)
@@ -340,17 +383,30 @@ Window {
 
     // ----------------------------------------------------- painel lateral
 
-    // O painel fica no meio, por cima da janela do quarto — nunca por cima da
-    // estante nem do vaso. Esses dois são o retorno que o app dá; escondê-los
-    // para mostrar a lista de pendências inverteria a prioridade da tela.
+    // O painel cobre a janela do quarto, e nada além dela.
+    //
+    // A estante e o vaso são o retorno que o app dá; escondê-los para mostrar a
+    // lista de pendências inverteria a prioridade da tela. O abajur entrou
+    // nessa lista depois: em x=330 o painel cortava a cúpula no meio, o que
+    // não escondia a luz e também não a deixava aparecer — o pior dos dois. Em
+    // 400 ele começa depois do abajur e termina antes do vaso, e o que fica
+    // debaixo dele é a janela, que é cenário puro.
+    //
+    // **Posição em coordenada de cena, não da janela.** Era `x: 330` em pixel
+    // de janela, o que coincide com a cena só em 1100x700: com a janela
+    // maximizada, o desenho é centralizado e escalado e o painel ficava parado
+    // no lugar antigo, descolando do abajur que ele existe para não cobrir. É a
+    // mesma armadilha que já tirou a chuva e a poeira de cena, e que o balão do
+    // passeio corrigiu — `cx` para posição, nunca fração da janela.
     Painel {
         id: gaveta
         // Nomeado para `tools/simular_uso.py` conseguir procurar só aqui
         // dentro: o bilhete da parede repete os rótulos das tarefas, e uma
         // busca pela tela inteira acha o papel antes da linha da lista.
         objectName: "gaveta"
-        width: 410
-        x: 330
+        sombra: true
+        width: quarto.px(410)
+        x: quarto.cx(400)
         anchors.top: parent.top
         anchors.topMargin: janela.aba === "" ? 44 : 24
         anchors.bottom: barra.top
@@ -479,6 +535,7 @@ Window {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
+                        limite: backend.labelLimit
                         placeholder: "o que você quer fazer?"
                         onAceito: function (texto) {
                             backend.addTask(texto)
@@ -520,6 +577,7 @@ Window {
                     // Some do mural só o que for descartado à mão, e mesmo isso é
                     // um evento novo no log, não um apagamento.
                     ListView {
+                        id: mural
                         anchors.fill: parent
                         anchors.bottomMargin: 48
                         spacing: 10
@@ -558,6 +616,17 @@ Window {
                                     font.pixelSize: Theme.corpo
                                     font.strikeout: cartaz.usada
                                     wrapMode: Text.WordWrap
+                                    // Quatro linhas, e o resto vira reticência.
+                                    //
+                                    // Uma ideia aceita até `TEXT_LIMIT` (4000)
+                                    // caracteres, o que é folgado de propósito
+                                    // — mas sem teto de linhas um texto colado
+                                    // empurrava o resto do mural para fora da
+                                    // tela, e as outras ideias sumiam. O mural
+                                    // é uma parede de bilhetes: bilhete que
+                                    // ocupa a parede inteira deixou de ser um.
+                                    maximumLineCount: 4
+                                    elide: Text.ElideRight
                                     Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
                                 }
                                 Text {
@@ -566,7 +635,7 @@ Window {
                                           : modelData.when
                                     color: Theme.textoSuave
                                     opacity: cartaz.usada ? 0.6 : 1.0
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.nano
                                 }
                             }
 
@@ -593,10 +662,16 @@ Window {
                         }
                     }
 
+                    Rolagem {
+                        anchors.fill: mural
+                        lista: mural
+                    }
+
                     CampoTexto {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
+                        limite: backend.textLimit
                         placeholder: "o que passou pela cabeça?"
                         onAceito: function (texto) {
                             backend.captureIdea(texto)
@@ -627,21 +702,40 @@ Window {
 
                 // ------------------------------------------------- a semana
 
-                Semana {
+                // Dentro de um Loader, e é o único painel que precisa disso.
+                //
+                // Os quatro painéis se cruzam por opacidade, então todos ficam
+                // instanciados o tempo todo — o que é barato para os outros
+                // três e não era para este. `weekDays`, `weekDelivered` e
+                // `weekMinutes` são notificados por `weekChanged`, que o
+                // `_recomputar` emite a **cada evento gravado**: com os
+                // bindings vivos, toda tarefa concluída pagava a semana inteira
+                // com o painel fechado. Medido em 95 ms por clique com um ano
+                // de log, e 301 ms com três anos — justamente no gesto em que a
+                // estante deveria animar suave.
+                //
+                // `active` só liga quando a aba é a semana; o fade continua
+                // sendo do Loader, então a transição não muda.
+                Loader {
                     anchors.fill: parent
+                    active: janela.aba === "semana" || opacity > 0.01
                     opacity: janela.aba === "semana" ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity {
                         NumberAnimation { duration: Theme.gesto }
                     }
-                    dias: backend.weekDays
-                    titulo: backend.weekTitle
-                    periodo: backend.weekRange
-                    entregas: backend.weekDelivered
-                    minutos: backend.weekMinutes
-                    recuo: backend.weekOffset
-                    onAnterior: backend.previousWeek()
-                    onSeguinte: backend.nextWeek()
+                    sourceComponent: Semana {
+                        dias: backend.weekDays
+                        titulo: backend.weekTitle
+                        periodo: backend.weekRange
+                        entregas: backend.weekDelivered
+                        minutos: backend.weekMinutes
+                        recuo: backend.weekOffset
+                        temAnterior: backend.hasPreviousWeek
+                        onAnterior: backend.previousWeek()
+                        onSeguinte: backend.nextWeek()
+                        onGuardarPagina: backend.exportCurrentWeek()
+                    }
                 }
             }
         }
@@ -649,7 +743,22 @@ Window {
 
     // ------------------------------------------------------- barra de baixo
 
-    Painel {
+    // Duas ilhas, e não uma faixa de ponta a ponta.
+    //
+    // A barra era uma laje que atravessava a tela inteira com o cronômetro numa
+    // ponta, os botões na outra e um vazio enorme no meio — a peça mais
+    // "aplicativo" da tela, e a que cortava o chão do quarto em dois. O vazio
+    // não era espaço de respiro: era superfície pintada sobre a ilustração para
+    // não ligar nada a nada.
+    //
+    // Agora são dois agrupamentos flutuando sobre o chão, e o chão aparece
+    // entre eles. Nada se perde: os controles continuam exatamente onde a mão
+    // já procurava, cada um ancorado no seu canto. O que sai é a ponte de
+    // pixels que só existia porque a barra tinha que ser um retângulo.
+    //
+    // `barra` continua existindo como guia de layout — é a ela que a gaveta se
+    // ancora por cima —, mas não desenha mais nada.
+    Item {
         id: barra
         height: 76
         anchors.left: parent.left
@@ -657,204 +766,237 @@ Window {
         anchors.bottom: parent.bottom
         anchors.margins: 24
 
-        // Bem mais translúcida que a gaveta: a barra não tem texto para ler, só
-        // controles. Opaca, ela vira rodapé de aplicativo e corta o chão do
-        // quarto em dois. Fica um pouco mais firme com o mouse por perto.
-        opacidadeFundo: sobreBarra.hovered
-                        ? Theme.opacidadePainel : Theme.opacidadeBarra
-
-        HoverHandler { id: sobreBarra }
-
-        // O relógio e, debaixo dele, o que o "começar" vai pegar.
+        // A ilha do tempo: o relógio e, debaixo dele, o que o "começar" pega.
         //
         // A segunda linha não é legenda: é um controle. Enquanto o timer está
         // parado ela mostra a tarefa escolhida e abre a lista de escolha; com o
         // timer correndo ela vira o nome do que está sendo feito e para de
         // responder, porque trocar de tarefa no meio da sessão seria trocar o
         // que o log já está gravando.
-        Column {
-            id: relogio
+        Painel {
+            id: ilhaTempo
+            sombra: true
             anchors.left: parent.left
-            anchors.leftMargin: Theme.espacoGrande
-            anchors.verticalCenter: parent.verticalCenter
-            width: 330
-            spacing: 2
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            // A largura acompanha o conteúdo em vez de ser fatia da janela: é o que
+            // faz a ilha ser do tamanho do que ela carrega, em qualquer resolução.
+            width: relogio.width + 2 * Theme.espacoGrande
 
-            Text {
-                text: backend.elapsedText
-                color: backend.timerRunning ? Theme.ambar : Theme.textoSuave
-                font.pixelSize: 30
-                font.letterSpacing: 1
-                Behavior on color { ColorAnimation { duration: Theme.gesto } }
-            }
+            // Bem mais translúcida que a gaveta: aqui não há texto para ler, só
+            // controle. Opaca, vira rodapé de aplicativo. Firma um pouco com o
+            // mouse por perto.
+            opacidadeFundo: sobreTempo.hovered
+                            ? Theme.opacidadePainel : Theme.opacidadeBarra
+            HoverHandler { id: sobreTempo }
 
-            Item {
-                width: parent.width
-                height: 20
-
-                readonly property bool escolhivel: !backend.timerRunning
+            Column {
+                id: relogio
+                anchors.left: parent.left
+                anchors.leftMargin: Theme.espacoGrande
+                anchors.verticalCenter: parent.verticalCenter
+                width: 300
+                spacing: 2
 
                 Text {
-                    id: aoLado
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(implicitWidth, parent.width - 20)
-                    elide: Text.ElideRight
-                    font.pixelSize: Theme.miudo
-                    text: backend.timerRunning
-                          ? (backend.currentTaskLabel !== ""
-                             ? backend.currentTaskLabel : "sessão livre")
-                          : backend.freeSessionChosen
-                            ? "sessão livre"
-                            : backend.focusedTaskLabel !== ""
-                              ? backend.focusedTaskLabel
-                              : "escreva no hoje o que fazer"
-                    color: backend.timerRunning ? Theme.ambar
-                           : (escolher.containsMouse ? Theme.ambar : Theme.textoSuave)
-                    Behavior on color { ColorAnimation { duration: Theme.reacao } }
+                    text: backend.elapsedText
+                    // Algarismos de largura fixa. Sem isto o relógio
+                    // treme: na Inter o "1" é mais estreito que o
+                    // "0", então 00:00 e 11:11 não medem igual e o
+                    // texto se mexe a cada segundo.
+                    font.features: Theme.digitos
+                    color: backend.timerRunning ? Theme.ambar : Theme.textoSuave
+                    font.pixelSize: Theme.destaque
+                    font.letterSpacing: 1
+                    Behavior on color { ColorAnimation { duration: Theme.gesto } }
                 }
 
-                // Marca de "isto abre": some junto com a possibilidade de
-                // escolher, para não prometer um clique que não acontece.
-                Text {
-                    anchors.left: aoLado.right
-                    anchors.leftMargin: 6
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "▾"
-                    font.pixelSize: 9
-                    color: escolher.containsMouse ? Theme.ambar : Theme.textoSuave
-                    opacity: parent.escolhivel ? 0.8 : 0
-                    Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
-                }
+                Item {
+                    width: parent.width
+                    height: 20
 
-                MouseArea {
-                    id: escolher
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    hoverEnabled: true
-                    enabled: parent.escolhivel
-                    cursorShape: Qt.PointingHandCursor
-                    onEntered: backend.sfx("toque")
-                    onClicked: {
-                        backend.sfx("clique")
-                        seletor.aberto = !seletor.aberto
+                    readonly property bool escolhivel: !backend.timerRunning
+
+                    Text {
+                        id: aoLado
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(implicitWidth, parent.width - 20)
+                        elide: Text.ElideRight
+                        font.pixelSize: Theme.miudo
+                        text: backend.timerRunning
+                              ? (backend.currentTaskLabel !== ""
+                                 ? backend.currentTaskLabel : "sessão livre")
+                              : backend.freeSessionChosen
+                                ? "sessão livre"
+                                : backend.focusedTaskLabel !== ""
+                                  ? backend.focusedTaskLabel
+                                  : "escreva no hoje o que fazer"
+                        color: backend.timerRunning ? Theme.ambar
+                               : (escolher.containsMouse ? Theme.ambar : Theme.textoSuave)
+                        Behavior on color { ColorAnimation { duration: Theme.reacao } }
+                    }
+
+                    // Marca de "isto abre": some junto com a possibilidade de
+                    // escolher, para não prometer um clique que não acontece.
+                    Text {
+                        anchors.left: aoLado.right
+                        anchors.leftMargin: 6
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "▾"
+                        font.pixelSize: Theme.nano
+                        color: escolher.containsMouse ? Theme.ambar : Theme.textoSuave
+                        opacity: parent.escolhivel ? 0.8 : 0
+                        Behavior on opacity { NumberAnimation { duration: Theme.gesto } }
+                    }
+
+                    MouseArea {
+                        id: escolher
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        hoverEnabled: true
+                        enabled: parent.escolhivel
+                        cursorShape: Qt.PointingHandCursor
+                        onEntered: backend.sfx("toque")
+                        onClicked: {
+                            backend.sfx("clique")
+                            seletor.aberto = !seletor.aberto
+                        }
                     }
                 }
             }
+
         }
 
-        Row {
+        // A ilha das ações. A largura anda com o conteúdo, então quando
+        // "entreguei" e "fui interrompido" chegam a ilha cresce junto com eles
+        // — o mesmo gesto de `BotaoSuave.mostrando`, agora com a borda do
+        // painel acompanhando em vez de um buraco aparecendo dentro dele.
+        Painel {
+            id: ilhaAcoes
+            sombra: true
             anchors.right: parent.right
-            anchors.rightMargin: Theme.espacoGrande
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 4
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: acoes.width + 2 * Theme.espacoGrande
+            opacidadeFundo: sobreAcoes.hovered
+                            ? Theme.opacidadePainel : Theme.opacidadeBarra
+            HoverHandler { id: sobreAcoes }
 
-            // Os três fins possíveis de uma sessão, e eles precisavam de nomes
-            // que não se confundissem.
-            //
-            // "Terminei" e "encerrar" eram a mesma palavra dita de dois jeitos,
-            // e ficavam lado a lado: ninguém sabia qual dos dois fechava a
-            // tarefa. Agora cada botão diz o que acontece com a tarefa, que é a
-            // única diferença entre eles:
-            //
-            //   entreguei        — a tarefa acabou e vira objeto na estante
-            //   parar            — o relógio para, a tarefa continua na lista
-            //   fui interrompido — igual, mas fica marcado assim no diário
-            //
-            // "Entreguei" é o mesmo verbo da estante, que é a vitrine de
-            // entregas: quem lê a palavra já sabe onde a tarefa vai parar. Só
-            // aparece com tarefa presa ao timer — numa sessão livre não há o
-            // que concluir.
-            BotaoSuave {
+            Row {
+                id: acoes
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.espacoGrande
                 anchors.verticalCenter: parent.verticalCenter
-                text: "entreguei"
-                mostrando: backend.timerRunning && backend.currentTaskId !== ""
-                destacado: true
-                corAtiva: Theme.musgo
-                tamanho: Theme.corpo
-                onClicked: backend.endSessionAndComplete()
-            }
+                spacing: 4
 
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
-                text: backend.timerRunning ? "parar" : "começar"
-                // Deixa de ser o botão principal quando "entreguei" está do
-                // lado: dois destaques lado a lado não destacam nada.
-                destacado: !backend.timerRunning
-                corAtiva: backend.timerRunning ? Theme.texto : Theme.ambar
-                tamanho: backend.timerRunning ? Theme.miudo : Theme.corpo
-                onClicked: backend.timerRunning
-                           ? backend.endSession(false, "")
-                           : backend.startFocused()
-            }
+                // Os três fins possíveis de uma sessão, e eles precisavam de nomes
+                // que não se confundissem.
+                //
+                // "Terminei" e "encerrar" eram a mesma palavra dita de dois jeitos,
+                // e ficavam lado a lado: ninguém sabia qual dos dois fechava a
+                // tarefa. Agora cada botão diz o que acontece com a tarefa, que é a
+                // única diferença entre eles:
+                //
+                //   entreguei        — a tarefa acabou e vira objeto na estante
+                //   parar            — o relógio para, a tarefa continua na lista
+                //   fui interrompido — igual, mas fica marcado assim no diário
+                //
+                // "Entreguei" é o mesmo verbo da estante, que é a vitrine de
+                // entregas: quem lê a palavra já sabe onde a tarefa vai parar. Só
+                // aparece com tarefa presa ao timer — numa sessão livre não há o
+                // que concluir.
+                BotaoSuave {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "entreguei"
+                    mostrando: backend.timerRunning && backend.currentTaskId !== ""
+                    destacado: true
+                    corAtiva: Theme.musgo
+                    tamanho: Theme.corpo
+                    onClicked: backend.endSessionAndComplete()
+                }
 
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "fui interrompido"
-                mostrando: backend.timerRunning
-                corAtiva: Theme.terracota
-                onClicked: backend.endSession(true, "")
-            }
+                BotaoSuave {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: backend.timerRunning ? "parar" : "começar"
+                    // Deixa de ser o botão principal quando "entreguei" está do
+                    // lado: dois destaques lado a lado não destacam nada.
+                    destacado: !backend.timerRunning
+                    corAtiva: backend.timerRunning ? Theme.texto : Theme.ambar
+                    tamanho: backend.timerRunning ? Theme.miudo : Theme.corpo
+                    onClicked: backend.timerRunning
+                               ? backend.endSession(false, "")
+                               : backend.startFocused()
+                }
 
-            Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 1; height: 26; color: Theme.borda
-            }
+                BotaoSuave {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "fui interrompido"
+                    mostrando: backend.timerRunning
+                    corAtiva: Theme.terracota
+                    onClicked: backend.endSession(true, "")
+                }
 
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "hoje"
-                destacado: janela.aba === "backlog"
-                onClicked: janela.alternar("backlog")
-            }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1; height: 26; color: Theme.borda
+                }
 
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "ideias"
-                destacado: janela.aba === "ideias"
-                onClicked: janela.alternar("ideias")
-            }
+                BotaoSuave {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "hoje"
+                    destacado: janela.aba === "backlog"
+                    onClicked: janela.alternar("backlog")
+                }
 
-            // "o dia" e não "fechar o dia": o painel sempre pôde ser aberto a
-            // qualquer hora, mas o nome dizia que era coisa de fim de
-            // expediente, e por isso ninguém entrava nele antes das dez da
-            // noite. É onde estão as sessões, o humor e a nota.
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "o dia"
-                destacado: janela.aba === "dia" || janela.aba === "semana"
-                // Dia já encerrado esverdeia o rótulo. É o mesmo verde da
-                // estante, e é tudo o que se pode dizer sobre isso sem virar
-                // marca de tarefa cumprida: não conta dias seguidos, não some
-                // amanhã como conquista perdida.
-                cor: backend.dayClosed ? Theme.musgo : Theme.textoSuave
-                onClicked: janela.alternar("dia")
-            }
+                BotaoSuave {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "ideias"
+                    destacado: janela.aba === "ideias"
+                    onClicked: janela.alternar("ideias")
+                }
 
-            Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 1; height: 26; color: Theme.borda
-            }
+                // "o dia" e não "fechar o dia": o painel sempre pôde ser aberto a
+                // qualquer hora, mas o nome dizia que era coisa de fim de
+                // expediente, e por isso ninguém entrava nele antes das dez da
+                // noite. É onde estão as sessões, o humor e a nota.
+                BotaoSuave {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "o dia"
+                    destacado: janela.aba === "dia" || janela.aba === "semana"
+                    // Dia já encerrado esverdeia o rótulo. É o mesmo verde da
+                    // estante, e é tudo o que se pode dizer sobre isso sem virar
+                    // marca de tarefa cumprida: não conta dias seguidos, não some
+                    // amanhã como conquista perdida.
+                    cor: backend.dayClosed ? Theme.musgo : Theme.textoSuave
+                    onClicked: janela.alternar("dia")
+                }
 
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "mini"
-                onClicked: backend.showMini()
-            }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1; height: 26; color: Theme.borda
+                }
 
-            // Tema, som, humor e a saída moram aqui.
-            //
-            // Não é gosto por menu: com "entreguei" a mais, a fileira de botões
-            // passava da largura da janela. E são todos ajustes do ambiente, não
-            // ações do dia — separá-los deixa na barra só o que se usa o tempo
-            // todo.
-            BotaoSuave {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "o quarto"
-                destacado: janela.menuAberto
-                onClicked: {
-                    seletor.aberto = false
-                    janela.menuAberto = !janela.menuAberto
+                BotaoSuave {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "mini"
+                    onClicked: backend.showMini()
+                }
+
+                // Tema, som, humor e a saída moram aqui.
+                //
+                // Não é gosto por menu: com "entreguei" a mais, a fileira de botões
+                // passava da largura da janela. E são todos ajustes do ambiente, não
+                // ações do dia — separá-los deixa na barra só o que se usa o tempo
+                // todo.
+                BotaoSuave {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "o quarto"
+                    destacado: janela.menuAberto
+                    onClicked: {
+                        seletor.aberto = false
+                        janela.menuAberto = !janela.menuAberto
+                    }
                 }
             }
         }
@@ -1151,6 +1293,26 @@ Window {
                 }
             }
 
+            // Levar o quarto embora.
+            //
+            // Um log de anos sem saída é um refém: o banco é SQLite e o esquema
+            // é simples, mas "abra o sqlite3 e escreva um SELECT" não é uma
+            // saída, é a ausência de uma. Aqui a estante, o diário e o mural
+            // viram uma página de texto que se lê sem o Cantinho instalado.
+            //
+            // Fica ao lado do passeio e não perto de "sair" de propósito: não é
+            // um gesto de despedida. É a mesma natureza do passeio — as duas
+            // linhas que falam sobre o app em vez de ajustarem o ambiente.
+            LinhaMenu {
+                width: parent.width
+                rotulo: "a página"
+                valor: "guardar uma cópia"
+                onClicado: {
+                    janela.menuAberto = false
+                    backend.exportEverything()
+                }
+            }
+
             Rectangle {
                 width: parent.width; height: 1; color: Theme.borda
             }
@@ -1163,6 +1325,115 @@ Window {
                 onClicado: {
                     janela.menuAberto = false
                     saida.aberta = true
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------ a página saiu
+
+    // Confirmação de que a página foi escrita, com o caminho e o jeito de
+    // chegar nela.
+    //
+    // Uma exportação sem retorno na tela é indistinguível de uma exportação que
+    // não aconteceu — e como o arquivo vai para uma pasta ao lado do banco, sem
+    // esta tira ninguém saberia onde procurar. É por isso que ela existe, e é
+    // por isso que "abrir a pasta" está aqui: o caminho não é para ser decorado.
+    //
+    // Some sozinha. Não pede resposta porque não há decisão nenhuma a tomar: o
+    // arquivo já está no disco.
+    property string paginaEscrita: ""
+
+    Connections {
+        target: backend
+        function onExported(caminho) {
+            janela.paginaEscrita = caminho
+            pagina.aberta = true
+            relogioDaPagina.restart()
+        }
+        function onExportFailed() {
+            janela.paginaEscrita = ""
+            pagina.falhou = true
+            pagina.aberta = true
+            relogioDaPagina.restart()
+        }
+    }
+
+    Timer {
+        id: relogioDaPagina
+        interval: 9000
+        onTriggered: pagina.aberta = false
+    }
+
+    Painel {
+        id: pagina
+        property bool aberta: false
+        property bool falhou: false
+
+        sombra: true
+        width: Math.min(480, parent.width - 48)
+        height: colunaPagina.height + 2 * Theme.espacoGrande
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: barra.top
+        anchors.bottomMargin: aberta ? 14 : -10
+
+        opacity: aberta ? 1 : 0
+        visible: opacity > 0.01
+
+        Behavior on anchors.bottomMargin {
+            NumberAnimation { duration: Theme.chegada; easing.type: Easing.OutCubic }
+        }
+        Behavior on opacity { NumberAnimation { duration: Theme.chegada } }
+
+        Column {
+            id: colunaPagina
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Theme.espacoGrande
+            spacing: 6
+
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                lineHeight: 1.3
+                text: pagina.falhou
+                      ? "Não deu para escrever a página aqui."
+                      : "A página está guardada."
+                color: Theme.texto
+                font.pixelSize: Theme.corpo
+            }
+
+            Text {
+                width: parent.width
+                wrapMode: Text.WrapAnywhere
+                maximumLineCount: 2
+                elide: Text.ElideMiddle
+                visible: !pagina.falhou
+                text: janela.paginaEscrita
+                color: Theme.textoSuave
+                font.pixelSize: Theme.nano
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: 4
+
+                BotaoSuave {
+                    text: "ok"
+                    onClicked: pagina.aberta = false
+                }
+
+                BotaoSuave {
+                    text: "abrir a pasta"
+                    mostrando: !pagina.falhou
+                    destacado: true
+                    corAtiva: Theme.musgo
+                    tamanho: Theme.corpo
+                    onClicked: {
+                        pagina.aberta = false
+                        backend.openExportFolder()
+                    }
                 }
             }
         }
@@ -1300,6 +1571,7 @@ Window {
             CampoTexto {
                 id: entradaIdeia
                 width: parent.width
+                limite: backend.textLimit
                 placeholder: "escreva e aperte Enter"
                 onAceito: function (texto) {
                     backend.captureIdea(texto)

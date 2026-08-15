@@ -18,6 +18,7 @@ válido, mas as capturas saem com tofu no lugar do texto.
 
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
 import sys
@@ -53,7 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # Mesma razão do app: com o `base` do conda ativo, o ambiente traz
 # `QT_XCB_GL_INTEGRATION=none` e o Qt Quick não sobe. Aqui a falha seria lida
 # como regressão da interface, que é o que esta ferramenta existe para achar.
-from cantinho.services.graphics import ensure_gl_integration  # noqa: E402
+from cantinho.services.graphics import ensure_gl_integration
 
 ensure_gl_integration()
 
@@ -66,23 +67,53 @@ from PySide6.QtCore import (  # noqa: E402
     QUrl,
     qInstallMessageHandler,
 )
-from PySide6.QtGui import QKeyEvent, QMouseEvent
-from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QKeyEvent, QMouseEvent  # noqa: E402
+from PySide6.QtQml import QQmlApplicationEngine  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from cantinho.backend import Backend
-from cantinho.core.clock import SystemClock
-from cantinho.core.projections import ideas, open_tasks, shelf_objects
-from cantinho.core.store import EventStore
-from cantinho.services import scene
+from cantinho.backend import Backend  # noqa: E402
+from cantinho.core.clock import SystemClock  # noqa: E402
+from cantinho.core.projections import ideas, open_tasks, shelf_objects  # noqa: E402
+from cantinho.core.store import EventStore  # noqa: E402
+from cantinho.services import scene  # noqa: E402
+from cantinho.services.fonts import load_fonts  # noqa: E402
 
 TAREFAS = ["revisar o capítulo 3", "responder o orientador", "comprar café"]
 IDEIA = "trocar a fonte do editor"
 CORRIGIDA = "responder o orientador amanhã"
 EXTRA = "resolver o e-mail do financeiro"
 
-SAIDA = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+# ------------------------------------------------------------------ argumentos
+#
+# `--tema` existe porque, sem ele, **o roteiro só rodava no escuro**.
+#
+# O tema padrão é `auto`, que decide pelo relógio: rodar a suíte de tarde dava a
+# cena clara e rodar à noite dava a escura, e como o desenvolvimento acontece à
+# noite, na prática o tema claro nunca era exercitado. Não é diferença
+# cosmética — as duas cenas são arquivos SVG distintos, as camadas da estante
+# são quatro (duas listas × dois temas), e a paleta clara tem contraste e
+# opacidades próprios. Uma regressão que só aparecesse de dia passaria batido
+# indefinidamente.
+#
+# O certo é rodar os dois, e é o que o CLAUDE.md manda fazer agora.
+
+_argumentos = argparse.ArgumentParser(prog="simular_uso", add_help=True)
+_argumentos.add_argument(
+    "saida",
+    nargs="?",
+    default=None,
+    help="pasta onde guardar as capturas de cada etapa",
+)
+_argumentos.add_argument(
+    "--tema",
+    choices=("auto", "tarde", "noite"),
+    default="auto",
+    help="força o tema em vez de deixar o relógio decidir",
+)
+ARGS = _argumentos.parse_args()
+
+SAIDA = Path(ARGS.saida) if ARGS.saida else None
 if SAIDA:
     SAIDA.mkdir(parents=True, exist_ok=True)
 
@@ -92,10 +123,14 @@ mensagens: list[str] = []
 qInstallMessageHandler(lambda tipo, contexto, texto: mensagens.append(texto))
 
 app = QApplication([])
+load_fonts(app)
 PASTA = Path(tempfile.mkdtemp())
 BANCO = PASTA / "simulacao.db"
 store = EventStore(BANCO, device_id="simulacao")
 backend = Backend(store, SystemClock())
+if ARGS.tema != "auto":
+    backend.setThemeMode(ARGS.tema)
+print(f"tema: {backend.themeName} ({ARGS.tema})")
 
 engine = QQmlApplicationEngine()
 engine.addImageProvider("cena", scene.SceneImageProvider())
@@ -129,6 +164,16 @@ def visiveis(raiz=None):
         for it in caminhar(raiz if raiz is not None else principal.contentItem())
         if it.isVisible() and it.width() > 0 and it.height() > 0
     ]
+
+
+def centro_em(item) -> QPoint:
+    """Centro do item nas coordenadas da janela dele.
+
+    `centro` serve à principal; a mini é outra janela, com outro sistema de
+    coordenadas. Mapear pelo `null` devolve a posição na janela de cada um.
+    """
+    ponto = item.mapToItem(None, QPointF(item.width() / 2, item.height() / 2))
+    return QPoint(round(ponto.x()), round(ponto.y()))
 
 
 def centro(item) -> QPoint:
@@ -220,8 +265,15 @@ def arrastar(de_item, para_item):
 
 
 def foto(nome):
+    """Guarda a captura, com o tema no nome do arquivo.
+
+    Sem o sufixo, rodar os dois temas faria a segunda execução sobrescrever as
+    capturas da primeira — e o ponto de rodar os dois é justamente poder olhar
+    os dois.
+    """
     if SAIDA:
-        principal.grabWindow().save(str(SAIDA / f"{nome}.png"))
+        sufixo = "" if ARGS.tema == "auto" else f"_{ARGS.tema}"
+        principal.grabWindow().save(str(SAIDA / f"{nome}{sufixo}.png"))
 
 
 def checar(condicao, descricao):
@@ -285,6 +337,18 @@ def no_extra(texto, **kwargs):
     return achar(texto, raiz=achar_por_nome("extra"), **kwargs)
 
 
+def _limites_da_semana():
+    """Segunda e domingo desta semana, em ISO. A mesma conta do painel."""
+    from datetime import datetime, timedelta, timezone
+
+    # Pelo mesmo caminho do backend (`_agora_local`): o relógio é UTC e a
+    # conversão para local acontece na apresentação. `date.today()` faria a
+    # mesma coisa por baixo, mas sem dizer que faz.
+    hoje = datetime.now(timezone.utc).astimezone().date()
+    segunda = hoje - timedelta(days=hoje.weekday())
+    return segunda.isoformat(), (segunda + timedelta(days=6)).isoformat()
+
+
 def na_gaveta(texto, **kwargs):
     """Procura só dentro do painel lateral.
 
@@ -315,7 +379,7 @@ def fazer_o_passeio():
 
     antes = len(open_tasks_do_log())
     voltas = 0
-    while not backend.showTour is False and voltas < 12:
+    while backend.showTour is not False and voltas < 12:
         try:
             clicar(no_passeio("próximo"))
         except LookupError:
@@ -721,6 +785,21 @@ def ver_a_semana():
     checar(backend.weekDelivered == 0, "e a semana passada está vazia")
     clicar(achar("›"))
     checar(backend.weekOffset == 0, "e volta para esta")
+
+    # A página: a resposta deste projeto ao horizonte mais longo. Ver mais que
+    # uma semana é gerar o diário do período, não abrir um painel de mês.
+    clicar(na_gaveta("guardar esta página"))
+    pagina = Path(backend.exportFolder) / "cantinho-{}-a-{}.md".format(
+        *_limites_da_semana()
+    )
+    checar(pagina.is_file(), "a página da semana foi escrita")
+    texto = pagina.read_text(encoding="utf-8")
+    checar(TAREFAS[0] in texto, "e traz o que foi entregue")
+    checar("%" not in texto and "média" not in texto.lower(),
+           "sem linguagem de desempenho na página")
+    checar(achar("abrir a pasta") is not None, "com o aviso do caminho na tela")
+    clicar(achar("ok"))
+
     # "o dia" e "a semana" são duas abas do mesmo painel: o primeiro clique
     # troca de aba, o segundo fecha a gaveta.
     clicar(na_barra("o dia"))
@@ -738,6 +817,14 @@ def trocar_tema():
     checar(backend.themeName != antes, "o tema mudou")
     foto("05_tema_trocado")
 
+    # Volta ao tema que se pediu testar: daqui para a frente vêm a mini, o toque
+    # e a pergunta do fim de sessão, e eles têm que ser exercitados no tema em
+    # questão. Sem isto, `--tema tarde` testava metade do roteiro no escuro.
+    if ARGS.tema != "auto":
+        backend.setThemeMode(ARGS.tema)
+        QTest.qWait(3200)
+        checar(backend.themeName == ARGS.tema, f"e volta para {ARGS.tema}")
+
 
 @passo
 def mini_janela():
@@ -746,8 +833,34 @@ def mini_janela():
     checar(backend.miniVisible, "a mini apareceu")
     checar(not backend.mainVisible, "e a principal saiu da tela")
     QTest.qWait(400)
+
+    # A mini tem dois tamanhos, e é a razão de ela ter encolhido: em repouso é
+    # um lembrete (relógio, nome, e o botão que encerra), e só quando o mouse
+    # chega ela mostra os secundários. Antes eram cinco controles à mostra o
+    # tempo todo, com o canto inferior esquerdo vazio.
+    # `height` num QQuickWindow é método, não propriedade — ao contrário do
+    # que vale para os itens QML lá dentro.
+    em_repouso = mini.height()
+    checar(em_repouso == mini.property("alturaEmRepouso"),
+           f"a mini em repouso tem {em_repouso} px de altura")
     if SAIDA:
-        mini.grabWindow().save(str(SAIDA / "06_mini.png"))
+        sufixo = "" if ARGS.tema == "auto" else f"_{ARGS.tema}"
+        mini.grabWindow().save(str(SAIDA / f"06_mini{sufixo}.png"))
+
+    QTest.mouseMove(mini, QPoint(mini.width() // 2, 40))
+    QTest.qWait(500)
+    checar(mini.height() > em_repouso, "e cresce quando o mouse chega")
+    if SAIDA:
+        mini.grabWindow().save(str(SAIDA / f"06_mini_aberta{sufixo}.png"))
+
+    # E os controles de dentro funcionam. "abrir" é o que traz a janela grande
+    # de volta — sem ele, quem está na mini não tem caminho para o quarto.
+    controles = [it for it in caminhar(mini.contentItem())
+                 if it.property("objectName") == "abrirNaMini"]
+    checar(len(controles) == 1, "o botão 'abrir' está na mini")
+    QTest.mouseClick(mini, Qt.LeftButton, Qt.NoModifier, centro_em(controles[0]))
+    QTest.qWait(500)
+    checar(backend.mainVisible, "e ele traz a janela grande de volta")
 
     backend.showMain()
     QTest.qWait(400)

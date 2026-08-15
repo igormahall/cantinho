@@ -30,13 +30,19 @@ Item {
     onTarefasChanged: if (!arrastando) recarregar()
     Component.onCompleted: recarregar()
 
+    // `project` não vem, e não é esquecimento: nada na interface tem como
+    // preenchê-lo. O único chamador é `backend.addTask(texto)`, com um
+    // argumento — o parâmetro existe no slot e no contrato do evento, e nunca
+    // recebeu valor por aqui. A linha que o mostrava era código morto com cara
+    // de funcionalidade: quem lia este arquivo achava que havia agrupamento por
+    // projeto. O campo continua no `task.created`, porque kind não se altera;
+    // o que saiu foi a promessa na tela.
     function recarregar() {
         modelo.clear()
         for (var i = 0; i < tarefas.length; i++) {
             modelo.append({
                 "taskId": tarefas[i].id,
-                "label": tarefas[i].label,
-                "project": tarefas[i].project
+                "label": tarefas[i].label
             })
         }
     }
@@ -70,6 +76,8 @@ Item {
         model: modelo
         clip: true
         cacheBuffer: 400
+
+
 
         delegate: Item {
             id: envelope
@@ -298,6 +306,7 @@ Item {
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: cartao.editando
+                                maximumLength: backend.labelLimit
                                 color: Theme.texto
                                 font.pixelSize: Theme.corpo
                                 selectionColor: Qt.rgba(Theme.ambar.r, Theme.ambar.g,
@@ -323,14 +332,6 @@ Item {
                             }
                         }
 
-                        Text {
-                            width: parent.width
-                            text: model.project
-                            visible: model.project !== ""
-                            color: Theme.textoSuave
-                            font.pixelSize: 11
-                            elide: Text.ElideRight
-                        }
                     }
 
                     Item { width: 1; height: 1 }
@@ -348,7 +349,7 @@ Item {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: model.taskId === raiz.tarefaAtual ? "em curso" : "começar"
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.nano
                         color: comecar.containsMouse ? Theme.ambar : Theme.textoSuave
                         MouseArea {
                             id: comecar
@@ -366,7 +367,7 @@ Item {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "editar"
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.nano
                         color: corrigir.containsMouse ? Theme.ambar : Theme.textoSuave
                         MouseArea {
                             id: corrigir
@@ -383,7 +384,7 @@ Item {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "×"
-                        font.pixelSize: 16
+                        font.pixelSize: Theme.corpo
                         color: guardar.containsMouse ? Theme.terracota : Theme.textoSuave
                         MouseArea {
                             id: guardar
@@ -448,5 +449,11 @@ Item {
         displaced: Transition {
             NumberAnimation { properties: "y"; duration: Theme.gesto; easing.type: Easing.OutQuad }
         }
+    }
+
+    // A pista de que a lista continua. Ver `Rolagem.qml`.
+    Rolagem {
+        anchors.fill: lista
+        lista: lista
     }
 }

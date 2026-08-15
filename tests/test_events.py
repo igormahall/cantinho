@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -7,9 +8,17 @@ import pytest
 
 from cantinho.core.clock import FakeClock
 from cantinho.core import events as ev
-from cantinho.core.events import Event, InvalidPayload, UnknownKind
+from cantinho.core.events import (
+    Event,
+    InvalidPayload,
+    PayloadTooLong,
+    UnknownKind,
+)
 
 from conftest import DEVICE
+
+# Itens de 100 caracteres suficientes para estourar o teto do payload inteiro.
+PAYLOAD_ITENS_DEMAIS = ev.PAYLOAD_LIMIT // 100 + 10
 
 
 def test_construtor_usa_o_relogio_injetado(clock: FakeClock) -> None:
@@ -49,7 +58,10 @@ def test_opcional_ausente_nao_vira_nulo(clock: FakeClock) -> None:
 
 def test_evento_e_imutavel(clock: FakeClock) -> None:
     evento = ev.task_created(clock, DEVICE, label="a")
-    with pytest.raises(Exception):
+    # `FrozenInstanceError` e não `Exception`: o que se quer provar é que o
+    # congelamento do dataclass é que barrou a atribuição. Com `Exception`,
+    # um `AttributeError` por nome de campo errado passaria como sucesso.
+    with pytest.raises(FrozenInstanceError):
         evento.kind = "task.completed"  # type: ignore[misc]
 
 
@@ -213,3 +225,107 @@ def test_lista_de_intencoes_vazia_e_valida(clock: FakeClock) -> None:
 def test_evento_sem_device_id_levanta(clock: FakeClock) -> None:
     with pytest.raises(InvalidPayload):
         ev.make_event(clock, "", "task.completed", {"id": "t1"})
+
+
+# ------------------------------------------------------------------- limites
+
+
+def test_rotulo_no_limite_passa(clock: FakeClock) -> None:
+    """O limite é folgado e o que cabe nele entra inteiro."""
+    label = "t" * ev.LABEL_LIMIT
+    evento = ev.task_created(clock, DEVICE, label=label)
+    assert evento.payload["label"] == label
+
+
+@pytest.mark.parametrize(
+    "construtor,kwargs,campo",
+    [
+        (ev.task_created, {"label": "x" * (ev.LABEL_LIMIT + 1)}, "label"),
+        (
+            ev.task_created,
+            {"label": "ok", "project": "x" * (ev.LABEL_LIMIT + 1)},
+            "project",
+        ),
+        (
+            ev.task_renamed,
+            {"id": "t1", "label": "x" * (ev.LABEL_LIMIT + 1)},
+            "label",
+        ),
+        (ev.idea_captured, {"text": "x" * (ev.TEXT_LIMIT + 1)}, "text"),
+        (
+            ev.session_ended,
+            {"id": "s1", "note": "x" * (ev.TEXT_LIMIT + 1)},
+            "note",
+        ),
+        (
+            ev.day_review,
+            {
+                "date": "2026-03-02",
+                "mood": 3,
+                "energy": 3,
+                "note": "x" * (ev.TEXT_LIMIT + 1),
+            },
+            "note",
+        ),
+        (
+            ev.day_checkin,
+            {"date": "2026-03-02", "intents": ["ok", "x" * (ev.LABEL_LIMIT + 1)]},
+            "intents",
+        ),
+    ],
+    ids=[
+        "task.created/label",
+        "task.created/project",
+        "task.renamed/label",
+        "idea.captured/text",
+        "session.ended/note",
+        "day.review/note",
+        "day.checkin/intents",
+    ],
+)
+def test_texto_acima_do_limite_nao_vira_evento(
+    clock: FakeClock, construtor: Any, kwargs: dict[str, Any], campo: str
+) -> None:
+    with pytest.raises(PayloadTooLong) as erro:
+        construtor(clock, DEVICE, **kwargs)
+    assert campo in str(erro.value)
+
+
+def test_payload_grande_demais_no_total_levanta(clock: FakeClock) -> None:
+    """A rede que pega o que os limites por campo não cobrem."""
+    ordem = ["i" * 100 for _ in range(PAYLOAD_ITENS_DEMAIS)]
+    with pytest.raises(PayloadTooLong):
+        ev.backlog_reordered(clock, DEVICE, order=ordem)
+
+
+def test_ordem_de_backlog_realista_nao_esbarra_no_teto(clock: FakeClock) -> None:
+    """O teto não pode cair sobre um backlog grande, só sobre um absurdo."""
+    ordem = [ev.new_id() for _ in range(500)]
+    evento = ev.backlog_reordered(clock, DEVICE, order=ordem)
+    assert evento.payload["order"] == ordem
+
+
+def test_limite_nao_vale_na_leitura(clock: FakeClock) -> None:
+    """**A regra que sustenta o resto.**
+
+    O limite é de construção. Se ele valesse também na leitura, um evento
+    gravado antes de o limite existir tornaria o banco inteiro ilegível — e o
+    log é justamente o que não se pode reescrever para consertar. Um banco que
+    abria ontem tem que abrir hoje.
+    """
+    antigo = Event(
+        uuid=ev.new_id(),
+        device_id=DEVICE,
+        occurred_at=clock.now(),
+        kind="idea.captured",
+        payload={"id": "i1", "text": "x" * (ev.TEXT_LIMIT * 3)},
+    )
+    linha = antigo.to_row()
+    relido = Event.from_row(linha)
+    assert relido.payload["text"] == antigo.payload["text"]
+
+
+def test_kind_desconhecido_ainda_e_reportado_como_kind(clock: FakeClock) -> None:
+    """`check_limits` não pode roubar o erro de `validate_payload`."""
+    with pytest.raises(UnknownKind):
+        ev.make_event(clock, DEVICE, "task.inventado", {"id": "t1"})

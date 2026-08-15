@@ -44,9 +44,70 @@ QtObject {
     readonly property int espaco: 14
     readonly property int espacoGrande: 22
 
-    readonly property int corpo: 15
-    readonly property int miudo: 13
-    readonly property int titulo: 18
+    // ------------------------------------------------------------ tipografia
+    //
+    // As duas famílias são asset, como os SVGs e os WAVs — não são dependência
+    // nova, e o `FontLoader` é do próprio Qt.
+    //
+    // **Antes disto o projeto não definia fonte em lugar nenhum.** O app usava
+    // o padrão do sistema, o que quer dizer Segoe UI no Windows e Cantarell ou
+    // DejaVu no Ubuntu — e as duas máquinas são os dois contextos de uso deste
+    // projeto. Ou seja: era outro programa em cada uma, com outro desenho de
+    // letra, outra métrica e outras larguras de botão. Um repositório que fixa
+    // cor em hex num arquivo só e proíbe hardcode em qualquer outro estava
+    // deixando metade do que se vê na tela por conta do sistema operacional.
+    //
+    // São duas porque têm papéis diferentes, e é essa divisão que faz o efeito:
+    //
+    //   `fonte`  — Inter. A interface: painéis, barra, botões, campos. Sans
+    //              humanista de contraste baixo, que acompanha a ilustração sem
+    //              disputar com ela.
+    //   `fontePapel` — EB Garamond. As superfícies de papel do quarto: o
+    //              bilhete e o calendário. É o que faz o bilhete parecer papel
+    //              pregado na parede em vez de um retângulo com texto.
+    //
+    // Ambas SIL OFL 1.1 — a licença vai junto em `assets/fonts/`.
+    readonly property FontLoader _interLoader: FontLoader {
+        source: "../../../assets/fonts/Inter.ttf"
+    }
+    readonly property FontLoader _papelLoader: FontLoader {
+        source: "../../../assets/fonts/EBGaramond.ttf"
+    }
+
+    // O nome da família, com recuo para a fonte do sistema se o arquivo faltar
+    // — num build mal empacotado, texto que some é pior que texto na fonte
+    // errada.
+    readonly property string fonte: _interLoader.status === FontLoader.Ready
+                                    ? _interLoader.name : "sans-serif"
+    readonly property string fontePapel: _papelLoader.status === FontLoader.Ready
+                                         ? _papelLoader.name : "serif"
+
+    // Algarismos de largura fixa, para o cronômetro.
+    //
+    // O `tnum` da Inter, e ele é obrigatório aqui: por padrão os algarismos dela
+    // são proporcionais — o "1" tem 6,95 px onde o "0" tem 9,6 —, então
+    // `00:00` e `11:11` têm larguras diferentes e o relógio **treme a cada
+    // segundo**. Com `tnum` os dez algarismos ficam com a mesma largura e as
+    // duas cadeias medem igual. Medido.
+    readonly property var digitos: ({ "tnum": 1 })
+
+    // A escala de tamanhos, pela mesma regra das cores e dos tempos: número de
+    // corpo escrito à mão fora daqui é bug.
+    //
+    // Havia 9, 10, 11, 13, 15, 16, 18 e 30 espalhados, com o 11 sozinho em oito
+    // lugares — a mesma doença que os quatro eixos de tempo curaram nas
+    // durações, cada valor escolhido no dia em que aquela tela foi escrita. São
+    // cinco degraus agora, em razão aproximada de 1,25, que é o que dá
+    // hierarquia visível sem parecer salto.
+    //
+    // Os corpos dos objetos de parede (bilhete, calendário) **não** vêm daqui:
+    // eles escalam com o desenho, por `unidade`, porque são parte da
+    // ilustração e não da interface.
+    readonly property int nano: 11      // legenda, data, metadado
+    readonly property int miudo: 13     // texto secundário
+    readonly property int corpo: 15     // texto normal
+    readonly property int titulo: 19    // título de painel
+    readonly property int destaque: 30  // o cronômetro, e só ele
 
     // Painel translúcido: o quarto continua aparecendo por trás.
     //
