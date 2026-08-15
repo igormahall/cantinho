@@ -1,24 +1,23 @@
-"""Empacota o Cantinho sobre o Python embeddable oficial, sem PyInstaller.
+"""Empacota o Cantinho sobre o Python embeddable oficial, sem construir binário.
 
 Por que este empacotador existe
 -------------------------------
 
-O `cantinho.spec` produz um `dist/Cantinho/Cantinho.exe` que funciona, mas que
-é um executável **do PyInstaller**: um bootloader genérico que descompacta o
-interpretador e o carrega na memória. Esse bootloader é o mesmo binário em
-todos os programas empacotados com PyInstaller no mundo, inclusive nos
-maliciosos — então os antivírus aprenderam a marcá-lo por semelhança, e um
-binário sem assinatura de editor não tem como contestar.
+Na máquina onde o repositório está clonado, o venv já resolve: o
+`.venv\\Scripts\\pythonw.exe` é cópia do binário oficial da Python Software
+Foundation e carrega a assinatura dela, e é para ele que o atalho da Área de
+Trabalho aponta.
 
-Na prática: numa máquina restrita, o antivírus gerenciado apaga o `.exe` antes
-de ele abrir, e não há acesso de administrador para criar exceção.
+Este pacote é para o outro caso — levar o Cantinho a uma máquina **que não tem
+Python** e onde não se pode instalar nada. Mesma estratégia, com o runtime
+vindo de fora: ele baixa o Python *embeddable* do python.org e monta o app em
+cima dele.
 
-Este empacotador contorna o problema pela raiz, não por exceção: em vez de
-gerar um executável novo e desconhecido, ele **reaproveita o `python.exe`
-oficial da Python Software Foundation**, que vem assinado, tem reputação
-acumulada e é o mesmo arquivo que milhões de máquinas já executam. O Cantinho
-vira o que sempre foi — um pacote Python — e o que roda é um interpretador que
-o antivírus reconhece.
+O que ela **não** faz é gerar um executável próprio, e isso é o ponto. Um
+binário recém-construído nasce sem assinatura e sem reputação; o antivírus
+gerenciado da máquina restrita apaga, o Smart App Control do Windows 11 recusa
+carregar, e não há administrador para criar exceção em nenhum dos dois casos.
+A saída não é contornar a checagem: é não dar o que checar.
 
 Não existe nenhum binário construído aqui. Só arquivos `.py`, os `.qml`, os
 `.svg`, e DLLs assinadas do Qt vindas do PySide6 oficial.
@@ -71,7 +70,7 @@ DESTINO = RAIZ / "portatil"
 CACHE = RAIZ / "build" / "cache-portatil"
 ZIP_FINAL = RAIZ / "Cantinho-portatil-windows.zip"
 
-# Os mesmos cortes do `cantinho.spec`, pela mesma razão: o PySide6 do PyPI traz
+# O PySide6 do PyPI traz
 # o Qt inteiro, e o WebEngine sozinho passa de 150 MB numa pasta que precisa
 # caber em pendrive. Nada aqui é importado pelo app.
 FORA = (

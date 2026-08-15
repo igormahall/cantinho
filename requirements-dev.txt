@@ -1,4 +1,11 @@
+# O que `cantinho.bat instalar` roda, e é o arquivo que precisa funcionar na
+# máquina restrita, sem internet confiável. Cada dependência a mais aqui é uma
+# chance a mais de a instalação falhar justamente onde ela mais importa.
+#
+# Por isso o ruff mora em `requirements-lint.txt` — lint não é o que faz o app
+# rodar — e por isso o `pyinstaller` saiu daqui: o executável que ele gerava
+# nasce sem assinatura, e nem o Smart App Control nem o antivírus gerenciado o
+# deixam abrir. Nada no repositório o chama. Ver `docs/plataformas.md`.
 -r requirements.txt
 
 pytest==9.1.1
-pyinstaller==6.22.0

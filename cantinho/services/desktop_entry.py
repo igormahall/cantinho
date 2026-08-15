@@ -125,8 +125,10 @@ def _quote(argumento: str) -> str:
 def _launch_command() -> tuple[str, Path | None]:
     """A linha de `Exec=` e o diretório de trabalho, conforme como o app roda.
 
-    São dois modos. Empacotado pelo PyInstaller, `sys.executable` já é o
-    próprio Cantinho e basta. Rodando do repositório, é o Python do venv com
+    São dois modos. Num executável congelado (`sys.frozen`), `sys.executable`
+    já é o próprio Cantinho e basta — este projeto não gera nenhum, mas a
+    checagem custa uma linha e evita um `Exec=` sem sentido se um dia gerar.
+    Rodando do repositório, que é o caso real, é o Python do venv com
     `-m cantinho.main` — e aí o diretório de trabalho importa, porque é dele
     que sai o `cantinho` no `sys.path`.
     """

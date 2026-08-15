@@ -21,7 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools import atalho_windows
 
 
-EXE = Path(r"C:\Users\alguem\Documents\cantinho\dist\Cantinho\Cantinho.exe")
+PASTA = Path(r"C:\Users\alguem\Documents\cantinho")
+LANCADOR = PASTA / ".venv" / "Scripts" / "pythonw.exe"
+ICONE = PASTA / "assets" / "icon" / "cantinho.ico"
 
 
 def test_o_comando_pergunta_ao_windows_onde_e_a_area_de_trabalho() -> None:
@@ -32,18 +34,51 @@ def test_o_comando_pergunta_ao_windows_onde_e_a_area_de_trabalho() -> None:
     OneDrive — que é justamente o tipo de máquina a que isto se destina. O
     caminho montado à mão criaria o atalho numa pasta que ninguém vê.
     """
-    script = atalho_windows.script_de_criacao(EXE)
+    script = atalho_windows.script_de_criacao(LANCADOR, PASTA, ICONE)
     assert "[Environment]::GetFolderPath('Desktop')" in script
     assert "Desktop'" not in script.replace("GetFolderPath('Desktop')", "")
 
 
-def test_o_atalho_aponta_para_o_executavel_e_para_a_pasta_dele() -> None:
-    """Sem `WorkingDirectory`, o app abre com o diretório de trabalho errado."""
-    script = atalho_windows.script_de_criacao(EXE)
-    assert f"$s.TargetPath = '{EXE}'" in script
-    assert f"$s.WorkingDirectory = '{EXE.parent}'" in script
-    assert f"$s.IconLocation = '{EXE}'" in script
+def test_o_atalho_aponta_para_o_interpretador_assinado_e_nao_para_um_exe() -> None:
+    """Esta é a correção inteira, e é o que o teste existe para segurar.
+
+    O `Cantinho.exe` do PyInstaller nasce sem assinatura, e o Smart App Control
+    recusa carregá-lo — o duplo clique não faz nada e não diz nada. O
+    `pythonw.exe` do venv é cópia do binário da Python Software Foundation e
+    carrega a assinatura dela. Um atalho que voltasse a apontar para um
+    executável gerado aqui reintroduziria o defeito inteiro, e em silêncio.
+    """
+    script = atalho_windows.script_de_criacao(LANCADOR, PASTA, ICONE)
+    assert f"$s.TargetPath = '{LANCADOR}'" in script
+    assert "pythonw.exe" in script
+    assert "Cantinho.exe" not in script
+
+
+def test_o_atalho_leva_o_modulo_e_a_pasta_de_onde_importa_lo() -> None:
+    """Com `-m`, o diretório de trabalho é também o `sys.path[0]`.
+
+    Apontar para outro lugar produz um atalho que abre e morre com
+    `ModuleNotFoundError`, sem terminal onde a mensagem apareça — o mesmo erro
+    que o `Exec=` do `.desktop` já tinha cometido no Linux.
+    """
+    script = atalho_windows.script_de_criacao(LANCADOR, PASTA, ICONE)
+    assert "$s.Arguments = '-m cantinho.main'" in script
+    assert f"$s.WorkingDirectory = '{PASTA}'" in script
+    assert f"$s.IconLocation = '{ICONE}'" in script
     assert "$s.Save()" in script
+
+
+def test_o_icone_nao_vem_do_interpretador() -> None:
+    """Senão o atalho na Área de Trabalho é o logo do Python, e não a planta."""
+    script = atalho_windows.script_de_criacao(LANCADOR, PASTA, ICONE)
+    assert f"$s.IconLocation = '{LANCADOR}'" not in script
+
+
+def test_os_padroes_apontam_para_o_venv_desta_pasta() -> None:
+    """Quem chama sem argumento — o `cantinho.bat` — tem que acertar sozinho."""
+    raiz = atalho_windows.RAIZ
+    assert atalho_windows.LANCADOR == raiz / ".venv" / "Scripts" / "pythonw.exe"
+    assert atalho_windows.ICONE == raiz / "assets" / "icon" / "cantinho.ico"
 
 
 def test_o_comando_de_remocao_nao_reclama_se_nao_ha_atalho() -> None:
@@ -65,7 +100,7 @@ def test_fora_do_windows_e_no_op(acao: str, monkeypatch: pytest.MonkeyPatch) -> 
     assert chamou == []
 
 
-def test_sem_executavel_avisa_onde_gerar(
+def test_sem_ambiente_avisa_qual_comando_cria_ele(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
     """A mensagem tem que dizer o comando, não só que faltou o arquivo: quem
@@ -73,28 +108,28 @@ def test_sem_executavel_avisa_onde_gerar(
     monkeypatch.setattr("sys.platform", "win32")
 
     assert atalho_windows.instalar(tmp_path / "nao-existe.exe") is False
-    assert "cantinho.bat empacotar" in capsys.readouterr().out
+    assert "cantinho.bat instalar" in capsys.readouterr().out
 
 
 def test_falha_do_powershell_nao_vira_excecao(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
-    """Roda junto do build: falhar aqui não pode derrubar um build que deu certo."""
+    """Roda no fim da instalação: falhar aqui não pode derrubar o que deu certo."""
     monkeypatch.setattr("sys.platform", "win32")
     monkeypatch.setattr(
         atalho_windows, "_powershell", lambda s: (False, "politica de execucao")
     )
-    exe = tmp_path / "Cantinho.exe"
-    exe.write_text("", encoding="utf-8")
+    lancador = tmp_path / "pythonw.exe"
+    lancador.write_text("", encoding="utf-8")
 
-    assert atalho_windows.instalar(exe) is False
+    assert atalho_windows.instalar(lancador) is False
     assert "politica de execucao" in capsys.readouterr().out
 
 
 def test_o_main_nao_falha_quando_o_atalho_nao_sai(
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """O `cantinho.bat` chama isto depois do build. Um atalho que não deu
-    certo é um aviso, não um build perdido."""
+    """O `cantinho.bat` chama isto no fim da instalação. Um atalho que não deu
+    certo é um aviso, não uma instalação perdida."""
     monkeypatch.setattr("sys.platform", "linux")
     assert atalho_windows.main([]) == 0

@@ -24,7 +24,8 @@ para ambiente e ritmo lento. **Quando os dois brigarem, cozy vence.**
 - QML para toda a UI (não QtWidgets, não QSS)
 - SQLite via `sqlite3` da stdlib (não DuckDB, não ORM)
 - pytest para testes
-- PyInstaller (onedir, portable) para distribuição
+- Nenhum empacotador de binário: o app roda sobre o `python.exe` assinado da
+  PSF, no venv aqui e no pacote portátil na máquina que não tem Python
 
 Sem dependências além de PySide6 e pytest sem discussão prévia.
 
@@ -47,27 +48,47 @@ teste sequer. O `norecursedirs` cobre quem passa caminho na mão. Ele **não** �
 `pyproject.toml` que não existe: não declara pacote nem mexe no `sys.path`, e
 quem põe a raiz no `sys.path` continua sendo o `python -m` rodado da raiz.
 
-No Windows há um atalho para tudo isto, e é o caminho de instalação da máquina
-do trabalho — onde não há git, e o repositório chega como zip baixado à mão:
+No Windows há um atalho para tudo isto, e é o caminho de instalação das duas
+máquinas — inclusive a do trabalho, onde não há git e o repositório chega como
+zip baixado à mão:
 
 ```bat
-cantinho.bat                 :: menu, que é o que o duplo clique abre
-cantinho.bat instalar        :: cria o venv e instala as dependências
-cantinho.bat rodar           :: abre o app a partir do código
-cantinho.bat empacotar       :: pyinstaller -> dist\Cantinho\
-cantinho.bat atualizar       :: dependências + build com o cache limpo
-cantinho.bat portatil        :: o zip que roda sobre o Python oficial
-cantinho.bat testar          :: a suíte
-cantinho.bat lint            :: ruff + qmllint (opcional)
-cantinho.bat refazer         :: apaga o venv e começa de novo
-cantinho.bat atalho          :: põe o Cantinho na Área de Trabalho
+cantinho.bat                 :: o menu, que é o que o duplo clique abre
+cantinho.bat instalar        :: apaga o venv, refaz do zero e cria o atalho
+cantinho.bat atualizar       :: fecha o app, atualiza as deps e refaz o atalho
+cantinho.bat dev             :: a oficina: rodar, testar, lint, semear, portátil
+cantinho.bat remover         :: desmonta, e pergunta pelo diário em separado
 ```
 
-Ele é idempotente de propósito: o mesmo comando serve para instalar pela
-primeira vez e para atualizar depois de sobrescrever os arquivos. `atualizar`
-se distingue de `empacotar` por uma coisa só — apaga `build/cantinho` antes,
-porque o cache de análise do PyInstaller é confiável quase sempre, e "quase"
-é pouco quando os fontes foram trocados por baixo dele.
+São **quatro verbos e mais nenhum**, e o arquivo é **só do Windows** — o roteiro
+do Ubuntu vive no `README.md`, que é onde alguém de lá vai procurar. O que antes
+era ação de primeiro nível (`rodar`, `testar`, `lint`, `portatil`, `empacotar`)
+virou item da oficina, porque nada disso é passo de instalação — e o menu de
+instalação é lido por quem não sabe qual das nove opções escolher.
+
+`instalar` e `atualizar` **terminam com o app funcionando**: as duas fecham
+chamando `tools/atalho_windows.py`, e não há segundo comando depois de nenhuma
+delas. A diferença é só o ponto de partida — `instalar` apaga o `.venv` e
+recomeça (é também o conserto para ambiente em estado duvidoso), `atualizar`
+aproveita o que existe, oferece o `git pull --rebase` quando a pasta veio de
+`git clone`, e **fecha o app se ele estiver aberto**, porque as DLLs do Qt
+ficam em uso e o pip não consegue substituí-las.
+
+O fechamento é por linha de comando e não por nome de processo — `pythonw.exe`
+sozinho pegaria qualquer outro programa em Python aberto na máquina, e são dois
+processos por app aberto (o lançador do venv e o Python de base que ele chama),
+os dois com `cantinho.main` na linha. É `TerminateProcess`, então cai na mesma
+rede da queda de energia: a sessão aberta é fechada na última marca de vida na
+abertura seguinte.
+
+**`remover` faz duas perguntas, e elas são separadas de propósito.** A primeira
+tira o ambiente, as pastas de trabalho e o atalho — tudo refazível com a opção 1.
+A segunda é o diário em `%APPDATA%\Cantinho`, e ela **exige que se escreva a
+palavra `apagar`**: é a única coisa do projeto que não se refaz com nada, não há
+cópia em lugar nenhum, e um `(s/N)` compartilhado com a primeira pergunta seria
+pedir que a pressa apagasse anos de log. O atalho sai antes do venv, e por isso
+`:remover_atalho` aceita qualquer Python do PATH como reserva — `atalho_windows`
+não importa PySide6, então não precisa do venv que acabou de ir embora.
 
 O `.bat` é **ASCII puro e CRLF**, e o `.gitattributes` tem exceção para isso.
 O cmd.exe é o único leitor deste repositório que não aceita LF: com quebra de
@@ -79,7 +100,7 @@ Windows (PowerShell), venv em `.venv/`, para quem prefere na mão:
 
 ```powershell
 .venv\Scripts\Activate.ps1        # ou prefixar tudo com .venv\Scripts\python.exe
-pip install -r requirements-dev.txt   # runtime + pytest + pyinstaller
+pip install -r requirements-dev.txt   # runtime + pytest, e nada além disso
 
 python -m cantinho.main           # rodar o app
 python -m cantinho.main --db .\teste.db --log DEBUG   # banco descartável
@@ -97,7 +118,6 @@ python tools/gerar_icone.py       # regera assets/icon/cantinho.{ico,png}
 python tools/gerar_capturas.py    # regera docs/quarto-*.png do README
 python tools/instalar_atalho.py   # atalho .desktop (Linux); --de-novo, --remover
 python tools/atalho_windows.py    # atalho na Área de Trabalho (Windows); --remover
-pyinstaller cantinho.spec --noconfirm   # portable em dist/Cantinho/
 python tools/empacotar_portatil.py      # pacote sobre o Python oficial
 ```
 
@@ -146,9 +166,9 @@ minuto decidindo sozinho. Para conferir isso é preciso baixar
 minutos — com o laço de eventos vivo, porque é dele que o tique depende. Testado
 assim: o toque sai sozinho, repete, chega pela bandeja com as duas janelas
 escondidas, e a pergunta do fim de sessão traz a janela grande de volta estando
-só a mini na tela. **Devolva as constantes antes do build final** — `git
-checkout cantinho/backend.py`, e só então `empacotar`, senão o executável sai
-com os números de teste.
+só a mini na tela. **Devolva as constantes quando terminar** — `git checkout
+cantinho/backend.py`. Como não há mais executável a gerar, o que ficaria com os
+números de teste é o próprio código que o atalho abre.
 
 A queda também não tem teste automático, e o roteiro é curto: abra uma sessão,
 espere alguns minutos e mate o processo pelo Gerenciador de Tarefas ("Finalizar
@@ -171,12 +191,12 @@ Para rodar a suíte sem abrir janela: `$env:QT_QPA_PLATFORM="offscreen"`. Cuidad
 que nesse modo o Qt fica **sem nenhuma família de fonte** — texto vira tofu em
 screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
 
-No Windows a suíte dá **458 passados e 3 pulados**, e esse é o resultado certo,
+No Windows a suíte dá **461 passados e 3 pulados**, e esse é o resultado certo,
 não uma suíte incompleta. Os três são de `test_desktop_entry.py` e dependem de
 semântica POSIX: barra `/` no `Exec=` e bit de execução no `.desktop`. A fixture
 finge o `sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação
 e o `chmod` do Windows não tem bit para ligar — eles falhariam com o código
-certo, que é o pior tipo de teste vermelho. No Ubuntu os 461 rodam.
+certo, que é o pior tipo de teste vermelho. No Ubuntu os 464 rodam.
 
 **Não rode nada disto num terminal elevado.** Com token de administrador o
 Windows põe `BUILTIN\Administradores` como dono de todo diretório criado, no
@@ -249,8 +269,8 @@ sobre o futuro; o porquê de uma linha de código envelhece longe dela.
 máquina restrita, sem internet confiável, e uma dependência a mais ali é uma
 chance a mais de o passo de instalação falhar onde ele mais importa. Lint não é
 o que faz o app rodar. Ele mora em `requirements-lint.txt`, e a falta dele é
-aviso e não erro — `cantinho.bat lint` pula a parte Python e roda o qmllint
-assim mesmo.
+aviso e não erro — o item de lint no menu de dev pula a parte Python e roda o
+qmllint assim mesmo.
 
 ```powershell
 pip install -r requirements-lint.txt
@@ -312,43 +332,58 @@ git push              # antes de desligar
 
 ## Distribuição
 
-No Windows os dois saem por `cantinho.bat` (`empacotar` e `portatil`). São dois
-empacotadores, para dois problemas diferentes.
+**No Windows não se constrói binário.** Nem para desenvolver, nem para
+instalar. O que o atalho da Área de Trabalho abre é
+`.venv\Scripts\pythonw.exe -m cantinho.main`, e o `pythonw.exe` do venv é cópia
+do binário oficial da PSF, com a assinatura dela intacta
+(`Get-AuthenticodeSignature` responde `Valid`, `CN=Python Software
+Foundation`).
 
-- `cantinho.spec` (PyInstaller) → `dist/Cantinho/`, ~198 MB. É o build para a
-  máquina onde se pode instalar o que quiser.
+Isto foi uma correção, não um desenho de origem, e a causa merece ficar escrita
+porque ela vai voltar: o `Cantinho.exe` do PyInstaller **não abre nesta
+máquina**. O **Smart App Control** do Windows 11 recusa carregá-lo —
+`VerifiedAndReputablePolicyState` = 1 em
+`HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy`, e os eventos 3033 e 3077 em
+`Microsoft-Windows-CodeIntegrity/Operational` nomeando o arquivo, disparados
+pelo `explorer.exe`, ou seja, pelo duplo clique. O sintoma engana e é isso que
+custa caro: o arquivo continua em `dist/`, o duplo clique não diz nada, e a
+conclusão natural é defeito do build — então se rebuilda, e o binário novo
+nasce igualmente sem assinatura e sem reputação. Nenhuma quantidade de rebuild
+resolve.
+
+A mesma causa, em outra roupa, é o antivírus gerenciado da máquina do trabalho
+apagando o executável: o bootloader do PyInstaller é o mesmo binário em todo
+programa empacotado com ele, inclusive nos maliciosos, e sem assinatura de
+editor não tem como se distinguir. Nos dois casos a saída não é contornar o
+efeito — é **remover a causa**, não produzindo binário nenhum.
+
+Sobra um empacotador, e ele tem um caso de uso só:
+
 - `tools/empacotar_portatil.py` → `Cantinho-portatil-windows.zip`, ~235 MB
-  descompactado. É o build para máquina restrita.
-
-O segundo existe porque antivírus gerenciado por política apaga o executável do
-PyInstaller, e nesse tipo de máquina não há como criar exceção. O bootloader do
-PyInstaller é o mesmo binário em todo programa empacotado com ele, inclusive
-nos maliciosos, e sem assinatura de editor não tem como se distinguir. Em vez
-de tentar contornar o efeito, o empacotador portátil remove a causa: monta o
-app sobre o `python.exe` oficial da PSF, que já vem assinado, e não constrói
-binário nenhum. O pacote fica auditável — que é o argumento para pedir
-liberação a quem administra, se ela for necessária.
-
-O antivírus gerenciado não é o único a barrar, e a máquina de desenvolvimento
-provou isso: o **Smart App Control** do Windows 11 bloqueou o `Cantinho.exe`
-recém-gerado, com os eventos 3118 ("Smart App Control Block") e 3077 no log de
-integridade de código. É a mesma causa de sempre — binário novo, sem assinatura
-e sem reputação — e o bloqueio é **intermitente**: a segunda tentativa do mesmo
-arquivo passou, que é o comportamento de quem consulta reputação em nuvem. Duas
-consequências práticas. Um exe do PyInstaller que abriu hoje não garante que
-abrirá depois de rebuildar, então o portátil não é só para a máquina do
-trabalho. E o sintoma engana: o arquivo continua em `dist/`, o duplo clique não
-diz nada, e parece defeito do build. Para saber se é isto, o registro em
-`HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy` traz
-`VerifiedAndReputablePolicyState` = 1 quando o SAC está ligado, e o log de
-`Microsoft-Windows-CodeIntegrity/Operational` nomeia o executável barrado.
+  descompactado. É para levar o app a uma máquina **que não tem Python** e onde
+  não se pode instalar. Ele baixa o embeddable oficial do python.org e monta o
+  app sobre ele — a mesma estratégia do atalho, com o runtime vindo de fora em
+  vez de já estar no venv. O pacote fica auditável, que é o argumento para
+  pedir liberação a quem administra, se ela for necessária.
 
 A poda do Qt no portátil compara nomes **em minúsculas**. A primeira versão
 comparava sensível a maiúsculas e deixou 83 MB de recurso do WebEngine para
 trás, porque o Qt escreve `Qt6WebEngine` na DLL e `qtwebengine` no `.pak`.
 
-Detalhes, instruções de instalação e o que fazer se mesmo assim for bloqueado:
-`docs/windows.md`.
+**O `cantinho.spec` e o `pyinstaller` saíram do repositório em 14/08/2026**, e a
+remoção é parte da correção, não faxina. Um caminho de build documentado como
+"não funciona nesta máquina" é convite a tentar de novo — e cada tentativa custa
+o mesmo diagnóstico caro, porque o sintoma não diz nada. Além disso o
+`pyinstaller` puxava cinco pacotes (`altgraph`, `pefile`,
+`pyinstaller-hooks-contrib`, `pywin32-ctypes`, `setuptools`) para dentro do
+`requirements-dev.txt`, que é o arquivo que precisa funcionar na máquina restrita
+sem internet confiável — a mesma razão pela qual o ruff nunca esteve lá.
+
+Quem segura a regressão é `tests/test_atalho_windows.py`: ele exige que o atalho
+aponte para um `pythonw.exe` e **proíbe `Cantinho.exe`** no script gerado.
+
+Detalhes, o roteiro de diagnóstico e o que fazer se mesmo assim for bloqueado:
+`docs/plataformas.md`.
 
 ## Contexto de uso (restrições reais)
 
@@ -761,10 +796,11 @@ cantinho/
                 versionados)
   docs/         quarto-{noite,tarde}.png     (capturas do README)
                 instalar-no-windows.md      (o passo a passo para leigos)
-                auditoria.md                (os achados de 14/08/2026)
-                windows.md linux.md desenvolvimento.md
+                plataformas.md              (Windows e Linux: o que difere)
+                desenvolvimento.md          (comandos, ferramentas, a suíte)
+                auditoria.md                (as direções de 14/08/2026)
   build/        saída de ferramenta e cache, nada versionado
-  cantinho.bat  instalação e build no Windows (ASCII, CRLF)
+  cantinho.bat  instalar, atualizar, dev e remover no Windows (ASCII, CRLF)
   cantinho/
     main.py
     core/      events.py store.py projections.py clock.py schedule.py
@@ -1057,14 +1093,27 @@ Todas deliberadas, todas com motivo:
 - **`tools/atalho_windows.py` é o irmão Windows do `.desktop`.** Mora em
   `tools/` e não em `services/` porque a diferença é *quando* cada um roda: o
   do Linux é criado pelo app na primeira abertura, e este é passo de
-  instalação — só existe o que apontar depois que o executável saiu. `:construir`
-  no `cantinho.bat` chama ele no fim, **ignorando o código de saída**: atalho
-  que não deu certo é aviso, não build perdido. Vai por `powershell -Command` e
-  não por arquivo `.ps1` porque máquina gerenciada costuma vir com a política
-  de execução em `Restricted`, que bloqueia script em arquivo e deixa passar
-  comando na linha. E pergunta ao Windows onde fica a Área de Trabalho em vez
-  de montar `%USERPROFILE%\Desktop`: em português ela tem outro nome, e com
-  OneDrive corporativo ela está redirecionada.
+  instalação. `instalar` e `atualizar` no `cantinho.bat` chamam ele no fim,
+  **ignorando o código de saída**: atalho que não deu certo é aviso, não
+  instalação perdida — sem ele o app ainda abre pelo menu de dev. Vai por
+  `powershell -Command` e não por arquivo `.ps1` porque máquina gerenciada
+  costuma vir com a política de execução em `Restricted`, que bloqueia script
+  em arquivo e deixa passar comando na linha. E pergunta ao Windows onde fica a
+  Área de Trabalho em vez de montar `%USERPROFILE%\Desktop`: em português ela
+  tem outro nome, e com OneDrive corporativo ela está redirecionada.
+
+  **Ele aponta para `.venv\Scripts\pythonw.exe -m cantinho.main`**, com a raiz
+  do repositório como diretório de trabalho — que com `-m` é também o
+  `sys.path[0]` de onde o pacote é importado, a mesma armadilha que o `Exec=`
+  do `.desktop` já tinha caído no Linux. O ícone vem do asset e não do alvo,
+  senão o atalho é o logo do Python. Ver **Distribuição** para o porquê de não
+  ser um `.exe`.
+
+  E aqui **refazer é o certo**, ao contrário do Linux. Lá a regra é criar uma
+  vez e nunca sobrescrever, porque qualquer clone de teste poderia sequestrar o
+  atalho do menu apontando para si; aqui quem chama é a instalação, a pedido, e
+  o alvo é o venv desta pasta — que é exatamente o que precisa ser corrigido
+  quando a pasta muda de lugar ou o ambiente é refeito.
 - **Todo desenho de SVG passa por uma trava** (`_desenho`, em `services/scene.py`).
   `QQuickImageProvider` do tipo Image roda em thread de trabalho quando o
   `Image` do QML é assíncrono, e as camadas do quarto compartilham um
@@ -1296,7 +1345,7 @@ estala — e num som que fica horas tocando isso é insuportável.
 | F3 | Cena, planta, estante | feito |
 | F4 | Retrospectiva, humor, inbox de ideias | feito |
 | F5 | Áudio local, ambiente, ciclo dia/noite | feito |
-| F6 | PyInstaller portable | feito, ~198 MB em `dist/Cantinho/` |
+| F6 | Distribuição sem binário próprio | feito, sobre o Python assinado |
 | F7 | Parede viva, mural, reação de mouse | feito |
 | F8 | Foco da sessão, correção de tarefa, a semana | feito |
 

@@ -7,6 +7,11 @@ parte é o computador trabalhando sozinho enquanto você espera.
 Se em algum momento aparecer uma tela preta com muito texto correndo, está
 tudo certo — é assim mesmo.
 
+> **Com pressa e sem medo de errar?** Passos 1 e 2, depois abra a pasta
+> `Documentos\cantinho-main`, dê **dois cliques** no arquivo `cantinho.bat`,
+> digite **1** e aperte Enter. Os passos 3 e 4 são esse mesmo caminho
+> explicado devagar.
+
 ---
 
 ## Passo 1 — Instalar o Python
@@ -73,7 +78,7 @@ Abriu uma janela preta com letras brancas. É por aqui que continuamos.
 
 ## Passo 4 — Ir até a pasta e montar o programa
 
-Você vai colar **três comandos**, um de cada vez. Depois de colar cada um,
+Você vai colar **dois comandos**, um de cada vez. Depois de colar cada um,
 aperte **Enter** e **espere ele terminar** antes de ir para o próximo.
 
 Você sabe que um comando terminou quando a tela para de andar e aparece de
@@ -89,7 +94,7 @@ Se aparecer **"O sistema não pode encontrar o caminho especificado"**, a pasta
 não está onde deveria. Volte ao Passo 2 e confira se você extraiu para
 `%USERPROFILE%\Documents`.
 
-### Comando 2 — preparar tudo
+### Comando 2 — instalar
 
 ```
 cantinho.bat instalar
@@ -98,24 +103,16 @@ cantinho.bat instalar
 Este é o demorado: uns 5 a 10 minutos. Vai passar MUITO texto na tela, com
 palavras como "Downloading" e "Installing". É normal. Vá tomar um café.
 
-Quando terminar, vai aparecer **`Ambiente pronto.`** e a janela volta a esperar
-você digitar.
-
-### Comando 3 — criar o programa e o atalho
+No fim ele escreve:
 
 ```
-cantinho.bat empacotar
-```
-
-Mais uns 2 minutos. No fim ele escreve:
-
-```
-Pronto: C:\Users\...\dist\Cantinho\Cantinho.exe
 atalho criado: C:\Users\...\Cantinho.lnk
+
+ Pronto. O atalho "Cantinho" esta na Area de Trabalho, e o duplo clique
+ nele ja abre o app - nao ha mais nenhum comando para rodar depois.
 ```
 
-Essas duas linhas querem dizer que deu tudo certo, **e que o atalho já está na
-sua Área de Trabalho**.
+E é isso mesmo: **não há um terceiro comando.**
 
 ---
 
@@ -140,15 +137,7 @@ Quem fez o programa vai avisar quando tiver novidade. Atualizar leva 3 minutos
 e **não apaga nada do que você anotou** — as suas coisas ficam guardadas em
 outro lugar, separado do programa.
 
-### 1. Feche o Cantinho de verdade
-
-Não basta fechar a janela: ele fica esperando perto do relógio, no canto de
-baixo à direita. Use **"o quarto" → "sair"**.
-
-(Se esquecer, o computador avisa: vai aparecer uma mensagem dizendo que o
-Cantinho está aberto. Aí é só fechar e rodar de novo.)
-
-### 2. Baixe os arquivos novos
+### 1. Baixe os arquivos novos
 
 Do mesmo jeito do Passo 2 lá em cima: **github.com/igormahall/cantinho** →
 botão verde **`<> Code`** → **Download ZIP** → botão direito no arquivo →
@@ -157,7 +146,7 @@ botão verde **`<> Code`** → **Download ZIP** → botão direito no arquivo �
 O Windows vai perguntar se você quer substituir os arquivos que já existem.
 **Diga que sim, substituir tudo.**
 
-### 3. Rode um comando só
+### 2. Rode um comando só
 
 Abra a tela preta (<kbd>Windows</kbd> + <kbd>R</kbd> → `cmd` → Enter) e cole
 os dois comandos, um de cada vez:
@@ -172,9 +161,14 @@ cantinho.bat atualizar
 
 Espere terminar. Pronto — abra pelo atalho de sempre.
 
-> **Se você souber usar git:** dá para trocar o passo 2 inteiro por um comando.
-> Na pasta do Cantinho, rode `git pull` antes do `cantinho.bat atualizar`. Só
-> funciona se você tiver baixado com `git clone` em vez do ZIP.
+**Não precisa fechar o Cantinho antes.** Se ele estiver aberto, a atualização
+fecha sozinha — inclusive o ícone que fica perto do relógio. Se tinha um
+cronômetro correndo, ele é guardado até o último minuto registrado, e o próprio
+app avisa disso quando você abrir de novo.
+
+> **Se você souber usar git:** dá para pular o item 1 inteiro. Numa pasta que
+> veio de `git clone`, o `cantinho.bat atualizar` pergunta se pode puxar as
+> novidades do GitHub e faz isso sozinho.
 
 ---
 
@@ -190,31 +184,24 @@ marcada no Passo 1. A solução é desinstalar o Python (Iniciar → "Adicionar 
 remover programas" → procure Python → Desinstalar) e refazer o Passo 1 com
 muita atenção à caixinha.
 
-### O antivírus apagou o `Cantinho.exe`
-Acontece em computador de empresa, e não é vírus: o programinha que "embrulha"
-o app é o mesmo em milhares de programas, inclusive nos ruins, então alguns
-antivírus apagam todos por precaução.
-
-Existe uma versão que não tem esse problema. Rode este comando no lugar do
-Comando 3:
-
-```
-cantinho.bat portatil
-```
-
-Ele gera um arquivo `Cantinho-portatil-windows.zip` dentro da pasta. Extraia
-esse zip onde quiser e clique no `Cantinho.bat` de dentro dele.
-
 ### Não apareceu o atalho na Área de Trabalho
-Rode este comando na janela preta, dentro da pasta do Cantinho:
+Dê dois cliques no `cantinho.bat` e escolha a opção **2** (atualizar). Ela
+refaz o atalho no fim, e é rápida — o ambiente já está instalado.
 
-```
-cantinho.bat atalho
-```
+### O ícone existe, mas o duplo clique nele não faz nada
+Se você instalou este programa **antes** de agosto de 2026, o atalho antigo
+aponta para um arquivo que o Windows recusa abrir, sem dizer nada a ninguém. A
+versão de hoje não gera mais esse arquivo.
 
-Se mesmo assim não aparecer, o programa continua funcionando: ele está em
-`Documentos\cantinho-main\dist\Cantinho\Cantinho.exe` e você pode clicar nele
-direto (ou arrastar para a Área de Trabalho segurando Alt).
+O conserto é a opção **1** (instalar) do `cantinho.bat`: ela apaga o que
+sobrou, refaz tudo e cria o atalho novo. Suas anotações não são tocadas.
+
+### O antivírus da empresa reclamou de alguma coisa
+Não deveria mais acontecer: o programa não cria nenhum arquivo executável
+próprio — o que abre é o Python oficial, assinado pela fundação que o
+desenvolve. Se ainda assim reclamar, o
+[plataformas.md](plataformas.md) tem o que mandar para quem administra a
+máquina.
 
 ### Fechei a janela do Cantinho e ele sumiu
 Ele não fecha de verdade quando você fecha a janela — fica esperando perto do
@@ -222,10 +209,20 @@ relógio, no canto de baixo à direita. Clique na setinha `^` lá e procure a
 plantinha. Para fechar de vez: **"o quarto" → "sair"**.
 
 ### Quero apagar tudo
-Apague a pasta `cantinho-main` de dentro de Documentos, e arraste o atalho da
-Área de Trabalho para a lixeira. O programa não deixa nada em outro lugar
-além de um arquivinho com as suas anotações em
-`%APPDATA%\Cantinho` — apague essa pasta também se quiser sumir com tudo.
+Dê dois cliques no `cantinho.bat` e escolha a opção **4** (remover). Ela tira o
+atalho e todo o material que a instalação criou, e no fim pergunta,
+**separadamente**, se as suas anotações também devem ir embora.
+
+Essa segunda pergunta pede que você escreva a palavra `apagar` — qualquer outra
+coisa deixa as anotações onde estão. É de propósito: elas são a única coisa que
+não dá para refazer, e não existe cópia em lugar nenhum.
+
+Se você respondeu que elas ficam e mudou de ideia depois, elas estão em
+`%APPDATA%\Cantinho`. Se um dia quiser o Cantinho de volta com tudo o que
+escreveu, é só instalar de novo — ele encontra as anotações no mesmo lugar.
+
+Sobra a pasta `cantinho-main` dentro de Documentos, que é só o código. Arraste
+para a lixeira e acabou.
 
 ---
 
@@ -235,9 +232,8 @@ Se você não gostou da janela preta, dá para fazer tudo clicando:
 
 1. Abra a pasta `Documentos\cantinho-main`.
 2. Dê dois cliques no arquivo **`cantinho.bat`**.
-3. Vai abrir um menuzinho com números. Digite **1** e aperte Enter (é o
-   "instalar"). Espere terminar.
-4. Dê dois cliques no `cantinho.bat` de novo, digite **3** e aperte Enter (é o
-   "gerar o executável"). Espere terminar.
+3. Vai abrir um menuzinho. Digite **1** e aperte Enter (é o "instalar"). Espere
+   terminar.
 
-Pronto, mesma coisa — inclusive o atalho na Área de Trabalho.
+Pronto, mesma coisa — inclusive o atalho na Área de Trabalho. Quando sair uma
+versão nova, é o mesmo caminho com a opção **2**.

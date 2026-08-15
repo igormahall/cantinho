@@ -21,152 +21,137 @@ máquina, e nada sai dela.
 
 ## Instalando
 
-Precisa de **Python 3.10 ou mais novo**, e só. A única dependência de execução
-é o PySide6, que os comandos abaixo instalam sozinhos.
+Precisa de **Python 3.10 ou mais novo**, e só. A única dependência de execução é
+o PySide6, que a instalação baixa sozinha.
 
-Escolha o seu caso:
+### Windows
 
-| | |
-|---|---|
-| **Só quero usar o Cantinho** (Windows) | [instalar](#usar-no-windows) · [atualizar](#atualizar-o-cantinho-instalado) |
-| **Quero mexer no código** (Windows ou Linux) | [ambiente de desenvolvimento](#desenvolver) |
-
----
-
-### Usar no Windows
-
-Não precisa de git nem de conhecimento técnico: baixar, descompactar e colar
-três linhas.
-
-**1. Baixe e descompacte**
-
-Em **github.com/igormahall/cantinho**, botão verde **`<> Code`** →
-**Download ZIP**. Descompacte dentro de `Documentos`, de forma a ficar assim:
+Tudo passa por um arquivo, o `cantinho.bat`. Duplo clique nele abre um menu de
+quatro opções, e é o mesmo menu para quem está começando e para quem mexe no
+código:
 
 ```
-C:\Users\voce\Documents\cantinho-main\
+ 1  instalar    montar o quarto do zero, atalho incluído
+ 2  atualizar   trocar o que mudou; o que você anotou fica
+ 3  dev         a oficina: código, testes, ferramentas
+ 4  remover     desmontar, e escolher o que fica
 ```
 
-**2. Instale**
+**A opção 1 termina com o Cantinho funcionando** — venv, dependências e o atalho
+na Área de Trabalho. Não há um segundo comando depois dela.
 
-Abra o Prompt de Comando (<kbd>Windows</kbd>+<kbd>R</kbd>, escreva `cmd`,
-Enter) e cole os comandos, um de cada vez:
+Escolha como o código chega até a sua máquina. As duas formas dão no mesmo
+`cantinho.bat`; a diferença aparece só na hora de atualizar.
+
+**Com git** (recomendado, se você já usa) — atualizar depois é uma opção só:
 
 ```bat
-cd /d "%USERPROFILE%\Documents\cantinho-main"
+cd /d "%USERPROFILE%\Documents"
+git clone https://github.com/igormahall/cantinho.git
+cd cantinho
 cantinho.bat instalar
-cantinho.bat empacotar
 ```
 
-O primeiro leva de 5 a 10 minutos, o segundo uns 2. No fim, o **atalho já está
-na Área de Trabalho** e o executável em `dist\Cantinho\Cantinho.exe`.
+**Com o ZIP**, sem instalar git nem saber o que é: em
+**github.com/igormahall/cantinho**, botão verde **`<> Code`** → **Download ZIP**.
+Descompacte dentro de `Documentos` — fica `C:\Users\voce\Documents\cantinho-main\`
+— e dê **duplo clique no `cantinho.bat`** de dentro dela, opção **1**.
+
+De qualquer um dos dois jeitos leva de 5 a 10 minutos, quase tudo esperando o
+`pip`. No fim o atalho **Cantinho** está na Área de Trabalho e abre o app.
 
 > **Nunca fez isso antes?**
 > **[docs/instalar-no-windows.md](docs/instalar-no-windows.md)** é o mesmo
-> roteiro explicado do zero, sem supor nada: desde instalar o Python até o
-> ícone aparecer na Área de Trabalho, com o que fazer em cada erro comum.
+> roteiro explicado do zero, sem supor nada: desde instalar o Python até o ícone
+> aparecer na Área de Trabalho, com o que fazer em cada erro comum.
 
-Se o antivírus da empresa apagar o `.exe`, troque o segundo comando por
-`cantinho.bat portatil` — ver [docs/windows.md](docs/windows.md).
+**Nenhum executável é gerado, e isso é de propósito.** O atalho aponta para o
+`pythonw.exe` do próprio ambiente virtual, que é uma cópia do binário oficial da
+Python Software Foundation e carrega a assinatura dela. Um `.exe` construído aqui
+nasceria sem assinatura, e é isso que o Smart App Control do Windows 11 e os
+antivírus gerenciados recusam — sem aviso, sem mensagem, o duplo clique
+simplesmente não faz nada. Ver [docs/plataformas.md](docs/plataformas.md).
 
----
+Uma consequência prática: **o atalho aponta para dentro desta pasta.** Se você
+mudá-la de lugar, rode a opção **2** de lá — ela refaz o atalho no caminho novo.
 
-### Atualizar o Cantinho instalado
+#### Atualizar
 
-**As suas anotações não são tocadas.** Elas ficam em `%APPDATA%\Cantinho`, fora
-da pasta do programa; atualizar troca só o código.
+**Não precisa fechar o app antes**: se ele estiver aberto, a atualização o fecha,
+inclusive o ícone perto do relógio. E as suas anotações não são tocadas — elas
+ficam em `%APPDATA%\Cantinho`, fora da pasta do programa.
 
-Antes de começar, **feche o Cantinho** — inclusive o ícone perto do relógio
-(**o quarto → sair**). O executável não pode ser reescrito enquanto está
-aberto.
+- **Instalou com git?** É só a opção **2**. Ela mesma oferece buscar as novidades
+  no GitHub antes de atualizar.
+- **Instalou pelo ZIP?** Baixe o ZIP novo, descompacte por cima da pasta antiga
+  substituindo os arquivos, e então a opção **2**. Ali não aparece pergunta de
+  git nenhuma: numa pasta que não veio de `git clone`, `git pull` responderia
+  *"not a git repository"*.
 
-Todos os comandos rodam **dentro da pasta do Cantinho**:
+Para trocar do ZIP para o git e ganhar a atualização de uma opção só, instale
+[Git para Windows](https://git-scm.com/download/win) e refaça a instalação com
+`git clone`. Suas anotações ficam onde estão — elas não moram na pasta do
+programa.
 
-```bat
-cd /d "%USERPROFILE%\Documents\cantinho-main"
-```
+A opção **1** também serve como conserto: apaga o ambiente e refaz do zero, que é
+o caminho quando algo ficou em estado duvidoso. Continua sem tocar no diário.
 
-**Se você instalou pelo ZIP** (o caminho acima), baixe o ZIP novo, descompacte
-por cima da pasta antiga substituindo os arquivos, e depois:
+#### Remover
 
-```bat
-cantinho.bat atualizar
-```
+A opção **4** desmonta o que foi montado — o ambiente, as pastas de trabalho e o
+atalho — e deixa o código da pasta, que você apaga na mão se quiser.
 
-**Se você instalou com git** (`git clone`), o comando de puxar as novidades vai
-nessa mesma pasta, antes do `atualizar`:
+O seu diário é uma pergunta **separada**, feita depois, e só sai se você escrever
+a palavra `apagar`. É a única coisa aqui que não se refaz: não existe cópia em
+lugar nenhum, e o banco inteiro é um arquivo só (`cantinho.db`), fácil de guardar
+antes.
 
-```bat
-cd /d "%USERPROFILE%\Documents\cantinho"
-git pull
-cantinho.bat atualizar
-```
+### Ubuntu
 
-> `git pull` só funciona em pasta que veio de `git clone`. Numa pasta que veio
-> do ZIP ele responde *"not a git repository"* — ali o caminho é baixar o ZIP
-> de novo. Se você prefere atualizar com um comando só daqui para frente,
-> instale [Git para Windows](https://git-scm.com/download/win) e refaça a
-> instalação com `git clone https://github.com/igormahall/cantinho.git`.
-
-`atualizar` e `empacotar` fazem quase a mesma coisa; a diferença é que
-`atualizar` apaga o cache de build antes. Ele é confiável quase sempre, e
-"quase" é pouco quando os arquivos foram trocados por baixo dele.
-
----
-
-### Desenvolver
-
-Aqui o git é o caminho, nos dois sistemas:
+Aqui não há instalador: é o venv e o código. O atalho na grade de aplicativos o
+próprio app cria na primeira abertura.
 
 ```bash
+sudo apt install python3-venv python3-dev libxcb-cursor0
+
 git clone https://github.com/igormahall/cantinho.git
 cd cantinho
-```
-
-**Windows** — `cantinho.bat` faz tudo. Duplo clique abre um menu; da linha de
-comando aceita `instalar`, `rodar`, `empacotar`, `atualizar`, `portatil`,
-`testar`, `refazer` e `atalho`.
-
-```bat
-cantinho.bat instalar    :: venv + dependências (runtime, pytest, pyinstaller)
-cantinho.bat rodar       :: abre o app a partir do código
-cantinho.bat testar      :: a suíte
-```
-
-**Linux** — o mesmo, na mão:
-
-```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 
-python -m cantinho.main          # rodar o app
-python -m pytest                 # a suíte
-python tools/simular_uso.py      # percorre a UI clicando de verdade
+python -m cantinho.main
 ```
 
-Numa Ubuntu limpa faltam bibliotecas de sistema que o PySide6 carrega em
-runtime — o sintoma é o plugin `xcb` não carregar. A lista está em
-[docs/linux.md](docs/linux.md).
+Para atualizar, `git pull --rebase` e o `pip install` de novo — o `.venv/` é por
+máquina e não é versionado, então é por ele que uma dependência trocada no outro
+sistema chega aqui.
+
+Numa Ubuntu recém-instalada faltam mais bibliotecas que o PySide6 carrega em
+runtime, e o sintoma é sempre o plugin `xcb` não carregar. A lista completa, o
+Anaconda desligando o OpenGL e o atalho na grade estão em
+**[docs/plataformas.md](docs/plataformas.md)**.
+
+### Onde ficam os seus dados
+
+`%APPDATA%\Cantinho` no Windows, `~/.local/share/cantinho` no Linux. Um banco por
+vez: abrir o mesmo duas vezes traz para a frente a janela que já existe. **Os
+bancos das duas máquinas nunca se falam** — não há sincronização de nenhum tipo.
+
+### Mexer no código
+
+**[docs/desenvolvimento.md](docs/desenvolvimento.md)** tem os comandos, as
+ferramentas e a suíte. No Windows, a opção **3** do menu embrulha tudo isso já
+com o Python do venv.
 
 Três coisas que economizam tempo depois:
 
 - **Rode sempre com o Python do venv.** O `python` do PATH não tem PySide6.
-- **`python tools/semear.py`** cria um banco de demonstração com duas semanas
-  de uso, em `build/demo.db`. Sem ele, avaliar estante, planta ou bilhete exige
-  usar o app por duas semanas de verdade.
+- **`python tools/semear.py`** cria um banco de demonstração com duas semanas de
+  uso. Sem ele, avaliar estante, planta ou bilhete exige usar o app por duas
+  semanas de verdade.
 - **`python tools/simular_uso.py` é o que cobre o QML** — o pytest não cobre.
-  Rode depois de mexer em qualquer `.qml`, e **com a tela ligada**.
-
-Mais detalhes em
-**[docs/desenvolvimento.md](docs/desenvolvimento.md)**.
-
----
-
-O banco fica em `%APPDATA%\Cantinho` no Windows e `~/.local/share/cantinho` no
-Linux. Um banco por vez: abrir o mesmo duas vezes traz para a frente a janela
-que já existe. **Os bancos das duas máquinas nunca se falam** — não há
-sincronização de nenhum tipo.
+  Rode depois de mexer em qualquer `.qml`, com a tela ligada e nos dois temas.
 
 ## Como se usa
 
@@ -216,13 +201,19 @@ morto.
 
 ## Documentação
 
+Quatro arquivos, cada um para um leitor diferente:
+
 - **[docs/instalar-no-windows.md](docs/instalar-no-windows.md)** — instalar do
   zero no Windows, escrito para quem nunca abriu um terminal.
-- **[docs/windows.md](docs/windows.md)** — empacotar para Windows, as duas
-  formas, e o que fazer quando o antivírus implica com o executável.
-- **[docs/linux.md](docs/linux.md)** — as bibliotecas de sistema que faltam
-  numa Ubuntu limpa, o Anaconda desligando o OpenGL, e o atalho na grade.
-- **[docs/desenvolvimento.md](docs/desenvolvimento.md)** — rodar a suíte,
-  as ferramentas, e como o log de eventos funciona por dentro.
-- **[CLAUDE.md](CLAUDE.md)** — as regras de arquitetura em detalhe, incluindo
-  o que deliberadamente não se faz aqui e por quê.
+- **[docs/plataformas.md](docs/plataformas.md)** — o que é específico de cada
+  sistema: por que não se gera executável, como confirmar que foi o Smart App
+  Control que bloqueou, o pacote portátil, as bibliotecas que faltam numa Ubuntu
+  limpa, o Anaconda desligando o OpenGL e os atalhos.
+- **[docs/desenvolvimento.md](docs/desenvolvimento.md)** — os comandos, as
+  ferramentas, a suíte, e como o log de eventos funciona por dentro.
+- **[CLAUDE.md](CLAUDE.md)** — as regras de arquitetura em detalhe, incluindo o
+  que deliberadamente não se faz aqui e por quê.
+
+E **[docs/auditoria.md](docs/auditoria.md)**, que não é documentação de uso: são
+as direções que sobraram da auditoria de 14/08/2026, algumas das quais não devem
+ser feitas.

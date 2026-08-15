@@ -10,7 +10,8 @@
 #   pip install -r requirements-lint.txt
 #   python -m ruff check cantinho tests tools
 #
-# Sem ele, `cantinho.bat lint` avisa e sai; nada mais deixa de funcionar.
+# Sem ele, o item de lint da oficina (`cantinho.bat dev`) avisa, roda só o
+# qmllint e segue; nada mais deixa de funcionar.
 #
 # A configuração está em `ruff.toml`, com o conjunto de regras fixado e o motivo
 # de cada exclusão. A versão está presa porque as duas máquinas não atualizam
