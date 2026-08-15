@@ -1,11 +1,29 @@
-# O que `cantinho.bat instalar` roda, e é o arquivo que precisa funcionar na
-# máquina restrita, sem internet confiável. Cada dependência a mais aqui é uma
-# chance a mais de a instalação falhar justamente onde ela mais importa.
+# Desenvolvimento — produção mais as ferramentas de quem mexe no código.
 #
-# Por isso o ruff mora em `requirements-lint.txt` — lint não é o que faz o app
-# rodar — e por isso o `pyinstaller` saiu daqui: o executável que ele gerava
+# Instala o `requirements.txt` junto, então numa máquina de desenvolvimento este
+# é o comando único:
+#
+#   pip install -r requirements-dev.txt
+#   python -m pytest
+#   python -m ruff check cantinho tests tools
+#
+# **Por que duas categorias e não três.** Havia um terceiro arquivo só com o
+# ruff (`requirements-lint.txt`), e ele existia por uma razão que deixou de
+# valer: o `requirements-dev.txt` era o que a máquina restrita instalava, então
+# cada pacote aqui era risco no passo de instalação que precisa funcionar sem
+# internet confiável. Com produção separada, a máquina restrita instala
+# `requirements.txt` e nunca chega aqui — e quem chega já veio para mexer no
+# código, onde lint e teste são a mesma categoria de ferramenta.
+#
+# **O `pyinstaller` saiu em 14/08/2026 e não volta.** O executável que ele gerava
 # nasce sem assinatura, e nem o Smart App Control nem o antivírus gerenciado o
 # deixam abrir. Nada no repositório o chama. Ver `docs/plataformas.md`.
+#
+# As versões estão presas porque as duas máquinas deste projeto não atualizam
+# juntas: regra de lint nova aparecendo sozinha vira diff que ninguém pediu, do
+# lado que atualizou primeiro. A configuração do ruff está em `ruff.toml`, com o
+# conjunto de regras escolhido a dedo e o motivo de cada exclusão.
 -r requirements.txt
 
 pytest==9.1.1
+ruff==0.16.3

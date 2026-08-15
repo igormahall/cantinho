@@ -43,10 +43,10 @@ set "PYW=%VENV%\Scripts\pythonw.exe"
 set "DIARIO=%APPDATA%\Cantinho"
 title Cantinho
 
-if not exist "requirements-dev.txt" (
+if not exist "requirements.txt" (
     echo.
     echo  Este script precisa rodar de dentro da pasta do Cantinho.
-    echo  Nao encontrei requirements-dev.txt em: %CD%
+    echo  Nao encontrei requirements.txt em: %CD%
     echo.
     echo  Se voce extraiu o zip do GitHub, confira se os arquivos ficaram na
     echo  raiz e nao dentro de uma subpasta "cantinho-main".
@@ -232,25 +232,32 @@ echo  Abrindo o Cantinho pelo codigo. Esta janela fica presa ate ele fechar.
 goto :dev
 
 :dev_testar
+rem O unico item da oficina que nao roda sem a categoria de
+rem desenvolvimento. Recusar a instalacao volta ao menu: os outros itens
+rem continuam servindo, porque nenhum deles usa pytest nem ruff.
+call :exigir_ferramentas || goto :dev
 echo.
-rem No Windows o resultado certo e 465 passados e 3 pulados: os tres sao de
-rem test_desktop_entry.py e dependem de semantica POSIX que nao existe aqui.
+rem A suite escolhe o checklist do sistema em que esta rodando: o que e
+rem exclusivo do outro fica fora da coleta em vez de virar pulado, e o
+rem cabecalho diz quantos foram e de quem. No Windows o resultado certo e 472
+rem passados e nenhum pulado; no Ubuntu sao 475. A diferenca sao os testes de
+rem semantica POSIX - caminho com barra e bit de execucao -, que nao existem
+rem aqui e nao sao teste faltando.
 "%PY%" -m pytest
 pause
 goto :dev
 
 :dev_lint
-rem O ruff nao esta em requirements-dev.txt: aquele arquivo e o que roda na
-rem maquina restrita, sem internet confiavel, e uma dependencia a mais ali e
-rem uma chance a mais de a instalacao falhar onde ela mais importa. Lint nao e
-rem o que faz o app rodar. Por isso a falta dele aqui e um aviso, nao um erro.
-rem O qmllint vem junto com o PySide6 e nao precisa de nada instalado.
+rem O ruff vem com a categoria de desenvolvimento, que a oficina confere na
+rem entrada. A falta dele continua sendo aviso e nao erro: lint nao e o que faz
+rem o app rodar, e quem recusou a instalacao ainda tem o resto da oficina. O
+rem qmllint vem junto com o PySide6 e nao precisa de nada instalado.
 echo.
 "%PY%" -m ruff --version >nul 2>&1
 if errorlevel 1 (
     echo  O ruff nao esta instalado, entao a parte Python fica de fora:
     echo.
-    echo      %PY% -m pip install -r requirements-lint.txt
+    echo      %PY% -m pip install -r requirements-dev.txt
     echo.
 ) else (
     echo  ruff:
@@ -367,10 +374,16 @@ goto :fim_ok
 rem =========================================================== sub-rotinas
 
 :dependencias
+rem So o requirements.txt, que e a categoria de producao: o que o app carrega
+rem para rodar, e nada alem disso. Sao duas categorias e mais nenhuma - pytest
+rem e ruff vivem em requirements-dev.txt e so entram pela oficina, que pergunta
+rem antes. Esta maquina pode ser a restrita, sem internet externa confiavel, e
+rem cada pacote a mais aqui e uma chance a mais de a instalacao falhar
+rem justamente onde ela mais importa.
 echo.
 echo  conferindo as dependencias ...
 "%PY%" -m pip install --disable-pip-version-check --quiet --upgrade pip
-"%PY%" -m pip install --disable-pip-version-check -r requirements-dev.txt
+"%PY%" -m pip install --disable-pip-version-check -r requirements.txt
 if errorlevel 1 (
     echo.
     echo  Falhou instalar as dependencias.
@@ -386,6 +399,35 @@ if exist "%PY%" exit /b 0
 echo.
 echo  Ainda nao ha ambiente em %VENV%. A opcao 1 monta ele.
 exit /b 1
+
+
+:exigir_ferramentas
+rem A segunda categoria: pytest e ruff, que so quem mexe no codigo precisa. A
+rem instalacao normal nao traz nenhum dos dois de proposito, entao a oficina
+rem pergunta na primeira vez que e aberta - e uma vez so por execucao, porque
+rem com eles ja instalados isto nao vai a rede nenhuma.
+if defined FERRAMENTAS exit /b 0
+"%PY%" -m pytest --version >nul 2>&1
+if not errorlevel 1 goto :ferramentas_ok
+echo.
+echo  A oficina roda com as ferramentas de desenvolvimento, e elas nao vem na
+echo  instalacao normal: quem so usa o Cantinho instala o que o app precisa
+echo  para rodar, e mais nada. Sao duas categorias, e esta e a outra.
+echo.
+set "CONFIRMA="
+set /p "CONFIRMA=  instalar pytest e ruff agora? (S/n) "
+if /i "!CONFIRMA!"=="n" exit /b 1
+"%PY%" -m pip install --disable-pip-version-check -r requirements-dev.txt
+if errorlevel 1 (
+    echo.
+    echo  Nao consegui instalar as ferramentas de desenvolvimento. O Cantinho
+    echo  continua inteiro - isto aqui e so a oficina. Numa rede restrita
+    echo  costuma ser proxy ou certificado; docs\plataformas.md tem o que fazer.
+    exit /b 1
+)
+:ferramentas_ok
+set "FERRAMENTAS=1"
+exit /b 0
 
 
 :achar_python

@@ -1,1 +1,16 @@
+# Produção — o que o Cantinho precisa para **rodar**, e mais nada.
+#
+# São duas categorias e mais nenhuma: produção (este arquivo) e desenvolvimento
+# (`requirements-dev.txt`, que instala este junto). Quem só usa o app instala
+# daqui; quem mexe no código instala de lá.
+#
+# É este o arquivo que `cantinho.bat instalar` roda, e é ele que precisa
+# funcionar na máquina do trabalho: restrita, sem internet externa confiável e
+# sem administrador. Cada dependência a mais aqui é uma chance a mais de o passo
+# de instalação falhar justamente onde ele mais importa — então só entra o que o
+# app carrega em runtime. Ferramenta de quem desenvolve nunca entra.
+#
+# `tools/empacotar_portatil.py` também lê daqui, por `-r`, para montar o runtime
+# embeddable: o pacote portátil é uma instalação de produção como outra
+# qualquer, e não deve levar pytest nem ruff dentro.
 PySide6==6.11.1

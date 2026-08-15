@@ -118,10 +118,15 @@ git clone https://github.com/igormahall/cantinho.git
 cd cantinho
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
 python -m cantinho.main
 ```
+
+São duas categorias de dependência e mais nenhuma: `requirements.txt` é o que o
+app precisa para **rodar**, e é só isso que a linha acima instala.
+`requirements-dev.txt` é o que quem **mexe no código** precisa — ele traz o de
+produção junto, e é o comando único de quem vai desenvolver.
 
 Para atualizar, `git pull --rebase` e o `pip install` de novo — o `.venv/` é por
 máquina e não é versionado, então é por ele que uma dependência trocada no outro

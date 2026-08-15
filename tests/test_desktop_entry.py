@@ -7,7 +7,6 @@ chato possível — ele aparece no menu e simplesmente não abre nada.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -29,7 +28,11 @@ def data_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 # semântica POSIX de verdade — separador `/` e permissão —, então no Windows
 # eles falhariam mesmo com o código certo, que é o pior tipo de teste vermelho.
 # Os demais deste arquivo são texto e escrita de arquivo, e rodam nos dois.
-posix = pytest.mark.skipif(os.name != "posix", reason="depende de caminho e permissão POSIX")
+#
+# A marca tira da coleta, não pula: no Windows estes três não fazem parte do
+# checklist, e "3 pulados" para sempre no fim da suíte é uma pergunta que nunca
+# tem resposta nova. Ver `tests/checklist.py`.
+posix = pytest.mark.posix
 
 
 # ---------------------------------------------------------------- o conteúdo
@@ -246,7 +249,7 @@ def test_instala_todos_os_tamanhos_do_ico(data_home: Path) -> None:
         assert desktop_entry.icon_path(lado).is_file()
 
 
-def test_os_bytes_sao_os_mesmos_do_windows(data_head: None = None) -> None:
+def test_os_bytes_sao_os_mesmos_do_windows() -> None:
     """O Linux instala literalmente os quadros do `.ico`, não uma reamostragem.
 
     É o que faz "igual ao que aparece no Windows" ser verdade e não aproximação:

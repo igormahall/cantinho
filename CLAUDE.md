@@ -27,7 +27,43 @@ para ambiente e ritmo lento. **Quando os dois brigarem, cozy vence.**
 - Nenhum empacotador de binário: o app roda sobre o `python.exe` assinado da
   PSF, no venv aqui e no pacote portátil na máquina que não tem Python
 
-Sem dependências além de PySide6 e pytest sem discussão prévia.
+Sem dependências além de PySide6, pytest e ruff sem discussão prévia.
+
+### As duas categorias de dependência
+
+**Produção e desenvolvimento, e mais nenhuma.** A pergunta que decide onde um
+pacote entra é uma só: *o app carrega isto para rodar?*
+
+| arquivo | categoria | o que tem | quem instala |
+|---|---|---|---|
+| `requirements.txt` | produção | PySide6 | `cantinho.bat instalar`, o pacote portátil, quem só usa o app |
+| `requirements-dev.txt` | desenvolvimento | produção + pytest + ruff | quem mexe no código |
+
+O de desenvolvimento faz `-r requirements.txt`, então na máquina de quem
+desenvolve o comando continua sendo um só. Nenhum arquivo repete o que o outro
+já declara.
+
+O que essa divisão resolve é concreto: o passo de instalação da máquina do
+trabalho — restrita, sem internet externa confiável, sem administrador — passou
+a instalar **um** pacote. Cada dependência a mais ali é uma chance a mais de a
+instalação falhar justamente onde ela mais importa, e nem o pytest nem o ruff
+fazem o app rodar.
+
+Havia um terceiro arquivo, `requirements-lint.txt`, só com o ruff, e ele existia
+por uma razão que deixou de valer: enquanto `requirements-dev.txt` era o que a
+instalação normal rodava, tirar o ruff de lá era a única forma de mantê-lo fora
+da máquina restrita. Com produção separada, a máquina restrita não chega mais
+nesse arquivo — e lint e teste voltam a ser a mesma categoria de ferramenta,
+porque quem instala uma instala a outra.
+
+Duas consequências no `cantinho.bat`:
+
+- `instalar` e `atualizar` instalam **produção**. É a mudança de comportamento:
+  antes traziam o pytest junto para toda máquina.
+- A oficina pergunta antes de baixar as ferramentas, e só no item da suíte — o
+  único que não roda sem elas. Rodar o app, simular a interface, semear e
+  empacotar continuam funcionando sem nada instalado a mais; recusar volta ao
+  menu, não derruba a oficina.
 
 ## Comandos
 
@@ -41,12 +77,14 @@ por conta própria. Sem isso, `python tools/x.py` falha com
 `ModuleNotFoundError: No module named 'cantinho'` mesmo rodando da raiz — que
 é justamente o que estas instruções mandam fazer.
 
-Há um `pytest.ini`, e ele existe por uma linha só: `testpaths = tests`. Sem ela
-o pytest coleta a partir da raiz e desce em `portatil/`, que carrega um Python
-embeddable inteiro com o PySide6 dentro — a coleta morre lá antes de rodar um
-teste sequer. O `norecursedirs` cobre quem passa caminho na mão. Ele **não** é o
-`pyproject.toml` que não existe: não declara pacote nem mexe no `sys.path`, e
-quem põe a raiz no `sys.path` continua sendo o `python -m` rodado da raiz.
+Há um `pytest.ini`, e o que ele faz é delimitar a coleta. `testpaths = tests`:
+sem essa linha o pytest coleta a partir da raiz e desce em `portatil/`, que
+carrega um Python embeddable inteiro com o PySide6 dentro — a coleta morre lá
+antes de rodar um teste sequer. O `norecursedirs` cobre quem passa caminho na
+mão, e as marcas `posix`/`windows` mais `--strict-markers` são o checklist do
+sistema (ver **O checklist do sistema**). Ele **não** é o `pyproject.toml` que
+não existe: não declara pacote nem mexe no `sys.path`, e quem põe a raiz no
+`sys.path` continua sendo o `python -m` rodado da raiz.
 
 No Windows há um atalho para tudo isto, e é o caminho de instalação das duas
 máquinas — inclusive a do trabalho, onde não há git e o repositório chega como
@@ -100,7 +138,8 @@ Windows (PowerShell), venv em `.venv/`, para quem prefere na mão:
 
 ```powershell
 .venv\Scripts\Activate.ps1        # ou prefixar tudo com .venv\Scripts\python.exe
-pip install -r requirements-dev.txt   # runtime + pytest, e nada além disso
+pip install -r requirements.txt       # produção: só o que o app carrega
+pip install -r requirements-dev.txt   # desenvolvimento: produção + pytest + ruff
 
 python -m cantinho.main           # rodar o app
 python -m cantinho.main --db .\teste.db --log DEBUG   # banco descartável
@@ -199,12 +238,49 @@ Para rodar a suíte sem abrir janela: `$env:QT_QPA_PLATFORM="offscreen"`. Cuidad
 que nesse modo o Qt fica **sem nenhuma família de fonte** — texto vira tofu em
 screenshot. Para avaliar a UI de verdade, rode com a plataforma normal.
 
-No Windows a suíte dá **465 passados e 3 pulados**, e esse é o resultado certo,
-não uma suíte incompleta. Os três são de `test_desktop_entry.py` e dependem de
-semântica POSIX: barra `/` no `Exec=` e bit de execução no `.desktop`. A fixture
-finge o `sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação
-e o `chmod` do Windows não tem bit para ligar — eles falhariam com o código
-certo, que é o pior tipo de teste vermelho. No Ubuntu os 468 rodam.
+### O checklist do sistema
+
+**A suíte descobre em que sistema está e coleta só o checklist dele.** No
+Windows dá **472 passados e nenhum pulado**; no Ubuntu, 475. A diferença são
+quatro testes de semântica POSIX de verdade — barra `/` no `Exec=` e bit de
+execução no `.desktop` —, que no Windows não são coletados: a fixture finge o
+`sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação e o
+`chmod` do Windows não tem bit para ligar, então lá eles falhariam com o código
+certo, que é o pior tipo de teste vermelho.
+
+Antes eles eram `skipif`, e a suíte do Windows terminava com "3 pulados" para
+sempre. **Pulado é uma pergunta em aberto** — "isto deveria ter rodado?" — que
+reaparece em toda execução e nunca tem resposta nova; quem lesse aquilo sem o
+comentário ao lado concluiria que a suíte estava incompleta. Fora da coleta,
+cada sistema termina com o seu checklist inteiro e nada pendurado, e o cabeçalho
+reconcilia os números:
+
+```
+checklist: posix — 475 testes dos 476 coletados; fora: 1 exclusivo de windows
+```
+
+As peças:
+
+- **`tests/checklist.py`** — a decisão, em função pura, com teste próprio
+  (`test_checklist.py`). Ela lê `os.name` e **não** `sys.platform`, de
+  propósito: `sys.platform` é justamente o que meia dúzia de testes finge com
+  `monkeypatch`, e a coleta acontece antes de qualquer fixture — ler dali faria
+  um teste mudar o checklist da suíte inteira.
+- **`tests/conftest.py`** — o encanamento: filtra em `pytest_collection_modifyitems`
+  e escreve a linha do cabeçalho. Não chama o hook de "deselected", porque estes
+  testes não foram descartados por escolha de quem rodou; no sistema errado eles
+  não existem.
+- **`@pytest.mark.posix` / `@pytest.mark.windows`** — as duas marcas, declaradas
+  no `pytest.ini`. Quase nada precisa de uma: o `core` não sabe onde está
+  rodando, e o que é de plataforma finge o `sys.platform` e é conferido nas duas
+  pontas de dentro de um sistema só. A marca é para o que **não** dá para fingir.
+- **`--strict-markers`** no `pytest.ini`, e ele é o que segura o resto: sem isso
+  um `@pytest.mark.linux` distraído viraria um teste rodando em todo lugar sem
+  ninguém notar, que é o mesmo defeito silencioso que a filtragem existe para
+  evitar.
+
+Há um teste exclusivo de Windows em `test_checklist.py` e ele existe para isto:
+a filtragem tem duas direções, e a direção que ninguém exercita é a que apodrece.
 
 **Não rode nada disto num terminal elevado.** Com token de administrador o
 Windows põe `BUILTIN\Administradores` como dono de todo diretório criado, no
@@ -281,16 +357,15 @@ sobre o futuro; o porquê de uma linha de código envelhece longe dela.
 
 ### Ruff
 
-`ruff==0.16.3`, configurado em `ruff.toml`, e **de propósito fora de
-`requirements-dev.txt`**: aquele arquivo é o que `cantinho.bat instalar` roda na
-máquina restrita, sem internet confiável, e uma dependência a mais ali é uma
-chance a mais de o passo de instalação falhar onde ele mais importa. Lint não é
-o que faz o app rodar. Ele mora em `requirements-lint.txt`, e a falta dele é
-aviso e não erro — o item de lint no menu de dev pula a parte Python e roda o
-qmllint assim mesmo.
+`ruff==0.16.3`, configurado em `ruff.toml`, e em `requirements-dev.txt` junto
+com o pytest — ver **As duas categorias de dependência**. Lint e teste são a
+mesma categoria de ferramenta: quem instala uma instala a outra, e a máquina que
+só roda o app não instala nenhuma das duas. A falta dele continua sendo aviso e
+não erro — o item de lint no menu de dev pula a parte Python e roda o qmllint
+assim mesmo, que é o caso de quem recusou a instalação das ferramentas.
 
 ```powershell
-pip install -r requirements-lint.txt
+pip install -r requirements-dev.txt
 python -m ruff check cantinho tests tools
 ```
 
@@ -392,9 +467,8 @@ remoção é parte da correção, não faxina. Um caminho de build documentado c
 "não funciona nesta máquina" é convite a tentar de novo — e cada tentativa custa
 o mesmo diagnóstico caro, porque o sintoma não diz nada. Além disso o
 `pyinstaller` puxava cinco pacotes (`altgraph`, `pefile`,
-`pyinstaller-hooks-contrib`, `pywin32-ctypes`, `setuptools`) para dentro do
-`requirements-dev.txt`, que é o arquivo que precisa funcionar na máquina restrita
-sem internet confiável — a mesma razão pela qual o ruff nunca esteve lá.
+`pyinstaller-hooks-contrib`, `pywin32-ctypes`, `setuptools`) para dentro das
+dependências, e nada no repositório o chamava.
 
 Quem segura a regressão é `tests/test_atalho_windows.py`: ele exige que o atalho
 aponte para um `pythonw.exe` e **proíbe `Cantinho.exe`** no script gerado.

@@ -78,9 +78,15 @@ se tem numa máquina restrita.
 
 Daí a saída, que é a mesma nos dois casos: **não produzir binário desconhecido
 nenhum**. Remover a causa, em vez de contornar o efeito. O `cantinho.spec` do
-PyInstaller foi removido do repositório em 14/08/2026, e o `pyinstaller` saiu do
-`requirements-dev.txt` junto — cinco pacotes a menos no passo de instalação que
-precisa funcionar na máquina restrita.
+PyInstaller foi removido do repositório em 14/08/2026, e o `pyinstaller` saiu das
+dependências junto — cinco pacotes a menos para instalar, e nada no repositório
+o chama.
+
+O passo de instalação desta máquina hoje instala **só o `requirements.txt`**, que
+é a categoria de produção: o que o app carrega para rodar, e nada além. Pytest e
+ruff estão em `requirements-dev.txt` e só entram se a oficina pedir — a instalação
+normal nunca vai buscá-los, o que é uma dependência a menos de a rede daqui
+cooperar.
 
 ## O pacote portátil: para uma máquina sem Python
 

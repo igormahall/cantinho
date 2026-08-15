@@ -4,12 +4,21 @@ Tudo a partir da raiz do repositório, e **sempre com o Python do venv** — o
 `python` do PATH não tem PySide6.
 
 ```bash
-pip install -r requirements-dev.txt        # runtime + pytest, e só
-pip install -r requirements-lint.txt       # opcional: ruff
+pip install -r requirements-dev.txt        # produção + pytest + ruff
 ```
 
+**Duas categorias e mais nenhuma.** `requirements.txt` é produção — o que o app
+carrega para rodar, e é o que a máquina restrita instala.
+`requirements-dev.txt` é desenvolvimento, traz o de produção junto e é o comando
+único de quem vai mexer no código. Havia um terceiro arquivo só com o ruff, e
+ele existia porque o `requirements-dev.txt` era o que a instalação normal rodava:
+cada pacote ali era risco no passo que precisa funcionar sem internet confiável.
+Com produção separada, essa razão acabou.
+
 No Windows a opção **3** (dev) do `cantinho.bat` embrulha o que está abaixo, já
-com o Python certo. No Linux é na mão, com o venv ativado.
+com o Python certo — e o item da suíte pergunta antes se pode instalar esta
+categoria, porque a instalação normal de propósito não a traz. No Linux é na
+mão, com o venv ativado.
 
 ## Comandos
 
@@ -35,18 +44,38 @@ python tools/empacotar_portatil.py         # pacote para máquina sem Python
 Não há `pyproject.toml` nem `setup.py`, de propósito. Como o Python põe no
 `sys.path` o diretório do *script* e não o diretório atual, cada ferramenta de
 `tools/` que importa `cantinho.*` insere a raiz do repositório no `sys.path` por
-conta própria. O `pytest.ini` existe por uma linha só, `testpaths = tests`: sem
-ela o pytest desce em `portatil/`, que carrega um Python embeddable inteiro com
-o PySide6 dentro, e a coleta morre lá antes de rodar um teste.
+conta própria. O `pytest.ini` só delimita a coleta: `testpaths = tests`, sem o
+qual o pytest desce em `portatil/` — um Python embeddable inteiro com o PySide6
+dentro, onde a coleta morre antes de rodar um teste sequer — e as duas marcas de
+sistema, que a seção seguinte explica.
 
 ## A suíte
 
-**No Windows: 465 passados e 3 pulados. No Ubuntu: 468.** Esse é o resultado
-certo, não uma suíte incompleta — os três são de `test_desktop_entry.py` e
-dependem de semântica POSIX: barra `/` no `Exec=` e bit de execução no
-`.desktop`. A fixture finge o `sys.platform`, mas o `pathlib` já escolheu
-`WindowsPath` na importação e o `chmod` do Windows não tem bit para ligar. Eles
-falhariam com o código certo, que é o pior tipo de teste vermelho.
+**A suíte escolhe o checklist do sistema em que está rodando.** No Windows: 472
+passados, nenhum pulado. No Ubuntu: 475. A diferença são quatro testes de
+semântica POSIX de verdade — barra `/` no `Exec=` e bit de execução no
+`.desktop` —, que no Windows **não são coletados**. A fixture finge o
+`sys.platform`, mas o `pathlib` já escolheu `WindowsPath` na importação e o
+`chmod` do Windows não tem bit para ligar: lá eles falhariam com o código certo,
+que é o pior tipo de teste vermelho.
+
+Antes eles ficavam como pulados, e "3 pulados" no fim de toda execução é uma
+pergunta que nunca tem resposta nova — quem lê sem o comentário ao lado conclui
+que a suíte está incompleta. Agora ficam fora da coleta, e o cabeçalho conta o
+que aconteceu:
+
+```
+checklist: posix — 475 testes dos 476 coletados; fora: 1 exclusivo de windows
+```
+
+Quem decide é `tests/checklist.py`, que é função pura e tem teste próprio; o
+`conftest.py` só liga isso ao pytest. Um teste que só existe num sistema leva
+`@pytest.mark.posix` ou `@pytest.mark.windows` — as duas marcas estão declaradas
+no `pytest.ini`, e `--strict-markers` faz um nome inventado (`@pytest.mark.linux`)
+parar a suíte na hora, em vez de virar um teste que roda em todo lugar sem
+ninguém notar. Quase nada precisa de marca: o `core` não sabe onde está rodando,
+e o que é de plataforma finge o `sys.platform` e é conferido nos dois sistemas de
+dentro de um só.
 
 Para rodar sem abrir janela, `QT_QPA_PLATFORM=offscreen`. Nesse modo o Qt fica
 **sem nenhuma família de fonte** e texto vira tofu em screenshot — para avaliar
@@ -109,11 +138,11 @@ tique que o desenho aceita.
 
 ## Ruff
 
-`ruff==0.16.3`, configurado em `ruff.toml`, e **de propósito fora de
-`requirements-dev.txt`**: aquele arquivo é o que roda na máquina restrita, sem
-internet confiável, e lint não é o que faz o app rodar. A falta dele é aviso e
-não erro — o item de lint no menu pula a parte Python e roda o qmllint assim
-mesmo.
+`ruff==0.16.3`, configurado em `ruff.toml`, e dentro de `requirements-dev.txt`
+com o pytest: lint e teste são a mesma categoria de ferramenta, e quem instala
+uma instala a outra. A falta dele continua sendo aviso e não erro — o item de
+lint no menu pula a parte Python e roda o qmllint assim mesmo, que é o caso de
+quem recusou a instalação das ferramentas.
 
 O conjunto de regras é escolhido a dedo (`E4 E7 E9 E402 F B DTZ RUF100`) e
 fixado em vez de herdado do padrão, que muda entre versões — e as duas máquinas

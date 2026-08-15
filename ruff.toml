@@ -1,5 +1,8 @@
 # Configuração do ruff. Rode por `python -m ruff check cantinho tests tools`,
-# ou `cantinho.bat lint` no Windows.
+# ou pela oficina no Windows (`cantinho.bat dev`, item 3).
+#
+# O ruff vem em `requirements-dev.txt`, junto com o pytest: são a categoria de
+# desenvolvimento, e nenhum dos dois entra na instalação de quem só usa o app.
 #
 # Este arquivo **não** é o `pyproject.toml` que este projeto não tem de
 # propósito: ele não declara pacote, não mexe no `sys.path` e não muda como o

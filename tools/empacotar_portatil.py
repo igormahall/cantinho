@@ -212,12 +212,30 @@ def montar_runtime(runtime: Path) -> None:
     )
 
 
+def pacotes_de_producao() -> list[str]:
+    """As linhas de `requirements.txt` que são pacote — só para a mensagem.
+
+    Quem instala é o pip, por `-r`: o pacote portátil é uma instalação de
+    produção como outra qualquer, e ler o arquivo na mão para montar a linha de
+    comando era o que fazia um comentário lá dentro virar argumento aqui.
+    """
+    bruto = (RAIZ / "requirements.txt").read_text(encoding="utf-8")
+    return [
+        linha.strip()
+        for linha in bruto.splitlines()
+        if linha.strip() and not linha.lstrip().startswith("#")
+    ]
+
+
 def instalar_pyside(runtime: Path) -> None:
-    """Instala o PySide6 dentro do runtime, com o pip do venv atual."""
+    """Instala as dependências de produção dentro do runtime, com o pip do venv."""
     destino = runtime / "Lib" / "site-packages"
     destino.mkdir(parents=True, exist_ok=True)
-    requisitos = (RAIZ / "requirements.txt").read_text(encoding="utf-8").strip()
-    log(f"  pip install {requisitos} --target {destino.relative_to(RAIZ)}")
+    requisitos = RAIZ / "requirements.txt"
+    log(
+        f"  pip install {' '.join(pacotes_de_producao())} "
+        f"--target {destino.relative_to(RAIZ)}"
+    )
     subprocess.run(
         [
             sys.executable,
@@ -227,7 +245,8 @@ def instalar_pyside(runtime: Path) -> None:
             "--no-compile",
             "--target",
             str(destino),
-            *requisitos.splitlines(),
+            "-r",
+            str(requisitos),
         ],
         check=True,
         cwd=RAIZ,
