@@ -22,7 +22,7 @@ from pathlib import Path
 # isto, `import cantinho` falha mesmo rodando da raiz do repositório.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from cantinho.services import desktop_entry  # noqa: E402
+from cantinho.services import desktop_entry
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,18 +53,28 @@ def main(argv: list[str] | None = None) -> int:
             print("não havia atalho instalado")
         return 0
 
-    if desktop_entry.install(force=args.de_novo):
-        print(f"atalho em {desktop_entry.entry_path()}")
-        print(f"ícone  em {desktop_entry.icon_path()}")
-        print()
-        print("pode levar alguns segundos para aparecer na grade de aplicativos")
-        print("se o ícone continuar se comportando como antes, o GNOME está")
-        print("servindo o atalho antigo da memória: Alt+F2, r, Enter recarrega")
-        print("a interface no X11; no Wayland, é sair e entrar na sessão")
-        return 0
+    criado = desktop_entry.install(force=args.de_novo)
 
-    print(f"o atalho já existe em {desktop_entry.entry_path()}")
-    print("use --de-novo para reescrevê-lo, ou --remover para apagá-lo")
+    # Os ícones são reinstalados por `install` mesmo quando o atalho já existe:
+    # são asset do app, não configuração do usuário. Por isso o relatório deles
+    # vem antes de saber se o `.desktop` foi escrito.
+    tamanhos = sorted(desktop_entry.installed_icons())
+    if tamanhos:
+        lista = ", ".join(f"{lado}x{lado}" for lado in tamanhos)
+        print(f"ícone  em {desktop_entry.icon_path().parent.parent.parent}")
+        print(f"       nos tamanhos {lista}")
+
+    if criado:
+        print(f"atalho em {desktop_entry.entry_path()}")
+    else:
+        print(f"o atalho já existe em {desktop_entry.entry_path()}")
+        print("use --de-novo para reescrevê-lo, ou --remover para apagá-lo")
+
+    print()
+    print("pode levar alguns segundos para aparecer na grade de aplicativos")
+    print("se o ícone continuar se comportando como antes, o GNOME está")
+    print("servindo o atalho antigo da memória: Alt+F2, r, Enter recarrega")
+    print("a interface no X11; no Wayland, é sair e entrar na sessão")
     return 0
 
 

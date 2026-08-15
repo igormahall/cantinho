@@ -62,7 +62,9 @@ def test_caminho_com_espaco_sai_citado(
     """`~/Documentos` já tem acento; espaço no caminho não é hipótese remota."""
     monkeypatch.setattr("sys.executable", "/home/eu/uma pasta/.venv/bin/python")
     linha = next(
-        l for l in desktop_entry.desktop_entry_text().splitlines() if l.startswith("Exec=")
+        texto
+        for texto in desktop_entry.desktop_entry_text().splitlines()
+        if texto.startswith("Exec=")
     )
     assert '"/home/eu/uma pasta/.venv/bin/python"' in linha
 
@@ -85,7 +87,9 @@ def test_o_venv_sobrevive_ao_atalho(
     monkeypatch.setattr("sys.executable", str(venv))
 
     linha = next(
-        l for l in desktop_entry.desktop_entry_text().splitlines() if l.startswith("Exec=")
+        texto
+        for texto in desktop_entry.desktop_entry_text().splitlines()
+        if texto.startswith("Exec=")
     )
     assert str(venv) in linha
     assert str(real) not in linha
@@ -154,16 +158,27 @@ def test_avisa_o_ambiente_ao_instalar(
     no ícone continuou falhando depois de o arquivo em disco já estar certo.
     """
     chamadas: list[list[str]] = []
-    monkeypatch.setattr(desktop_entry.shutil, "which", lambda _: "/usr/bin/upd")
+    monkeypatch.setattr(desktop_entry.shutil, "which", lambda nome: f"/usr/bin/{nome}")
     monkeypatch.setattr(
         desktop_entry.subprocess, "run", lambda cmd, **k: chamadas.append(cmd)
     )
 
     desktop_entry.install()
 
-    assert len(chamadas) == 1
-    assert chamadas[0][0] == "/usr/bin/upd"
-    assert chamadas[0][1] == str(desktop_entry.entry_path().parent)
+    # São dois avisos, e o segundo faltava: o dos ícones. Sem ele, um tamanho
+    # recém-instalado fica em disco e não é encontrado, porque o GTK continua
+    # servindo o `icon-theme.cache` antigo.
+    ferramentas = [chamada[0] for chamada in chamadas]
+    assert "/usr/bin/update-desktop-database" in ferramentas
+    assert "/usr/bin/gtk-update-icon-cache" in ferramentas
+
+    atalhos = next(c for c in chamadas if c[0].endswith("update-desktop-database"))
+    assert atalhos[1] == str(desktop_entry.entry_path().parent)
+
+    # A raiz do tema: .../hicolor/<lado>x<lado>/apps/cantinho.png -> hicolor
+    raiz = desktop_entry.icon_path().parent.parent.parent
+    icones = next(c for c in chamadas if c[0].endswith("gtk-update-icon-cache"))
+    assert str(raiz) in icones
 
 
 def test_sem_a_ferramenta_o_atalho_ainda_e_criado(
@@ -200,3 +215,98 @@ def test_no_windows_e_no_op(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     assert desktop_entry.install() is False
     assert desktop_entry.remove() is False
     assert not (tmp_path / "applications").exists()
+
+
+# ------------------------------------------------------- os tamanhos do ícone
+#
+# O defeito: só o 256 era instalado, e o ambiente reduzia esse arquivo único
+# para os 22-24 px da bandeja e os 48-64 do dock. A arte do 256 é a planta
+# sobre um ladrilho escuro — reduzida a 24 px vira um quadrado escuro com um
+# borrão dentro, que na barra do Ubuntu lê como ícone genérico. No Windows
+# nunca apareceu porque lá o `.ico` entrega os sete tamanhos.
+
+
+def test_instala_todos_os_tamanhos_do_ico(data_home: Path) -> None:
+    from cantinho.services import scene
+
+    tamanhos = desktop_entry.install_icons()
+
+    esperados = sorted(
+        desktop_entry._quadros_do_ico(
+            (scene.assets_dir() / "icon" / "cantinho.ico").read_bytes()
+        )
+    )
+    assert tamanhos == esperados
+    # E não é só um: se voltar a ser, o defeito voltou.
+    assert len(tamanhos) > 1
+    assert 256 in tamanhos
+    assert min(tamanhos) <= 32, "falta tamanho pequeno, que é onde o defeito doía"
+
+    for lado in tamanhos:
+        assert desktop_entry.icon_path(lado).is_file()
+
+
+def test_os_bytes_sao_os_mesmos_do_windows(data_head: None = None) -> None:
+    """O Linux instala literalmente os quadros do `.ico`, não uma reamostragem.
+
+    É o que faz "igual ao que aparece no Windows" ser verdade e não aproximação:
+    os dois sistemas leem o mesmo desenho, feito para aquele tamanho.
+    """
+    from cantinho.services import scene
+
+    bruto = (scene.assets_dir() / "icon" / "cantinho.ico").read_bytes()
+    quadros = desktop_entry._quadros_do_ico(bruto)
+    assert quadros, "o .ico não entregou quadro nenhum"
+    for dados in quadros.values():
+        assert dados.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_o_icone_e_reparado_com_o_atalho_ja_no_lugar(data_home: Path) -> None:
+    """**A parte que fazia a correção não chegar em quem já tinha instalado.**
+
+    `install` sai cedo quando o `.desktop` existe, e antes o ícone saía junto —
+    então uma instalação antiga jamais ganharia os tamanhos que faltam. A regra
+    de "criar uma vez e nunca sobrescrever" protege o `Exec=`; o ícone é asset
+    do app e ninguém o edita à mão.
+    """
+    assert desktop_entry.install() is True
+
+    # Simula a instalação antiga: só o 256 em disco.
+    for lado, caminho in desktop_entry.installed_icons().items():
+        if lado != 256:
+            caminho.unlink()
+    assert list(desktop_entry.installed_icons()) == [256]
+
+    # O atalho continua lá, então `install` devolve False — e mesmo assim
+    # reinstala os ícones.
+    assert desktop_entry.install() is False
+    assert len(desktop_entry.installed_icons()) > 1
+
+
+def test_remover_leva_todos_os_tamanhos(data_home: Path) -> None:
+    desktop_entry.install()
+    assert len(desktop_entry.installed_icons()) > 1
+
+    assert desktop_entry.remove() is True
+    assert desktop_entry.installed_icons() == {}
+
+
+def test_ico_ilegivel_nao_derruba_a_instalacao(
+    data_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sem o `.ico`, o 256 sozinho ainda é melhor que ícone nenhum."""
+    monkeypatch.setattr(desktop_entry, "_source_ico", lambda: None)
+
+    tamanhos = desktop_entry.install_icons()
+    assert tamanhos == [256]
+    assert desktop_entry.icon_path().is_file()
+
+
+@pytest.mark.parametrize(
+    "bruto",
+    [b"", b"xx", b"\x00\x00\x02\x00\x01\x00", b"\x00\x00\x01\x00\xff\xff"],
+    ids=["vazio", "curto demais", "tipo errado", "conta mais do que tem"],
+)
+def test_ico_malformado_devolve_vazio_em_vez_de_estourar(bruto: bytes) -> None:
+    """Um `.ico` de outra procedência não pode derrubar a abertura do app."""
+    assert desktop_entry._quadros_do_ico(bruto) == {}

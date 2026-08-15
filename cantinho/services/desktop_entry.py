@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,8 @@ __all__ = [
     "ICON_NAME",
     "entry_path",
     "icon_path",
+    "installed_icons",
+    "install_icons",
     "desktop_entry_text",
     "install",
     "ensure_installed",
@@ -40,9 +43,9 @@ __all__ = [
 ENTRY_NAME = "cantinho.desktop"
 ICON_NAME = "cantinho"
 
-# O tamanho em que o ícone é versionado. Uma pasta só: o `hicolor` aceita um
-# tamanho isolado, e o app não tem arte de ícone em mais nenhum.
-_ICON_SIZE = "256x256"
+# O tamanho "de referência", que é o que `icon_path()` devolve sem argumento.
+# **Não é o único instalado** — ver `install_icons`.
+_ICON_SIZE = 256
 
 
 def _data_home() -> Path:
@@ -57,8 +60,55 @@ def entry_path() -> Path:
     return _data_home() / "applications" / ENTRY_NAME
 
 
-def icon_path() -> Path:
-    return _data_home() / "icons" / "hicolor" / _ICON_SIZE / "apps" / f"{ICON_NAME}.png"
+def icon_path(size: int = _ICON_SIZE) -> Path:
+    pasta = f"{size}x{size}"
+    return _data_home() / "icons" / "hicolor" / pasta / "apps" / f"{ICON_NAME}.png"
+
+
+def _quadros_do_ico(bruto: bytes) -> dict[int, bytes]:
+    """Os PNGs de dentro do `.ico`, indexados pelo lado.
+
+    **É de propósito que o Linux beba do arquivo do Windows.** O `.ico` já
+    carrega os sete tamanhos, cada um com a arte feita para ele — e a razão de
+    ele ter sete é que o desenho *muda* com o tamanho: de 32 px para cima é a
+    planta sobre um ladrilho quente; abaixo disso o ladrilho sai e a planta
+    ocupa o quadro inteiro. Lendo daqui, os dois sistemas mostram literalmente
+    os mesmos bytes, que é o que "igual ao do Windows" quer dizer.
+
+    O formato permite BMP ou PNG por quadro; `tools/gerar_icone.py` grava PNG
+    em todos, então quadro que não comece com a assinatura de PNG é ignorado em
+    vez de virar erro — um `.ico` de outra procedência não deve derrubar a
+    instalação do atalho.
+
+    Sem Qt de propósito: este módulo é chamado antes de a aplicação existir, e
+    `struct` dá conta de um cabeçalho de seis bytes e entradas de dezesseis.
+    """
+    assinatura = b"\x89PNG\r\n\x1a\n"
+    quadros: dict[int, bytes] = {}
+
+    if len(bruto) < 6:
+        return quadros
+    reservado, tipo, quantidade = struct.unpack_from("<HHH", bruto, 0)
+    if reservado != 0 or tipo != 1:
+        return quadros
+
+    for indice in range(quantidade):
+        inicio = 6 + 16 * indice
+        if inicio + 16 > len(bruto):
+            break
+        largura, _altura, _cores, _res, _planos, _bpp, tamanho, deslocamento = (
+            struct.unpack_from("<BBBBHHII", bruto, inicio)
+        )
+        # No formato, 0 quer dizer 256: o campo tem um byte só.
+        lado = largura or 256
+        fim = deslocamento + tamanho
+        if fim > len(bruto):
+            continue
+        dados = bruto[deslocamento:fim]
+        if dados.startswith(assinatura):
+            quadros[lado] = dados
+
+    return quadros
 
 
 def _quote(argumento: str) -> str:
@@ -130,6 +180,84 @@ def _source_icon() -> Path | None:
     return origem if origem.is_file() else None
 
 
+def _source_ico() -> Path | None:
+    from cantinho.services import scene
+
+    origem = scene.assets_dir() / "icon" / f"{ICON_NAME}.ico"
+    return origem if origem.is_file() else None
+
+
+def installed_icons() -> dict[int, Path]:
+    """Os tamanhos que estão em disco agora, por lado."""
+    achados: dict[int, Path] = {}
+    raiz = _data_home() / "icons" / "hicolor"
+    if not raiz.is_dir():
+        return achados
+    for pasta in raiz.iterdir():
+        nome = pasta.name
+        if "x" not in nome:
+            continue
+        lado, _, resto = nome.partition("x")
+        if not lado.isdigit() or lado != resto:
+            continue
+        arquivo = pasta / "apps" / f"{ICON_NAME}.png"
+        if arquivo.is_file():
+            achados[int(lado)] = arquivo
+    return achados
+
+
+def install_icons() -> list[int]:
+    """Escreve o ícone em todos os tamanhos que o `.ico` carrega.
+
+    **Este era o defeito.** Só o 256 era instalado, e o ambiente reduzia esse
+    único arquivo para os 22-24 px da bandeja e os 48-64 do dock. Só que a arte
+    do 256 é a planta sobre um ladrilho escuro: reduzida a 24 px ela vira um
+    quadrado escuro com um borrão dentro — que na barra lê como ícone genérico,
+    exatamente o sintoma relatado. No Windows isso nunca apareceu porque lá o
+    `.ico` entrega os sete tamanhos e o sistema escolhe o certo.
+
+    Ao contrário do `.desktop`, o ícone **é sempre reescrito**. A regra de
+    "criar uma vez e nunca sobrescrever" existe para proteger o `Exec=` de ser
+    sequestrado por um clone de teste, e para respeitar um atalho editado à
+    mão — nada disso vale para o ícone, que é asset do app e ninguém edita.
+    Congelá-lo junto significaria que uma instalação antiga nunca ganharia os
+    tamanhos que faltam, que é justamente o caso que se está consertando.
+    """
+    ico = _source_ico()
+    quadros: dict[int, bytes] = {}
+    if ico is not None:
+        try:
+            quadros = _quadros_do_ico(ico.read_bytes())
+        except OSError:
+            logger.warning("não deu para ler %s", ico, exc_info=True)
+
+    if not quadros:
+        # Sem o `.ico` legível, o 256 sozinho ainda é melhor que ícone nenhum.
+        origem = _source_icon()
+        if origem is None:
+            return []
+        try:
+            quadros = {_ICON_SIZE: origem.read_bytes()}
+        except OSError:
+            logger.warning("não deu para ler %s", origem, exc_info=True)
+            return []
+
+    escritos: list[int] = []
+    for lado, dados in sorted(quadros.items()):
+        destino = icon_path(lado)
+        try:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            if not destino.is_file() or destino.read_bytes() != dados:
+                destino.write_bytes(dados)
+            escritos.append(lado)
+        except OSError:
+            logger.warning("não deu para escrever %s", destino, exc_info=True)
+
+    if escritos:
+        _refresh_icon_cache()
+    return escritos
+
+
 def _refresh_desktop_database() -> None:
     """Avisa o ambiente que a pasta de atalhos mudou.
 
@@ -160,6 +288,37 @@ def _refresh_desktop_database() -> None:
         logger.debug("update-desktop-database falhou: %s", erro)
 
 
+def _refresh_icon_cache() -> None:
+    """Avisa o GTK que a pasta de ícones mudou.
+
+    É o irmão de `_refresh_desktop_database`, e faltava. Sem ele, ambiente que
+    já tenha um `icon-theme.cache` na árvore local continua servindo o índice
+    antigo, e um tamanho recém-instalado não é encontrado — o sintoma é o ícone
+    certo em disco e o genérico na tela, que é o pior tipo de defeito para
+    diagnosticar.
+
+    Melhor-esforço pela mesma razão do outro: o binário vem do `gtk-update-icon-cache`
+    e pode não existir. `--ignore-theme-index` porque a árvore local não tem
+    `index.theme` próprio (ela se apoia no `hicolor` do sistema), e sem a flag a
+    ferramenta recusa a pasta.
+    """
+    ferramenta = shutil.which("gtk-update-icon-cache")
+    if ferramenta is None:
+        logger.debug("gtk-update-icon-cache não encontrado; cache não atualizado")
+        return
+
+    raiz = _data_home() / "icons" / "hicolor"
+    try:
+        subprocess.run(
+            [ferramenta, "--ignore-theme-index", "--quiet", str(raiz)],
+            check=False,
+            capture_output=True,
+            timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError) as erro:
+        logger.debug("gtk-update-icon-cache falhou: %s", erro)
+
+
 def install(force: bool = False) -> bool:
     """Escreve atalho e ícone. Devolve se escreveu.
 
@@ -169,20 +328,20 @@ def install(force: bool = False) -> bool:
     if not sys.platform.startswith("linux"):
         return False
 
+    # O ícone é reparado sempre, mesmo com o atalho já no lugar. São coisas de
+    # naturezas diferentes: o `.desktop` pode ter sido editado à mão e aponta
+    # para um executável, enquanto o ícone é asset do app. Ver `install_icons`.
+    tamanhos = install_icons()
+
     alvo = entry_path()
     if alvo.exists() and not force:
         return False
 
-    origem = _source_icon()
-    if origem is None:
+    if not tamanhos:
         logger.warning("ícone não encontrado: o atalho não foi criado")
         return False
 
     alvo.parent.mkdir(parents=True, exist_ok=True)
-    icone = icon_path()
-    icone.parent.mkdir(parents=True, exist_ok=True)
-
-    shutil.copyfile(origem, icone)
     alvo.write_text(desktop_entry_text(), encoding="utf-8")
     # Sem o bit de execução, o GNOME marca o atalho como não confiável.
     alvo.chmod(0o755)
@@ -203,11 +362,13 @@ def remove() -> bool:
         return False
 
     achou = False
-    for caminho in (entry_path(), icon_path()):
+    alvos = [entry_path(), *installed_icons().values()]
+    for caminho in alvos:
         if caminho.exists():
             caminho.unlink()
             achou = True
 
     if achou:
         _refresh_desktop_database()
+        _refresh_icon_cache()
     return achou
