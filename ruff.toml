@@ -1,0 +1,83 @@
+# Configuração do ruff. Rode por `python -m ruff check cantinho tests tools`,
+# ou `cantinho.bat lint` no Windows.
+#
+# Este arquivo **não** é o `pyproject.toml` que este projeto não tem de
+# propósito: ele não declara pacote, não mexe no `sys.path` e não muda como o
+# Python encontra `cantinho`. Quem põe a raiz no `sys.path` continua sendo o
+# `python -m` rodado da raiz, e cada ferramenta de `tools/` continua fazendo a
+# sua própria inserção.
+#
+# O conjunto de regras é escolhido a dedo e fixado aqui em vez de herdado do
+# padrão do ruff, por dois motivos. Primeiro, o padrão muda entre versões, e as
+# duas máquinas deste projeto não atualizam juntas — regra que aparece sozinha
+# vira diff que ninguém pediu, do lado que atualizou primeiro. Segundo, e mais
+# importante: **lint que reclama de código certo é lint que se aprende a
+# ignorar.** Cada família aqui embaixo está ligada porque pega defeito, e as que
+# ficaram de fora saíram porque reclamavam de decisões deliberadas deste
+# projeto, não porque incomodavam.
+
+target-version = "py310"
+line-length = 88
+
+[lint]
+select = [
+    "E4",     # imports mal formados
+    "E7",     # comparação e statement suspeitos
+    "E9",     # erro de sintaxe e de runtime
+    "E402",   # import fora do topo — ver a nota abaixo, é a regra-chave aqui
+    "F",      # pyflakes: import não usado, nome indefinido, variável esquecida
+    "B",      # bugbear: os padrões que quase sempre são defeito
+    "DTZ",    # datetime sem fuso
+    "RUF100", # noqa que não serve mais para nada
+]
+
+# E402 é a regra que faz o resto funcionar.
+#
+# Toda ferramenta de `tools/` insere a raiz do repositório no `sys.path` antes
+# de importar `cantinho.*`, porque o Python põe no path o diretório do *script*
+# e não o diretório atual. O import fica depois de código, de propósito, e cada
+# um já vem marcado com `# noqa: E402`.
+#
+# Com E402 desligado esses noqa viram lixo — e o `RUF100` os denuncia como
+# inúteis, dezenove de uma vez. Ligada, cada noqa volta a significar o que
+# significa, e a regra passa a proteger o padrão: um import solto no meio de um
+# arquivo que *não* faz sys.path aparece como aviso.
+#
+# DTZ está aqui pelo invariante do projeto, não por gosto: o banco é todo UTC, e
+# `datetime` sem fuso é o jeito de furar isso sem ninguém perceber.
+
+# O que ficou de fora, e por quê. Não é lista de tarefa — é decisão:
+#
+#   I     (isort)      — a ordem dos imports aqui é por intenção, e nos `tools/`
+#                        ela é separada pela inserção no sys.path. Ordenar não
+#                        pega defeito nenhum e rende diff nas duas máquinas.
+#   RUF022 (__all__)   — os `__all__` seguem o ciclo de vida do domínio
+#                        (created, renamed, completed, archived). Em ordem
+#                        alfabética a lista deixa de contar alguma coisa.
+#   RUF046 (cast)      — `int(mood)` parece redundante pelo type hint e não é:
+#                        o valor vem do QML como número de JavaScript. O cast é
+#                        a fronteira, e é onde ele tem que estar.
+#   PLW1510 (check=)   — `subprocess.run` sem `check` nos quatro lugares onde a
+#                        chamada é melhor-esforço de propósito
+#                        (`update-desktop-database`, `gdbus`, `powershell`).
+#   BLE001 (except)    — as duas capturas largas são de melhor-esforço, e estão
+#                        comentadas onde estão.
+
+[lint.per-file-ignores]
+# O único import realmente fora do topo sem sys.path: os de dentro de função em
+# `hotkey.py`, que são condicionais de plataforma — importar `ctypes.wintypes`
+# no Linux não é opcional, é erro.
+"cantinho/services/hotkey.py" = ["E402"]
+
+[format]
+# O formatador **não** é usado neste projeto, e isto não é esquecimento.
+#
+# `ruff format` reflui a base inteira, e o pior conflito aqui é um arquivo
+# editado nos dois sistemas — reformatar tudo de uma vez é fabricar esse
+# conflito de propósito. O alinhamento que existe hoje é escolhido: tabela de
+# comentário, assinatura quebrada onde a linha fica legível. Nada disso
+# sobrevive a um reflow automático.
+#
+# Se um dia for adotado, que seja num commit sozinho, com as duas máquinas
+# sincronizadas antes.
+exclude = ["*"]

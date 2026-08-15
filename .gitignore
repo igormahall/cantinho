@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
 
 # Saída de build e das ferramentas: `build/` recebe o cache do PyInstaller, as
 # rasterizações do check_svg, o banco do semear e as capturas da simulação.
@@ -28,6 +29,11 @@ Cantinho-*.zip
 # sistema, junto do banco de verdade; este é o do descartável e versioná-lo
 # daria o mesmo device_id a todo clone.
 device_id
+
+# E as páginas exportadas (core/export.py), que nascem numa pasta ao lado do
+# banco: rodar com `--db teste.db` da raiz deixa uma aqui. São o diário do
+# usuário virado texto — dado dele, não conteúdo do projeto.
+paginas/
 
 # Pelo mesmo motivo, a marca de vida (services/heartbeat.py). Ela só existe
 # enquanto uma sessão está correndo, e um arquivo destes sobrando significa que

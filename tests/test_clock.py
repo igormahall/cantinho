@@ -35,10 +35,12 @@ def test_fake_clock_recusa_andar_para_tras(clock: FakeClock) -> None:
 
 
 def test_datetime_ingenuo_e_recusado() -> None:
+    # O `datetime` sem fuso é o assunto do teste, não um descuido: é
+    # exatamente o que as duas funções existem para recusar. Daí o noqa.
     with pytest.raises(ValueError):
-        ensure_utc(datetime(2026, 1, 1))
+        ensure_utc(datetime(2026, 1, 1))  # noqa: DTZ001
     with pytest.raises(ValueError):
-        FakeClock(datetime(2026, 1, 1))
+        FakeClock(datetime(2026, 1, 1))  # noqa: DTZ001
 
 
 def test_ensure_utc_converte_de_outro_fuso() -> None:

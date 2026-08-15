@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools import atalho_windows  # noqa: E402
+from tools import atalho_windows
 
 
 EXE = Path(r"C:\Users\alguem\Documents\cantinho\dist\Cantinho\Cantinho.exe")

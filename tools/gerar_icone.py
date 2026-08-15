@@ -96,7 +96,7 @@ def main() -> int:
     app = QGuiApplication.instance() or QGuiApplication([])
 
     imagens = [scene.render_icon(ESTAGIO_IDENTIDADE, lado) for lado in TAMANHOS]
-    for lado, imagem in zip(TAMANHOS, imagens):
+    for lado, imagem in zip(TAMANHOS, imagens, strict=True):
         assert imagem.width() == lado, f"{lado} saiu com {imagem.width()}"
 
     ico = DESTINO / "cantinho.ico"

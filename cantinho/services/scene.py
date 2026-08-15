@@ -242,7 +242,10 @@ def render_shelf(theme: str, object_types: list[str], size: QSize) -> QImage:
         if renderer is None:
             return imagem
         painter = _painter_for(imagem)
-        for object_type, (centro_x, base_y) in zip(visiveis, posicoes):
+        # `strict` porque as duas listas têm o mesmo tamanho por construção —
+        # `posicoes` vem de `len(visiveis)`. Se um dia deixarem de ter, o certo
+        # é estourar aqui e não desenhar meia estante em silêncio.
+        for object_type, (centro_x, base_y) in zip(visiveis, posicoes, strict=True):
             if not renderer.elementExists(object_type):
                 continue
             natural = renderer.boundsOnElement(object_type)

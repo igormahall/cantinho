@@ -1,0 +1,19 @@
+# Ferramenta de estilo. **De propósito fora de `requirements-dev.txt`.**
+#
+# O `requirements-dev.txt` é o que `cantinho.bat instalar` roda na máquina do
+# trabalho, que é restrita e não tem internet externa confiável. Uma dependência
+# a mais ali é uma chance a mais de o passo de instalação falhar justamente onde
+# ele mais importa — e lint não é o que faz o app rodar.
+#
+# Aqui é opcional e só na máquina de quem for mexer no código:
+#
+#   pip install -r requirements-lint.txt
+#   python -m ruff check cantinho tests tools
+#
+# Sem ele, `cantinho.bat lint` avisa e sai; nada mais deixa de funcionar.
+#
+# A configuração está em `ruff.toml`, com o conjunto de regras fixado e o motivo
+# de cada exclusão. A versão está presa porque as duas máquinas não atualizam
+# juntas: regra nova aparecendo sozinha vira diff que ninguém pediu, do lado que
+# atualizou primeiro.
+ruff==0.16.3

@@ -1,5 +1,6 @@
 import QtQuick
 import theme
+import "../room"
 
 // O passeio da primeira abertura.
 //
@@ -82,7 +83,11 @@ Item {
     // zero — em qualquer outro formato o balão descola do que aponta, e quanto
     // mais larga a janela, mais longe. É o mesmo erro de `px` no lugar de `cx`
     // que já tirou a chuva e a poeira de cena uma vez.
-    property Item cena: null
+    //
+    // Tipada como `Room` e não como `Item`: `cx`/`cy` são dele, e um `Item`
+    // qualquer não os tem. Com o tipo certo o erro aparece no `qmllint` em vez
+    // de virar um balão fora de lugar só quando a janela é maximizada.
+    property Room cena: null
 
     function cx(v) { return cena ? cena.cx(v) : v * (width / 1100) }
     function cy(v) { return cena ? cena.cy(v) : v * (height / 700) }

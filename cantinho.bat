@@ -14,6 +14,7 @@ rem      cantinho.bat atualizar       dependencias + build limpo, tudo de uma ve
 rem      cantinho.bat portatil        gera o zip que roda sobre o Python oficial
 rem      cantinho.bat atalho          poe o Cantinho na Area de Trabalho
 rem      cantinho.bat testar          roda a suite
+rem      cantinho.bat lint            confere o estilo do codigo (opcional)
 rem      cantinho.bat refazer         apaga o venv e comeca de novo
 rem
 rem  Os comentarios deste arquivo sao sem acento de proposito: o cmd.exe le o
@@ -63,6 +64,7 @@ echo    5  gerar o pacote portatil ^(roda sobre o Python oficial^)
 echo    6  rodar os testes
 echo    7  refazer o ambiente do zero
 echo    8  criar o atalho do Cantinho na Area de Trabalho
+echo    9  conferir o estilo do codigo ^(ruff + qmllint^)
 echo    0  sair
 echo.
 set "ESCOLHA="
@@ -76,6 +78,7 @@ if "%ESCOLHA%"=="5" set "ACAO=portatil"
 if "%ESCOLHA%"=="6" set "ACAO=testar"
 if "%ESCOLHA%"=="7" set "ACAO=refazer"
 if "%ESCOLHA%"=="8" set "ACAO=atalho"
+if "%ESCOLHA%"=="9" set "ACAO=lint"
 if "%ESCOLHA%"=="0" goto :fim_ok
 
 if not defined ACAO (
@@ -96,11 +99,12 @@ if /i "%ACAO%"=="portatil"   goto :portatil
 if /i "%ACAO%"=="testar"     goto :testar
 if /i "%ACAO%"=="refazer"    goto :refazer
 if /i "%ACAO%"=="atalho"     goto :atalho
+if /i "%ACAO%"=="lint"       goto :lint
 
 echo.
 echo  Comando desconhecido: %ACAO%
 echo  Use: instalar ^| rodar ^| empacotar ^| atualizar ^| portatil ^| testar
-echo       refazer ^| atalho
+echo       lint ^| refazer ^| atalho
 goto :fim_erro
 
 rem ------------------------------------------------------------- o ambiente
@@ -143,6 +147,38 @@ call :garantir_ambiente || goto :fim_erro
 echo.
 "%PY%" -m pytest
 if errorlevel 1 goto :fim_erro
+goto :fim_ok
+
+:lint
+rem Conferencia de estilo, e e a unica acao daqui que e opcional de proposito.
+rem
+rem O ruff nao esta em requirements-dev.txt: aquele arquivo e o que roda na
+rem maquina restrita, sem internet confiavel, e uma dependencia a mais ali e
+rem uma chance a mais de a instalacao falhar onde ela mais importa. Lint nao e
+rem o que faz o app rodar. Por isso ele mora em requirements-lint.txt, e por
+rem isso a falta dele aqui e um aviso e nao um erro.
+rem
+rem O qmllint vem junto com o PySide6 e nao precisa de nada instalado.
+call :garantir_ambiente || goto :fim_erro
+set "LINT_FALHOU="
+echo.
+"%PY%" -m ruff --version >nul 2>&1
+if errorlevel 1 (
+    echo  O ruff nao esta instalado neste ambiente, entao a parte Python foi
+    echo  pulada. Para ter ela:
+    echo.
+    echo      "%PY%" -m pip install -r requirements-lint.txt
+    echo.
+) else (
+    echo  ruff:
+    "%PY%" -m ruff check cantinho tests tools
+    if errorlevel 1 set "LINT_FALHOU=1"
+    echo.
+)
+echo  qmllint:
+"%PY%" tools\check_qml.py
+if errorlevel 1 set "LINT_FALHOU=1"
+if defined LINT_FALHOU goto :fim_erro
 goto :fim_ok
 
 rem ------------------------------------------------------------- os builds
